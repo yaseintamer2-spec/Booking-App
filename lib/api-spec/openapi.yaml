@@ -10,6 +10,12 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: matches
+    description: Public match discovery
+  - name: admin
+    description: Administrator match management
+  - name: account
+    description: Signed-in account details
 paths:
   /healthz:
     get:
@@ -24,7 +30,183 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /me:
+    get:
+      operationId: getCurrentUser
+      tags: [account]
+      summary: Get the signed-in user's profile and permissions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /matches:
+    get:
+      operationId: listMatches
+      tags: [matches]
+      summary: List published matches open for discovery
+      responses:
+        "200":
+          description: Published matches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Match"
+  /matches/{id}:
+    get:
+      operationId: getMatch
+      tags: [matches]
+      summary: Get one published match
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      responses:
+        "200":
+          description: Match details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /admin/matches:
+    get:
+      operationId: listAdminMatches
+      tags: [admin]
+      summary: List all matches for administrators
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: All matches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Match"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: createAdminMatch
+      tags: [admin]
+      summary: Create a match
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchInput"
+      responses:
+        "201":
+          description: Created match
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /admin/matches/{id}:
+    patch:
+      operationId: updateAdminMatch
+      tags: [admin]
+      summary: Update a match
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchUpdate"
+      responses:
+        "200":
+          description: Updated match
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Match"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteAdminMatch
+      tags: [admin]
+      summary: Remove a match
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/MatchId"
+      responses:
+        "204":
+          description: Match removed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    MatchId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Sign-in required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Administrator access required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +215,176 @@ components:
           type: string
       required:
         - status
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    CurrentUser:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        isAdmin:
+          type: boolean
+      required: [id, email, name, isAdmin]
+    Match:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        venueName:
+          type: string
+        neighborhood:
+          type: string
+        address:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        durationMinutes:
+          type: integer
+        format:
+          type: string
+          enum: [7v7]
+        capacity:
+          type: integer
+        bookedCount:
+          type: integer
+        spotsRemaining:
+          type: integer
+        priceHalalas:
+          type: integer
+        compareAtPriceHalalas:
+          type: integer
+        status:
+          type: string
+          enum: [draft, published, cancelled]
+        refereeIncluded:
+          type: boolean
+        waterIncluded:
+          type: boolean
+        imageUrl:
+          type: string
+        isDemo:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - venueName
+        - neighborhood
+        - address
+        - startsAt
+        - durationMinutes
+        - format
+        - capacity
+        - bookedCount
+        - spotsRemaining
+        - priceHalalas
+        - compareAtPriceHalalas
+        - status
+        - refereeIncluded
+        - waterIncluded
+        - imageUrl
+        - isDemo
+        - createdAt
+    MatchInput:
+      type: object
+      properties:
+        venueName:
+          type: string
+          minLength: 2
+        neighborhood:
+          type: string
+          minLength: 2
+        address:
+          type: string
+          minLength: 5
+        startsAt:
+          type: string
+          format: date-time
+        durationMinutes:
+          type: integer
+          minimum: 30
+          maximum: 240
+        capacity:
+          type: integer
+          minimum: 2
+          maximum: 30
+        priceHalalas:
+          type: integer
+          minimum: 0
+        compareAtPriceHalalas:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum: [draft, published, cancelled]
+        refereeIncluded:
+          type: boolean
+        waterIncluded:
+          type: boolean
+        imageUrl:
+          type: string
+      required:
+        - venueName
+        - neighborhood
+        - address
+        - startsAt
+        - durationMinutes
+        - capacity
+        - priceHalalas
+        - compareAtPriceHalalas
+        - status
+        - refereeIncluded
+        - waterIncluded
+        - imageUrl
+    MatchUpdate:
+      type: object
+      properties:
+        venueName:
+          type: string
+          minLength: 2
+        neighborhood:
+          type: string
+          minLength: 2
+        address:
+          type: string
+          minLength: 5
+        startsAt:
+          type: string
+          format: date-time
+        durationMinutes:
+          type: integer
+          minimum: 30
+          maximum: 240
+        capacity:
+          type: integer
+          minimum: 2
+          maximum: 30
+        priceHalalas:
+          type: integer
+          minimum: 0
+        compareAtPriceHalalas:
+          type: integer
+          minimum: 0
+        status:
+          type: string
+          enum: [draft, published, cancelled]
+        refereeIncluded:
+          type: boolean
+        waterIncluded:
+          type: boolean
+        imageUrl:
+          type: string
 
