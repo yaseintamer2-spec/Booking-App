@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { heroImage } from '@/components/KickoffUI';
 import { Button } from '@/components/KickoffUI';
+import { GoogleSignInButton } from '@/components/KickoffUI';
 import { useColors } from '@/hooks/useColors';
 
 export default function WelcomeScreen() {
@@ -19,7 +20,9 @@ export default function WelcomeScreen() {
     <View style={[styles.content, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 67 : 0) + 18, paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 34 : 0) + 24 }]}>
       <View style={styles.topline}><View style={[styles.mark, { backgroundColor: colors.primary }]}><Feather name="activity" size={18} color={colors.primaryForeground} /></View><Text style={[styles.wordmark, { color: colors.foreground }]}>KICKOFF</Text><Text style={[styles.city, { color: colors.foreground }]}>RIYADH</Text></View>
       <View style={styles.hero}><Text style={[styles.kicker, { color: colors.primary }]}>YOUR CITY. YOUR GAME.</Text><Text style={[styles.title, { color: colors.foreground }]}>The pitch is{'\n'}already set.</Text><Text style={[styles.body, { color: colors.foreground }]}>Quality 7v7 football, organized end to end. Just bring your game.</Text></View>
-      <View style={{ gap: 12 }}>
+      <View style={{ gap: 10 }}>
+        <GoogleSignInButton />
+        <Text style={[styles.emailDivider, { color: colors.foreground }]}>OR CONTINUE WITH EMAIL</Text>
         <Button label="Create your account" onPress={() => router.push('/(auth)/sign-up')} icon="arrow-up-right" />
         <Button label="I already have an account" onPress={() => router.push('/(auth)/sign-in')} secondary />
         <Text style={[styles.legal, { color: colors.foreground }]}>Email verification keeps every player real.</Text>
@@ -40,4 +43,5 @@ const styles = StyleSheet.create({
   title: { fontFamily: 'Georgia', fontSize: 48, lineHeight: 53, letterSpacing: -1.5 },
   body: { fontSize: 15, lineHeight: 23, maxWidth: 285, marginTop: 16, opacity: 0.88 },
   legal: { textAlign: 'center', fontSize: 10, opacity: 0.68, marginTop: 4 },
+  emailDivider: { textAlign: 'center', fontSize: 9, letterSpacing: 1.2, fontWeight: '700', marginTop: 4, marginBottom: 1, opacity: 0.66 },
 });

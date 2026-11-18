@@ -2,8 +2,9 @@
 
 ## Sign-in
 
-- Players can create an account with email and password, then verify the email once.
+- Players can create an account with email and password, then verify the email once. Password sign-in does not request an email code.
 - Google sign-in is available after Google is enabled for this app in Replit's Auth settings.
+- Keep email as the account identifier and do not require a phone number for sign-up.
 - Phone numbers and phone-based OTP are not part of the sign-in flow.
 - Clerk is responsible for account identity and unique email addresses.
 

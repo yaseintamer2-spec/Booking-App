@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -10,12 +10,11 @@ export default function MatchesScreen() {
   const colors = useColors(); const router = useRouter(); const [query, setQuery] = useState(''); const [filter, setFilter] = useState('All games');
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey() } });
-  useEffect(() => { if (user.error) router.replace('/(auth)/welcome'); }, [user.error, router]);
   const neighborhoods = useMemo(() => ['All games', ...Array.from(new Set((matches.data || []).map(match => match.neighborhood)))], [matches.data]);
   const visible = useMemo(() => (matches.data || []).filter(match => (filter === 'All games' || match.neighborhood === filter) && `${match.venueName} ${match.neighborhood}`.toLowerCase().includes(query.toLowerCase())), [matches.data, filter, query]);
-  return <Screen><BrandHeader user={user.data} subtitle="FIND YOUR GAME" />
+  return <Screen refreshing={matches.isRefetching} onRefresh={() => { void matches.refetch(); }}><BrandHeader user={user.data} subtitle="FIND YOUR GAME" />
     <Text style={[styles.kicker, { color: colors.primary }]}>MADE FOR THE GAME</Text><Text style={[styles.title, { color: colors.foreground }]}>Discover matches.</Text><Text style={[styles.sub, { color: colors.mutedForeground }]}>Organized 7v7 football, across Riyadh.</Text>
-    <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="search" size={17} color={colors.mutedForeground} /><TextInput value={query} onChangeText={setQuery} placeholder="Venue or neighborhood" placeholderTextColor={colors.mutedForeground} style={[styles.searchInput, { color: colors.foreground }]} /></View>
+     <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="search" size={17} color={colors.mutedForeground} /><TextInput accessibilityLabel="Search matches by venue or neighborhood" value={query} onChangeText={setQuery} autoCapitalize="none" autoCorrect={false} placeholder="Venue or neighborhood" placeholderTextColor={colors.mutedForeground} style={[styles.searchInput, { color: colors.foreground }]} /></View>
     <View style={styles.filters}>{neighborhoods.map(item => <Pressable key={item} onPress={() => setFilter(item)} style={[styles.filter, { backgroundColor: filter === item ? colors.primary : colors.card, borderColor: filter === item ? colors.primary : colors.border }]}><Text style={{ color: filter === item ? colors.primaryForeground : colors.mutedForeground, fontSize: 11, fontWeight: '700' }}>{item}</Text></Pressable>)}</View>
     {matches.isLoading ? <LoadingState /> : matches.isError ? <EmptyState title="Matches are out of reach" body="We couldn't load the schedule. Try again in a moment." icon="wifi-off" action="Retry" onAction={() => matches.refetch()} /> : visible.length ? visible.map(match => <MatchCard key={match.id} match={match} onPress={() => router.push(`/match/${match.id}`)} />) : <EmptyState icon="map-pin" title={query || filter !== 'All games' ? 'No games match that search.' : 'No matches scheduled yet.'} body={query || filter !== 'All games' ? 'Try another Riyadh neighborhood or clear your search.' : 'New games will appear here as soon as they are published.'} /> }
   </Screen>;

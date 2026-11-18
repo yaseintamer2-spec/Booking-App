@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useClerk } from '@clerk/expo';
@@ -10,7 +10,6 @@ import { useColors } from '@/hooks/useColors';
 export default function SettingsScreen() {
   const colors = useColors(); const router = useRouter(); const { signOut } = useClerk(); const [working, setWorking] = useState(false);
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
-  useEffect(() => { if (user.error) router.replace('/(auth)/welcome'); }, [user.error, router]);
   const logout = () => Alert.alert('Sign out of KICKOFF?', 'You can come back whenever the next game calls.', [{ text: 'Stay', style: 'cancel' }, { text: 'Sign out', style: 'destructive', onPress: async () => { setWorking(true); try { await signOut(); router.replace('/(auth)/welcome'); } catch { setWorking(false); Alert.alert('Could not sign out', 'Please try again.'); } } }]);
   return <Screen><BrandHeader back user={user.data} subtitle="PREFERENCES" /><Text style={[styles.kicker, { color: colors.primary }]}>ACCOUNT</Text><Text style={[styles.title, { color: colors.foreground }]}>Settings.</Text>
     <View style={[styles.section, { borderColor: colors.border }]}><Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>SIGN-IN DETAILS</Text><View style={styles.setting}><Feather name="mail" size={16} color={colors.primary} /><View style={{ flex: 1 }}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Email</Text><Text style={[styles.settingCopy, { color: colors.mutedForeground }]}>{user.data?.email || 'Your verified account email'}</Text></View><Feather name="check-circle" size={15} color={colors.primary} /></View><View style={styles.setting}><Feather name="lock" size={16} color={colors.primary} /><View style={{ flex: 1 }}><Text style={[styles.settingTitle, { color: colors.foreground }]}>Password</Text><Text style={[styles.settingCopy, { color: colors.mutedForeground }]}>Managed securely by Clerk</Text></View></View></View>

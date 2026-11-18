@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -9,7 +9,6 @@ import { useColors } from '@/hooks/useColors';
 export default function ProfileScreen() {
   const colors = useColors(); const router = useRouter();
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
-  useEffect(() => { if (user.error) router.replace('/(auth)/welcome'); }, [user.error, router]);
   return <Screen><BrandHeader user={user.data} subtitle="PLAYER CARD" /><Text style={[styles.kicker, { color: colors.primary }]}>YOUR KICKOFF PROFILE</Text><Text style={[styles.title, { color: colors.foreground }]}>Player profile.</Text>
     <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={[styles.avatar, { backgroundColor: colors.accent }]}><Text style={[styles.initial, { color: colors.primary }]}>{(user.data?.name || 'K').slice(0, 1).toUpperCase()}</Text></View><Text style={[styles.name, { color: colors.foreground }]}>{user.data?.name || 'Player'}</Text><Text style={[styles.email, { color: colors.mutedForeground }]}>{user.data?.email || ' '}</Text><View style={[styles.line, { backgroundColor: colors.border }]} /><View style={styles.info}><Feather name="map-pin" size={15} color={colors.primary} /><Text style={[styles.email, { color: colors.mutedForeground }]}>Riyadh, Saudi Arabia</Text></View><View style={styles.info}><Feather name="users" size={15} color={colors.primary} /><Text style={[styles.email, { color: colors.mutedForeground }]}>7v7 player</Text></View></View>
     <Pressable onPress={() => router.push('/settings')} style={[styles.settingsRow, { borderColor: colors.border }]}><Feather name="settings" size={17} color={colors.mutedForeground} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Account settings</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable>

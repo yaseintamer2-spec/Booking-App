@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -11,8 +11,7 @@ export default function HomeScreen() {
   const colors = useColors(); const router = useRouter();
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey() } });
-  useEffect(() => { if (user.error) router.replace('/(auth)/welcome'); }, [user.error, router]);
-  return <Screen>
+  return <Screen refreshing={matches.isRefetching} onRefresh={() => { void matches.refetch(); }}>
     <BrandHeader user={user.data} subtitle="RIYADH, SA" />
     <View style={styles.greeting}><Text style={[styles.hello, { color: colors.mutedForeground }]}>GOOD EVENING{user.data?.name ? `, ${user.data.name.split(' ')[0].toUpperCase()}` : ''}</Text><Text style={[styles.headline, { color: colors.foreground }]}>Find your{'\n'}next match.</Text></View>
     <ImageBackground source={heroImage} resizeMode="cover" style={styles.featureImage} imageStyle={{ borderRadius: 20 }}>
