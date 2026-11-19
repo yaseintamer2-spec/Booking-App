@@ -1,0 +1,1735 @@
+# PROJECT MASTER PROMPT — PREMIUM FOOTBALL MATCH BOOKING PLATFORM (RIYADH, SAUDI ARABIA)
+
+## 1. PROJECT OVERVIEW
+
+Build a complete, premium, production-ready football match booking platform focused exclusively on Riyadh, Saudi Arabia, at launch.
+
+The platform is inspired by the general concept of Wady Le3b, but must have its own original branding, identity, user experience, design system, features and implementation.
+
+This is NOT simply a football pitch booking website.
+
+It is a complete football community and match-organizing platform where users can:
+
+- Discover and join organized football matches.
+- Book individual spots in 7v7 matches.
+- Pay directly through the application.
+- Receive booking confirmations.
+- Cancel bookings under a structured cancellation policy.
+- Receive eligible refunds into their in-app wallet.
+- View their football statistics and match history.
+- Compete on player leaderboards.
+- Track their goals, assists and achievements.
+
+The platform must also include a dedicated referee interface and a comprehensive administration dashboard.
+
+**The user interface and user experience are the highest priority.**
+
+I want an exceptionally polished application that looks like a professionally designed, funded sports technology startup, not a generic AI-generated website.
+
+Do not compromise the visual quality to save development time.
+
+---
+
+# 2. DEVELOPMENT APPROACH
+
+Use Replit to build the application.
+
+Build it as a mobile-first, responsive Progressive Web App (PWA), with an app-like experience on mobile devices and a fully responsive desktop experience.
+
+The architecture must support:
+
+1. Player application.
+2. Referee application.
+3. Admin dashboard.
+4. Backend and database.
+5. Payment processing.
+6. Notification system.
+
+These should be different interfaces connected to one backend and one database.
+
+Use a modern, maintainable technology stack.
+
+Preferred stack:
+
+- Frontend: React + TypeScript.
+- Styling: Tailwind CSS.
+- UI components: Custom components, using shadcn/ui where appropriate.
+- Icons: Lucide React, supplemented with imported Figma assets.
+- Animations: Framer Motion.
+- Backend: Node.js with TypeScript.
+- Database: Supabase PostgreSQL.
+- Authentication: Supabase Auth.
+- Storage: Supabase Storage.
+- Server-side business logic: Secure backend APIs and database functions.
+- Maps: Google Maps or another suitable mapping provider.
+- Notifications: Push notifications and email/SMS integration where configured.
+
+If Replit recommends an alternative that materially improves reliability, explain why before changing the architecture.
+
+Do not build the application as a collection of static mockup screens.
+
+Every major button, form, navigation item, booking action and dashboard interaction must work.
+
+---
+
+# 3. DESIGN DIRECTION — MOST IMPORTANT SECTION
+
+## Overall visual identity
+
+Create a premium football-focused design system.
+
+The interface should feel like a combination of:
+
+- A modern professional sports application.
+- A premium football community.
+- A high-end event booking platform.
+- A polished fintech application for payments and wallets.
+
+Avoid the appearance of a typical sports template.
+
+### Color palette
+
+Use a dark, elegant design.
+
+Primary colors:
+
+- Background: #090D0C
+- Secondary background: #101715
+- Cards: #151E1A
+- Elevated cards: #1B2621
+- Primary emerald: #18C878
+- Secondary emerald: #0FA968
+- White: #F5F7F5
+- Secondary text: #929D96
+- Borders: #26332C
+- Warning: #F3B64C
+- Error: #F06464
+
+Use green carefully to highlight important actions, availability, selected states and success messages.
+
+Do not make the entire interface green.
+
+Use subtle gradients, soft shadows, translucent overlays and restrained glass effects where appropriate.
+
+### Typography
+
+Use a premium, modern sans-serif font.
+
+Recommended:
+
+- English: Inter or Manrope.
+- Arabic: IBM Plex Sans Arabic or an equivalent high-quality Arabic font.
+
+Typography should have a clear hierarchy:
+
+- Large, bold page headings.
+- Medium-weight section headings.
+- Clear card titles.
+- Small but readable supporting information.
+- Strong numerical typography for prices, match times and statistics.
+
+### UI rules
+
+1. Rounded cards with consistent corner radiuses.
+2. Consistent spacing throughout the application.
+3. Smooth page transitions.
+4. Beautiful loading states and skeleton screens.
+5. Attractive empty states.
+6. Clear button hierarchy.
+7. Subtle hover and press interactions.
+8. Animated success and booking confirmations.
+9. Bottom navigation on mobile.
+10. Responsive navigation on desktop.
+
+Avoid excessive borders, unnecessary gradients, oversized text and overcrowded screens.
+
+Use professional football photography as visual content.
+
+Images should feel authentic: illuminated artificial football pitches, stadium floodlights, footballs, nets, football players and venue photography.
+
+Do not use random unrelated stock photographs.
+
+Create a consistent image treatment across the application.
+
+---
+
+# 4. FIGMA ASSETS, ICONS AND DESIGN REFERENCES
+
+I intend to use Figma for icons, visual assets and potentially interface references.
+
+IMPORTANT:
+
+If a Figma integration, MCP server or imported Figma asset library is available, use it to inspect and reuse the actual available design assets.
+
+Do not invent Figma file IDs, component names or asset URLs.
+
+If I provide a Figma file or export assets into the project, inspect them and use them appropriately.
+
+Create a centralized assets directory:
+
+- /assets/icons
+- /assets/images
+- /assets/logos
+- /assets/illustrations
+- /assets/flags
+
+Create reusable icon components.
+
+Use consistent icon sizing and stroke thickness.
+
+If an appropriate Figma icon does not exist, use Lucide icons.
+
+Recommended icon families:
+
+- Home.
+- Football.
+- Calendar.
+- Location.
+- Map.
+- Clock.
+- Users.
+- Ticket.
+- Wallet.
+- Credit card.
+- Trophy.
+- Statistics.
+- Profile.
+- Settings.
+- Notifications.
+- Referee whistle.
+- Football goal.
+- Water.
+- Shield.
+- Checkmark.
+- Cancellation.
+- Refund.
+
+Do not use emojis as substitutes for professional interface icons.
+
+Do not mix unrelated icon styles.
+
+Create an original logo and visual identity. Do not copy Wady Le3b branding.
+
+---
+
+# 5. LANGUAGE, LOCATION AND CURRENCY
+
+The application launches exclusively in Riyadh, Saudi Arabia.
+
+All initial match discovery and venue searches must be restricted to Riyadh.
+
+Use Saudi Riyal (SAR) as the default currency.
+
+Support:
+
+- English.
+- Arabic.
+
+Arabic must have proper RTL layout, not simply translated English screens.
+
+Switching languages must update:
+
+- Navigation.
+- Buttons.
+- Forms.
+- Match information.
+- Notifications.
+- Wallet.
+- Checkout.
+- Policies.
+- Player statistics.
+- Admin interface.
+
+Use Asia/Riyadh as the application timezone.
+
+Store timestamps consistently in the database and display them in Riyadh local time.
+
+Use Saudi mobile number validation.
+
+Prepare the application for future expansion to Jeddah, Dammam and other cities, but do not display those cities in the launch interface.
+
+---
+
+# 6. PLAYER APPLICATION
+
+The player application is the main product.
+
+It must be exceptionally polished and intuitive.
+
+## A. Authentication
+
+Create a beautiful welcome screen.
+
+Include:
+
+- Original application logo.
+- Premium football background image.
+- Welcome heading.
+- Sign up.
+- Login.
+- Continue with Google, if configured.
+- Mobile number authentication.
+- OTP verification.
+
+Registration fields:
+
+- Full name.
+- Username.
+- Mobile number.
+- Email (optional if the authentication method permits).
+- Profile picture.
+- Date of birth, if required for eligibility.
+- Preferred language.
+
+Create secure authentication.
+
+Users must not be able to access referee or admin interfaces unless their account has the appropriate role.
+
+Create a profile setup process after registration.
+
+Do not ask for unnecessary information.
+
+## B. Main navigation
+
+Use a mobile bottom navigation bar with five sections:
+
+1. Home.
+2. My Matches.
+3. Wallet.
+4. Rankings.
+5. Profile.
+
+The navigation must be consistent across all player screens.
+
+## C. HOME SCREEN
+
+This is the most important player screen.
+
+Design it with considerable attention.
+
+At the top:
+
+- Small personalized greeting.
+- Player's first name.
+- Profile picture.
+- Notification bell.
+- Current available wallet balance, where appropriate.
+
+Create a visually impressive hero section.
+
+Example heading:
+
+"Your next match starts here."
+
+Supporting text:
+
+"Find your game. Meet your team. Play."
+
+Include a prominent CTA:
+
+"Find a Match"
+
+Below the hero, display:
+
+### Upcoming matches
+
+Show match cards with:
+
+- Venue photograph.
+- Venue name.
+- Neighborhood.
+- Date.
+- Starting time.
+- Duration.
+- Format: 7v7.
+- Available spots.
+- Price per player.
+- Referee included.
+- Water included.
+- Distance from the user, if location permission is granted.
+
+Example match card:
+
+Al Nakheel Football Arena
+
+Riyadh · Al Nakheel
+
+Thursday, 8:00 PM
+
+7 vs 7
+
+12/14 players booked
+
+30 SAR per player
+
+[View Match]
+
+Use realistic, visually attractive match cards.
+
+Show availability clearly.
+
+Examples:
+
+- 4 spots left.
+- Almost full.
+- Fully booked.
+- Booking closed.
+
+### Other home sections
+
+Include:
+
+- Matches happening soon.
+- Popular matches.
+- Recommended matches.
+- Nearby venues.
+- Your next booking.
+- Monthly top players.
+- Latest player achievements.
+
+Do not overload the home screen.
+
+Use horizontal carousels where appropriate.
+
+The home screen must feel premium and alive.
+
+## D. MATCH DISCOVERY
+
+Create a dedicated Find Matches screen.
+
+Users should be able to browse available football matches in Riyadh.
+
+Include filters:
+
+- Date.
+- Time.
+- Neighborhood.
+- Price.
+- Available spots.
+- Match format.
+- Skill level, if enabled.
+- Match category.
+
+Use Riyadh neighborhoods as location filters.
+
+Examples:
+
+- Al Olaya.
+- Al Nakheel.
+- Al Malqa.
+- Al Yasmin.
+- Al Narjis.
+- Al Sahafah.
+- Al Rawdah.
+- Al Hamra.
+- Al Wurud.
+
+These are example neighborhoods, not a list of confirmed venues.
+
+Include a list/map toggle.
+
+Map markers should display available match information.
+
+Allow sorting by:
+
+- Soonest.
+- Nearest.
+- Lowest price.
+- Most available spots.
+
+Only show matches that are actually published and open for booking.
+
+## E. MATCH DETAILS SCREEN
+
+This screen must be especially beautiful because it is where players decide whether to book.
+
+Design a premium match details page.
+
+At the top:
+
+- Large venue image.
+- Venue name.
+- Neighborhood.
+- Venue rating, only if real verified ratings exist.
+- Location/map preview.
+
+Below display:
+
+### Match information
+
+- Date.
+- Kickoff time.
+- Booking duration.
+- 7v7 format.
+- Number of players.
+- Number of remaining spots.
+- Match price.
+
+### What's included?
+
+Display attractive icon-based information:
+
+- Professional referee.
+- Water.
+- Organized teams.
+- Individual player statistics.
+- Score recording.
+
+### Match schedule
+
+Clearly show the two-hour format:
+
+1. First 15 minutes: Arrival, attendance and organization.
+2. Next 45 minutes: First half.
+3. Next 15 minutes: Half-time.
+4. Final 45 minutes: Second half.
+
+Total booking duration: 120 minutes.
+
+The actual football playing time is 90 minutes.
+
+### Player availability
+
+Show the registered player count and available spaces.
+
+Example:
+
+Team A: 7 players.
+
+Team B: 5 players.
+
+2 spots remaining.
+
+Do not expose private information about users unnecessarily.
+
+Include a prominent fixed bottom booking button:
+
+"Join Match · 30 SAR"
+
+The price must come from the database, not a hardcoded frontend value.
+
+---
+
+# 7. BOOKING AND PAYMENT EXPERIENCE
+
+The checkout UI is one of the highest-priority parts of the application.
+
+I want it to look like a premium payment experience.
+
+The user selects a match first.
+
+Only after selecting the match should the application open the booking and payment interface.
+
+Do not ask users to pay before they have selected a specific match.
+
+## Checkout screen
+
+Display:
+
+- Selected venue photograph.
+- Venue name.
+- Date.
+- Time.
+- Location.
+- Match format.
+- Duration.
+- Selected price.
+- Included services.
+
+### Payment methods
+
+Support a payment architecture that can accommodate:
+
+- Mada.
+- Apple Pay.
+- Visa.
+- Mastercard.
+
+Choose a suitable Saudi payment gateway after configuration.
+
+Do not pretend payments are working if API credentials have not been configured.
+
+Never collect or store card numbers or CVV information directly.
+
+Use the payment gateway's secure hosted checkout or tokenized payment components.
+
+### Wallet payment
+
+If the user has an available wallet balance:
+
+Show:
+
+- Available wallet balance.
+- Amount that can be used.
+- Remaining amount to pay.
+
+Allow the player to:
+
+1. Pay entirely using wallet balance.
+2. Pay entirely using an external payment method.
+3. Combine wallet balance with an external payment method.
+
+If wallet balance is zero, the wallet payment option should be disabled.
+
+### Checkout summary
+
+Show:
+
+- Match price.
+- Wallet deduction, if applicable.
+- External payment amount.
+- Total.
+
+Create a large confirmation button.
+
+After successful payment:
+
+Show a premium animated success screen.
+
+Include:
+
+- Booking confirmed.
+- Venue.
+- Date and time.
+- Booking ID.
+- QR code.
+- Directions.
+- View booking button.
+
+Only confirm a booking after the payment gateway verifies successful payment server-side.
+
+Prevent duplicate payments and duplicate bookings.
+
+Use temporary spot reservations during checkout, with an expiration timer and automatic release if payment fails or expires.
+
+---
+
+# 8. MY MATCHES
+
+Create a beautiful match management screen.
+
+Tabs:
+
+- Upcoming.
+- Completed.
+- Cancelled.
+
+Each match card must show:
+
+- Venue.
+- Date.
+- Time.
+- Booking status.
+- Player's team.
+- Match QR code.
+- View details.
+
+For upcoming matches:
+
+Include:
+
+- View location.
+- Open directions.
+- View match details.
+- Cancel booking, if eligible.
+
+For completed matches:
+
+Display:
+
+- Final score.
+- Team result.
+- Goals scored.
+- Assists.
+- Match statistics.
+- Referee report.
+- Link to player statistics.
+
+For cancelled matches:
+
+Display:
+
+- Cancellation date.
+- Cancellation reason.
+- Refund status.
+- Amount returned to wallet, if applicable.
+
+---
+
+# 9. CANCELLATION AND REFUND SYSTEM
+
+This is a core business feature.
+
+Implement the following proposed policy.
+
+All times must be calculated using the match's local Riyadh kickoff time.
+
+### Scenario 1: Cancellation more than 24 hours before kickoff
+
+If the player cancels more than 24 hours before the match:
+
+- Cancel the booking.
+- Release the spot.
+- Issue a 100% refund.
+- Refund the payment according to the disclosed refund policy.
+- Record the transaction.
+
+### Scenario 2: Cancellation within 24 hours
+
+If a player cancels within 24 hours:
+
+- The player submits a cancellation request.
+- The system marks the spot as available.
+- The system attempts to find a replacement player.
+- The replacement must make a successful payment.
+- Once the replacement payment is verified, the original player's wallet receives 50% of the original booking price.
+- The platform retains the other 50% of the original booking price.
+
+Example:
+
+Original booking: 30 SAR.
+
+Replacement booking: 30 SAR.
+
+Original player receives: 15 SAR in their wallet.
+
+Platform retains: 15 SAR from the original booking.
+
+The replacement player receives the vacant match spot.
+
+### Scenario 3: No replacement
+
+If no replacement player is found before the match:
+
+- Apply the disclosed cancellation policy.
+- Do not issue the conditional 50% wallet credit.
+- Show the cancellation outcome clearly to the player.
+
+### Important system requirements
+
+- Never credit a refund twice.
+- Never issue a late-cancellation wallet credit before replacement payment is confirmed.
+- Prevent multiple players from occupying the same spot.
+- Maintain transaction history.
+- Keep audit records.
+- Allow administrators to review disputed cancellations.
+- Support match cancellation by the platform with an appropriate full-refund process.
+
+The 24-hour policy must be clearly displayed before checkout and in the cancellation interface.
+
+Make the cancellation rules configurable through the admin dashboard.
+
+Implement the system so it can be reviewed and adjusted to comply with applicable Saudi consumer-protection, e-commerce and payment regulations before launch.
+
+Do not automatically treat wallet-only refunds as legally sufficient without confirming the applicable requirements.
+
+---
+
+# 10. MY WALLET
+
+Keep the wallet extremely simple.
+
+The wallet is NOT a subscription system.
+
+Do not introduce:
+
+- Monthly subscriptions.
+- Game-pass packages.
+- Prepaid match bundles.
+- Mandatory wallet top-ups.
+
+Players simply pay for each match individually.
+
+The wallet exists for eligible refunds and compensation.
+
+### Wallet screen design
+
+Show a large premium balance card:
+
+"My Wallet"
+
+"Available Balance"
+
+45.00 SAR
+
+Below:
+
+Recent Transactions.
+
+Example:
+
+Match cancellation refund: +15 SAR.
+
+Match booking: -30 SAR.
+
+Display:
+
+- Transaction description.
+- Date.
+- Amount.
+- Transaction status.
+
+Allow wallet balance to be used when paying for future matches.
+
+Do not allow unauthorized balance modifications from the frontend.
+
+All wallet changes must be performed through secure server-side transactions.
+
+Maintain a complete immutable wallet ledger.
+
+Support:
+
+- Credit.
+- Debit.
+- Refund.
+- Adjustment.
+- Reversal.
+
+All transactions must have unique IDs and references.
+
+If cash withdrawal or transfer is not supported, clearly state that wallet funds are available for eligible platform purchases only, subject to the approved refund policy.
+
+---
+
+# 11. REFEREE APPLICATION
+
+Create a separate, dedicated referee interface.
+
+The referee must not need to use the normal player interface to manage matches.
+
+Referees log in using their assigned accounts.
+
+They should only see matches assigned to them.
+
+### Referee home screen
+
+Show:
+
+- Today's assigned matches.
+- Upcoming matches.
+- Completed matches.
+- Match reporting status.
+
+Each match card displays:
+
+- Venue.
+- Date.
+- Kickoff time.
+- Registered players.
+- Match status.
+
+### Match management screen
+
+Before kickoff, the referee can:
+
+- Open the registered player list.
+- Check attendance.
+- Verify players using QR codes.
+- View team assignments.
+- Mark absent players.
+- Confirm that the match is ready.
+
+### Live match control
+
+Create a professional match-control interface designed for use on a phone.
+
+The referee should be able to record:
+
+1. Goals.
+2. Assists.
+3. Yellow cards.
+4. Red cards.
+5. Substitutions, if enabled.
+6. Other match events.
+
+When recording a goal:
+
+- Select Team A or Team B.
+- Select the goal scorer.
+- Select the assister, optionally.
+- Confirm the event.
+
+The system automatically updates the score.
+
+Display:
+
+- Team A score.
+- Team B score.
+- Match timer.
+- Match events.
+- Player names.
+
+Provide event editing and correction functionality with an audit trail.
+
+Do not make the referee enter all statistics manually after the match.
+
+Record events during the match whenever possible.
+
+### Final match report
+
+After the match, the referee submits:
+
+- Final score.
+- Goals by player.
+- Assists by player.
+- Cards.
+- Attendance.
+- Match completion status.
+- Optional referee notes.
+
+Once submitted, the report becomes locked.
+
+Corrections require authorized administrative approval.
+
+The system automatically updates player statistics only after the match report is accepted and finalized.
+
+---
+
+# 12. PLAYER PROFILES AND STATISTICS
+
+Player profiles are a major part of the platform's retention strategy.
+
+Create attractive player profiles.
+
+Each player profile should contain:
+
+- Profile photograph.
+- Username.
+- Player level.
+- Total matches.
+- Total goals.
+- Total assists.
+- Wins.
+- Draws.
+- Losses.
+- Win percentage.
+- Recent match history.
+- Achievements.
+
+### Additional statistics
+
+For goalkeepers:
+
+- Clean sheets.
+- Goals conceded.
+- Matches played as goalkeeper.
+
+For other players:
+
+- Goals per match.
+- Assists per match.
+- Appearances.
+- Performance history.
+
+Only calculate statistics from finalized, verified referee reports.
+
+Allow players to see their own detailed history.
+
+Public player information should be configurable through privacy settings.
+
+---
+
+# 13. RANKINGS AND LEADERBOARDS
+
+Create a premium rankings screen.
+
+Include tabs:
+
+- Weekly.
+- Monthly.
+- All-time.
+
+Leaderboard categories:
+
+- Top scorers.
+- Top assists.
+- Most appearances.
+- Most wins.
+- Best goalkeeper.
+
+Show:
+
+- Player photograph.
+- Username.
+- Ranking.
+- Relevant statistics.
+
+Create an attractive top-three podium.
+
+Do not generate fake rankings or fictional player statistics in production.
+
+Seed demo players only in development mode.
+
+Allow admins to configure ranking periods and rules.
+
+---
+
+# 14. REFEREE AND PLAYER NOTIFICATIONS
+
+Create a notification center.
+
+Player notifications:
+
+- Booking confirmed.
+- Match reminder.
+- Match location update.
+- Match cancellation.
+- Refund processed.
+- Replacement found.
+- Wallet credited.
+- Match report completed.
+- New achievement.
+
+Referee notifications:
+
+- New match assignment.
+- Assignment change.
+- Match reminder.
+- Player list updated.
+- Match reporting reminder.
+
+Admin notifications:
+
+- New bookings.
+- Failed payments.
+- Cancellation requests.
+- Refund requests.
+- Unfilled matches.
+- Venue availability issues.
+
+Use push notifications where configured.
+
+Use email or SMS services only when credentials are configured.
+
+Create a notification preferences page.
+
+---
+
+# 15. VENUE AND PITCH MANAGEMENT
+
+Create a venue management system for administrators.
+
+Each venue should have:
+
+- Venue name.
+- Description.
+- Address.
+- Neighborhood.
+- GPS coordinates.
+- Photographs.
+- Pitch format.
+- Capacity.
+- Available booking times.
+- Booking duration.
+- Price.
+- Water availability.
+- Facilities.
+- Rules.
+- Active/inactive status.
+
+Support multiple venues in Riyadh.
+
+The administrator should be able to add and edit venues without changing code.
+
+### Venue pricing
+
+Initial business arrangement:
+
+250 SAR per two-hour booking for a good-quality 7v7 pitch, including water.
+
+This is an initial negotiated offer, not a universal venue price.
+
+Referee cost is a separate configurable expense until confirmed.
+
+Do not hardcode venue prices.
+
+---
+
+# 16. MATCH SCHEDULING
+
+Each standard match has:
+
+- 14 player spots.
+- 7 players per team.
+- 120-minute venue booking.
+
+Schedule:
+
+| Stage | Duration |
+|---|---:|
+| Arrival and organization | 15 minutes |
+| First half | 45 minutes |
+| Half-time | 15 minutes |
+| Second half | 45 minutes |
+| Total | 120 minutes |
+
+Use this schedule consistently throughout the application.
+
+The referee can see the match timeline.
+
+### Booking management
+
+- Only show available spots.
+- Stop bookings when the match is full.
+- Allow the administrator to configure maximum capacity.
+- Support waitlists.
+- Support player replacement after cancellation.
+- Prevent double booking.
+- Support booking cut-off times.
+
+IMPORTANT:
+
+The two-hour booking contains no additional pitch-turnaround buffer.
+
+Create a configurable venue turnaround period between consecutive bookings, preferably 10–15 minutes if agreed with the venue.
+
+Do not schedule consecutive matches without accounting for the venue's actual availability.
+
+Allow the admin to configure venue opening times and slot intervals.
+
+---
+
+# 17. TEAM ASSIGNMENT
+
+Build a flexible team assignment system.
+
+The system should support:
+
+- Automatic assignment.
+- Referee assignment.
+- Admin assignment.
+
+For automatic assignment:
+
+Use available player information to distribute players reasonably evenly.
+
+Possible inputs:
+
+- Player skill level.
+- Preferred position.
+- Historical performance, if sufficient data exists.
+
+Allow the referee to adjust assignments before kickoff.
+
+Do not automatically expose sensitive player data.
+
+Display teams attractively with player photographs and names.
+
+---
+
+# 18. ADMIN DASHBOARD
+
+Build a separate professional desktop-first admin dashboard.
+
+The dashboard is essential for operating the business.
+
+### Main overview
+
+Display:
+
+- Total registered players.
+- Total bookings.
+- Today's matches.
+- Upcoming matches.
+- Completed matches.
+- Revenue.
+- Refunds.
+- Wallet liabilities.
+- Occupancy rate.
+- Active venues.
+- Active referees.
+
+Use clear charts and summary cards.
+
+### Match management
+
+Admin can:
+
+- Create matches.
+- Edit matches.
+- Cancel matches.
+- Assign venues.
+- Assign referees.
+- Set prices.
+- Set capacity.
+- Manage players.
+- Assign teams.
+- View bookings.
+- View attendance.
+- View match reports.
+
+### Financial management
+
+Display:
+
+- Total collected payments.
+- Booking revenue.
+- Refunds.
+- Wallet credits.
+- Wallet debits.
+- Outstanding wallet liabilities.
+- Payment gateway fees.
+- Venue costs.
+- Referee costs.
+- Estimated gross profit.
+
+Provide filters by:
+
+- Date.
+- Venue.
+- Match.
+- Payment status.
+
+### Cancellation management
+
+Show:
+
+- Original player.
+- Original booking.
+- Cancellation time.
+- Time remaining until kickoff.
+- Replacement status.
+- Replacement player.
+- Original payment.
+- Wallet credit due.
+- Platform-retained amount.
+
+Allow admins to review and resolve disputed cases.
+
+### Referee management
+
+- Add referees.
+- Assign matches.
+- Review performance.
+- Review submitted reports.
+- Approve corrections.
+
+### User management
+
+- Search players.
+- View profiles.
+- Review booking history.
+- View payment history.
+- Suspend accounts when justified.
+- Manage roles and permissions.
+
+Use role-based access control.
+
+An administrator should not be able to access sensitive payment credentials through the interface.
+
+---
+
+# 19. DATABASE DESIGN
+
+Use Supabase PostgreSQL.
+
+Design a normalized, secure database.
+
+Create migrations and SQL scripts.
+
+Suggested tables:
+
+### users
+- id
+- full_name
+- username
+- email
+- phone
+- profile_image
+- preferred_language
+- role
+- account_status
+- created_at
+
+### player_profiles
+- user_id
+- skill_level
+- preferred_position
+- total_matches
+- total_goals
+- total_assists
+- total_wins
+- total_draws
+- total_losses
+
+### venues
+- id
+- name
+- description
+- address
+- neighborhood
+- latitude
+- longitude
+- images
+- pitch_format
+- capacity
+- active
+
+### venue_slots
+- id
+- venue_id
+- start_time
+- end_time
+- availability_status
+- turnaround_minutes
+
+### matches
+- id
+- venue_id
+- referee_id
+- start_time
+- end_time
+- match_price
+- maximum_players
+- booked_players
+- match_status
+- match_format
+- skill_level
+- team_assignment_method
+
+### bookings
+- id
+- match_id
+- player_id
+- team
+- booking_status
+- payment_status
+- amount_paid
+- created_at
+
+### payments
+- id
+- user_id
+- booking_id
+- amount
+- currency
+- payment_gateway
+- gateway_reference
+- payment_status
+- created_at
+
+### cancellations
+- id
+- booking_id
+- player_id
+- cancellation_time
+- cancellation_reason
+- refund_type
+- replacement_status
+- replacement_booking_id
+- refund_amount
+- status
+
+### wallet_accounts
+- id
+- user_id
+- available_balance
+- currency
+
+### wallet_transactions
+- id
+- wallet_id
+- transaction_type
+- amount
+- description
+- reference_id
+- status
+- created_at
+
+### match_events
+- id
+- match_id
+- player_id
+- team
+- event_type
+- assist_player_id
+- event_time
+- recorded_by
+- created_at
+
+### match_reports
+- id
+- match_id
+- referee_id
+- team_a_score
+- team_b_score
+- attendance
+- report_status
+- submitted_at
+- approved_at
+
+### referee_assignments
+- id
+- referee_id
+- match_id
+- assignment_status
+
+### notifications
+- id
+- user_id
+- title
+- message
+- type
+- read_status
+- created_at
+
+### achievements
+- id
+- name
+- description
+- criteria
+
+### user_achievements
+- user_id
+- achievement_id
+- awarded_at
+
+Add appropriate indexes, foreign keys, uniqueness constraints and timestamps.
+
+Use database transactions for booking, payment confirmation, replacement assignment and wallet changes.
+
+Implement proper RLS policies.
+
+Never rely on frontend validation for financial operations.
+
+---
+
+# 20. SECURITY AND FINANCIAL INTEGRITY
+
+This is extremely important.
+
+Implement:
+
+- Secure authentication.
+- Role-based permissions.
+- Server-side validation.
+- Row-level security.
+- Payment webhook verification.
+- Idempotency keys.
+- Secure wallet ledger.
+- Audit logs.
+- Rate limiting.
+- Input validation.
+- Duplicate booking protection.
+- Duplicate refund protection.
+- Secure environment variables.
+
+Never put API secrets in frontend code.
+
+Never allow a user to modify their own wallet balance directly.
+
+Never accept a payment success status from the frontend without server verification.
+
+Ensure every financial action is recorded.
+
+Create a reconciliation system between:
+
+- Payments.
+- Bookings.
+- Refunds.
+- Wallet credits.
+- Wallet debits.
+
+All financial amounts should be stored using an appropriate exact numeric representation, not floating-point arithmetic.
+
+---
+
+# 21. PAYMENT INTEGRATION
+
+Prepare a payment integration layer.
+
+Support a Saudi-compatible payment provider after credentials and merchant approval are available.
+
+Potential providers can be evaluated based on support for Mada, Apple Pay and international cards.
+
+Keep the payment integration modular so the provider can be changed later.
+
+Create:
+
+- Payment initiation.
+- Payment verification.
+- Payment webhooks.
+- Refund handling.
+- Failed payment handling.
+- Payment history.
+
+If payment credentials are unavailable, create a clear TEST MODE.
+
+Do not simulate successful real payments in production.
+
+The application must clearly distinguish test payments from real transactions.
+
+---
+
+# 22. MAPS AND LOCATION
+
+Integrate a proper map experience.
+
+Use Riyadh as the only launch city.
+
+Each match must have a real venue location.
+
+Users should be able to:
+
+- See venue location.
+- Open directions.
+- View nearby matches.
+- Filter by neighborhood.
+
+Request location permission only when necessary.
+
+If permission is denied, allow manual neighborhood selection.
+
+Never invent venue coordinates.
+
+Allow administrators to add exact venue coordinates.
+
+---
+
+# 23. DEMO DATA AND DEVELOPMENT
+
+Create realistic seed data for development.
+
+Include:
+
+- Several fictional Riyadh football venues.
+- Upcoming matches.
+- Completed matches.
+- Fictional players.
+- Referees.
+- Match reports.
+- Statistics.
+- Leaderboard entries.
+
+Clearly identify seed data as demonstration data.
+
+Do not mix test records with real production transactions.
+
+Create test accounts for:
+
+1. Player.
+2. Referee.
+3. Admin.
+
+Document how to log in to each role in the README.
+
+---
+
+# 24. TESTING
+
+Write tests for important application flows.
+
+Especially:
+
+### Booking tests
+
+- Successful booking.
+- Failed payment.
+- Duplicate booking prevention.
+- Fully booked match.
+- Expired checkout.
+- Concurrent booking attempts.
+
+### Cancellation tests
+
+- Cancellation more than 24 hours before kickoff.
+- Cancellation within 24 hours.
+- Replacement successfully booked.
+- Replacement payment failure.
+- No replacement.
+- Duplicate cancellation request.
+- Duplicate wallet credit.
+
+### Referee tests
+
+- Recording a goal.
+- Recording an assist.
+- Updating the score.
+- Submitting a report.
+- Correcting a report through admin approval.
+
+### Security tests
+
+- Player cannot access admin pages.
+- Referee cannot access unrelated matches.
+- Player cannot edit statistics.
+- Player cannot modify wallet balance.
+- Unverified payment cannot confirm a booking.
+
+---
+
+# 25. DEVELOPMENT EXECUTION PLAN
+
+Do not attempt to build everything in one giant unstructured component.
+
+Work in phases.
+
+### Phase 1 — Design system and player UI
+
+Build:
+
+- Global visual identity.
+- Typography.
+- Colors.
+- Buttons.
+- Cards.
+- Navigation.
+- Authentication.
+- Home screen.
+- Match discovery.
+- Match details.
+- Checkout.
+- Booking confirmation.
+- My Matches.
+- Wallet.
+- Profile.
+- Rankings.
+
+Make this phase visually excellent.
+
+### Phase 2 — Backend and database
+
+Build:
+
+- Supabase connection.
+- Authentication.
+- Database migrations.
+- RLS.
+- User roles.
+- Venue management.
+- Match management.
+- Booking system.
+
+### Phase 3 — Payments and refunds
+
+Build:
+
+- Payment gateway integration.
+- Wallet ledger.
+- Cancellation rules.
+- Replacement process.
+- Refund management.
+
+### Phase 4 — Referee interface
+
+Build:
+
+- Referee login.
+- Assigned matches.
+- Attendance.
+- Live score.
+- Goal recording.
+- Assist recording.
+- Final reports.
+
+### Phase 5 — Admin dashboard
+
+Build:
+
+- Overview.
+- Matches.
+- Venues.
+- Referees.
+- Players.
+- Financial reporting.
+- Cancellations.
+- Wallet management.
+
+### Phase 6 — Testing and deployment
+
+- Test all critical workflows.
+- Fix UI issues.
+- Test mobile responsiveness.
+- Test Arabic RTL.
+- Test permissions.
+- Configure production environment.
+- Prepare deployment instructions.
+
+---
+
+# 26. UI QUALITY REQUIREMENTS — NON-NEGOTIABLE
+
+I want you to pay special attention to these requirements.
+
+1. Do not use generic AI-generated dashboard templates.
+2. Do not make every screen look like the same repetitive collection of cards.
+3. Do not use random gradients everywhere.
+4. Do not use emojis instead of professional icons.
+5. Do not leave buttons without functionality.
+6. Do not display fake live data in production.
+7. Do not make the mobile interface look like a squeezed desktop website.
+8. Do not use inconsistent spacing, fonts or colors.
+9. Do not overcrowd the home screen.
+10. Do not use low-quality or unrelated images.
+
+Every screen must have its own carefully considered layout.
+
+Use beautiful match cards, premium photography, clear typography, smooth transitions and carefully designed empty states.
+
+The checkout screen must be particularly polished.
+
+The wallet must look simple and elegant.
+
+The referee interface must prioritize speed, clarity and ease of use during an actual match.
+
+The admin dashboard must prioritize information hierarchy and operational efficiency.
+
+**Design quality should be treated as a core feature, not a finishing touch.**
+
+---
+
+# 27. EXPECTED FINAL DELIVERABLES
+
+At the end, provide:
+
+1. Complete working application.
+2. Player interface.
+3. Referee interface.
+4. Admin dashboard.
+5. Supabase SQL/migration files.
+6. Authentication setup.
+7. Payment integration architecture.
+8. Cancellation and refund implementation.
+9. Wallet implementation.
+10. README.
+11. Environment variables example.
+12. Demo account instructions.
+13. Testing instructions.
+14. Deployment instructions.
+
+Explain which external services require my own API keys or merchant accounts.
+
+Do not claim an integration is complete if it still requires external credentials or approval.
+
+---
+
+# FINAL INSTRUCTION
+
+Build this as a serious commercial football platform.
+
+The initial market is Riyadh, Saudi Arabia.
+
+The initial main product is organized 7v7 football.
+
+Every match has 14 player spots and a two-hour venue booking:
+
+- 15 minutes arrival and organization.
+- 45 minutes first half.
+- 15 minutes halftime.
+- 45 minutes second half.
+
+The initial negotiated pitch cost is 250 SAR including water. Referee cost is configurable and must be accounted for separately until confirmed.
+
+Players pay individually for matches.
+
+Do not implement prepaid match bundles or subscriptions.
+
+The wallet is primarily for eligible refunds and compensation.
+
+The most important business features are reliable booking, match attendance, referee reporting, player statistics and the cancellation/replacement system.
+
+The most important development priority is a world-class user interface.
+
+**Start by presenting the proposed architecture and building the complete visual design system and player application. Do not rush into backend implementation before establishing a high-quality interface.**
+
+Make thoughtful design decisions independently. Avoid repeatedly asking me for minor design preferences. Use professional judgment and deliver a cohesive product.
