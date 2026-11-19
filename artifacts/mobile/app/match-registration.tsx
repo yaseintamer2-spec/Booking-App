@@ -31,7 +31,8 @@ const POSITION_OPTIONS: { label: string; value: PositionPreference }[] = [
   { label: 'Midfielder', value: 'midfielder' },
   { label: 'Attacker', value: 'attacker' },
 ];
-const PITCH_ROWS = [[0, 1], [2, 3], [4, 5], [6]];
+const TEAM_A_ROWS = [[0], [1, 2], [3, 4, 5], [6]];
+const TEAM_B_ROWS = [[0], [1, 2, 3], [4, 5], [6]];
 
 type Palette = ReturnType<typeof useColors>;
 
@@ -332,6 +333,20 @@ function Pitch({
         { backgroundColor: colors.accent, borderColor: colors.border },
       ]}
     >
+      <View pointerEvents="none" style={styles.pitchStripes}>
+        {Array.from({ length: 6 }, (_, index) => (
+          <View
+            key={index}
+            style={[
+              styles.pitchStripe,
+              {
+                left: `${(index / 6) * 100}%`,
+                backgroundColor: index % 2 === 0 ? 'rgba(57,217,138,0.055)' : 'transparent',
+              },
+            ]}
+          />
+        ))}
+      </View>
       <View pointerEvents="none" style={styles.pitchOutline} />
       <View pointerEvents="none" style={[styles.pitchCenterLine, { backgroundColor: colors.border }]} />
       <View pointerEvents="none" style={[styles.pitchCenterCircle, { borderColor: colors.border }]} />
@@ -339,9 +354,9 @@ function Pitch({
         players={topHalf}
         colors={colors}
         teamLabel="TEAM A"
-        teamAccent="#FF5D5D"
+        teamAccent="#45AEFF"
+        formationRows={TEAM_A_ROWS}
         onJoinSpot={onJoinSpot}
-        reverseRows
       />
       <View pointerEvents="none" style={[styles.pitchCenterLine, { backgroundColor: colors.border }]} />
       <View pointerEvents="none" style={[styles.pitchCenterCircle, { borderColor: colors.border }]} />
@@ -350,6 +365,7 @@ function Pitch({
         colors={colors}
         teamLabel="TEAM B"
         teamAccent="#FF8C8C"
+        formationRows={TEAM_B_ROWS}
         onJoinSpot={onJoinSpot}
       />
     </View>
@@ -361,25 +377,27 @@ function PitchHalf({
   colors,
   teamLabel,
   teamAccent,
+  formationRows,
   onJoinSpot,
-  reverseRows = false,
 }: {
   players: (RegistrationParticipant | null)[];
   colors: Palette;
   teamLabel: string;
   teamAccent: string;
+  formationRows: number[][];
   onJoinSpot: () => void;
-  reverseRows?: boolean;
 }) {
-  const rows = reverseRows ? [...PITCH_ROWS].reverse() : PITCH_ROWS;
   return (
     <View style={styles.pitchHalf}>
       <View style={styles.teamLabelRow}>
         <View style={[styles.teamDot, { backgroundColor: teamAccent }]} />
         <Text style={[styles.teamLabel, { color: teamAccent }]}>{teamLabel}</Text>
       </View>
-      {rows.map((row, rowIndex) => (
-        <View key={`${reverseRows ? 'top' : 'bottom'}-${rowIndex}`} style={styles.pitchRow}>
+      {formationRows.map((row, rowIndex) => (
+        <View
+          key={`${teamLabel}-${rowIndex}`}
+          style={[styles.pitchRow, row.length === 2 && styles.pitchPairRow]}
+        >
           {row.map((slotIndex) => (
             <PlayerSlot
               key={slotIndex}
@@ -641,6 +659,8 @@ const styles = StyleSheet.create({
   matchSubtitle: { fontSize: 12, marginTop: 3 },
   sectionLabel: { fontSize: 10, letterSpacing: 1.6, fontWeight: '800', marginTop: 26, marginBottom: 12 },
   pitch: { height: 468, borderWidth: 1, borderRadius: 18, overflow: 'hidden', position: 'relative', paddingHorizontal: 8 },
+  pitchStripes: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
+  pitchStripe: { position: 'absolute', top: 0, bottom: 0, width: '16.667%' },
   pitchOutline: { position: 'absolute', top: 8, bottom: 8, left: 12, right: 12, borderWidth: 1, borderColor: 'rgba(211,222,214,0.18)', borderRadius: 14 },
   pitchCenterLine: { position: 'absolute', top: '50%', left: 12, right: 12, height: 1, opacity: 0.8 },
   pitchCenterCircle: { position: 'absolute', top: '50%', left: '50%', width: 58, height: 58, marginLeft: -29, marginTop: -29, borderWidth: 1, borderRadius: 29, opacity: 0.8 },
@@ -649,6 +669,7 @@ const styles = StyleSheet.create({
   teamDot: { width: 6, height: 6, borderRadius: 3 },
   teamLabel: { fontSize: 8, fontWeight: '800', letterSpacing: 1.2 },
   pitchRow: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center' },
+  pitchPairRow: { justifyContent: 'center', columnGap: 14 },
   playerSlot: { width: 74, height: 50, alignItems: 'center', justifyContent: 'flex-start' },
   openPlayerSlot: { justifyContent: 'center' },
   playerAvatar: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
