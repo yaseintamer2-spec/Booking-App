@@ -55,19 +55,11 @@ export default function MatchRegistrationScreen() {
   const joinedCount = participants.length;
   const isFull = joinedCount >= match.maxPlayers || match.status === 'full';
   const isCancelled = match.status === 'cancelled';
-  const isConfirmed =
-    joinedCount >= match.minPlayers ||
-    match.status === 'confirmed' ||
-    match.status === 'full';
+  const spotsRemaining = Math.max(0, match.maxPlayers - joinedCount);
   const goalkeeperCount = participants.filter(
     (participant) => participant.positionPreference === 'goalkeeper',
   ).length;
   const goalkeeperLimitReached = goalkeeperCount >= MAX_GOALKEEPERS;
-  const progress = Math.min(joinedCount / match.maxPlayers, 1);
-  const confirmationMarker = Math.min(
-    match.minPlayers / match.maxPlayers,
-    1,
-  );
 
   const joinMatch = () => {
     if (joining || joined || isFull || isCancelled) return;
@@ -144,7 +136,6 @@ export default function MatchRegistrationScreen() {
           <SectionLabel colors={colors}>PLAYERS</SectionLabel>
           <Pitch
             participants={participants}
-            maxPlayers={match.maxPlayers}
             colors={colors}
             onJoinSpot={joinMatch}
           />
@@ -152,9 +143,7 @@ export default function MatchRegistrationScreen() {
           <ProgressArea
             joinedCount={joinedCount}
             match={match}
-            isConfirmed={isConfirmed}
-            progress={progress}
-            confirmationMarker={confirmationMarker}
+            spotsRemaining={spotsRemaining}
             colors={colors}
           />
 
@@ -326,22 +315,15 @@ function SectionLabel({
 
 function Pitch({
   participants,
-  maxPlayers,
   colors,
   onJoinSpot,
 }: {
   participants: RegistrationParticipant[];
-  maxPlayers: number;
   colors: Palette;
   onJoinSpot: () => void;
 }) {
-  const topHalf = Array.from({ length: Math.ceil(maxPlayers / 2) }, (_, index) =>
-    participants[index] ?? null,
-  );
-  const bottomHalf = Array.from(
-    { length: Math.floor(maxPlayers / 2) },
-    (_, index) => participants[Math.ceil(maxPlayers / 2) + index] ?? null,
-  );
+  const topHalf = participants.filter((_, index) => index % 2 === 0);
+  const bottomHalf = participants.filter((_, index) => index % 2 === 1);
 
   return (
     <View
@@ -356,12 +338,18 @@ function Pitch({
       <PitchHalf
         players={topHalf}
         colors={colors}
+        teamLabel="TEAM A"
+        teamAccent="#FF5D5D"
         onJoinSpot={onJoinSpot}
         reverseRows
       />
+      <View pointerEvents="none" style={[styles.pitchCenterLine, { backgroundColor: colors.border }]} />
+      <View pointerEvents="none" style={[styles.pitchCenterCircle, { borderColor: colors.border }]} />
       <PitchHalf
         players={bottomHalf}
         colors={colors}
+        teamLabel="TEAM B"
+        teamAccent="#FF8C8C"
         onJoinSpot={onJoinSpot}
       />
     </View>
@@ -371,17 +359,25 @@ function Pitch({
 function PitchHalf({
   players,
   colors,
+  teamLabel,
+  teamAccent,
   onJoinSpot,
   reverseRows = false,
 }: {
   players: (RegistrationParticipant | null)[];
   colors: Palette;
+  teamLabel: string;
+  teamAccent: string;
   onJoinSpot: () => void;
   reverseRows?: boolean;
 }) {
   const rows = reverseRows ? [...PITCH_ROWS].reverse() : PITCH_ROWS;
   return (
     <View style={styles.pitchHalf}>
+      <View style={styles.teamLabelRow}>
+        <View style={[styles.teamDot, { backgroundColor: teamAccent }]} />
+        <Text style={[styles.teamLabel, { color: teamAccent }]}>{teamLabel}</Text>
+      </View>
       {rows.map((row, rowIndex) => (
         <View key={`${reverseRows ? 'top' : 'bottom'}-${rowIndex}`} style={styles.pitchRow}>
           {row.map((slotIndex) => (
@@ -389,6 +385,7 @@ function PitchHalf({
               key={slotIndex}
               participant={players[slotIndex] ?? null}
               colors={colors}
+              teamAccent={teamAccent}
               onJoinSpot={onJoinSpot}
             />
           ))}
@@ -401,10 +398,12 @@ function PitchHalf({
 function PlayerSlot({
   participant,
   colors,
+  teamAccent,
   onJoinSpot,
 }: {
   participant: RegistrationParticipant | null;
   colors: Palette;
+  teamAccent: string;
   onJoinSpot: () => void;
 }) {
   const opacity = useRef(new Animated.Value(participant ? 0 : 1)).current;
@@ -432,6 +431,7 @@ function PlayerSlot({
         style={({ pressed }) => [
           styles.playerSlot,
           styles.openPlayerSlot,
+          { borderColor: teamAccent },
           {
             opacity: pressed ? 0.7 : 1,
             borderWidth: focused ? 2 : 0,
@@ -456,7 +456,7 @@ function PlayerSlot({
       <View
         style={[
           styles.playerAvatar,
-          { backgroundColor: colors.secondary, borderColor: colors.border },
+          { backgroundColor: colors.secondary, borderColor: teamAccent },
         ]}
       >
         <PlayerPortrait participant={participant} colors={colors} />
@@ -514,18 +514,27 @@ function PlayerPortrait({
 function ProgressArea({
   joinedCount,
   match,
-  isConfirmed,
-  progress,
-  confirmationMarker,
+  spotsRemaining,
   colors,
 }: {
   joinedCount: number;
   match: RegistrationMatch;
-  isConfirmed: boolean;
-  progress: number;
-  confirmationMarker: number;
+  spotsRemaining: number;
   colors: Palette;
 }) {
+  const progress = match.maxPlayers > 0
+    ? Math.min(joinedCount / match.maxPlayers, 1)
+    : 0;
+  const statusLabel = match.status === 'cancelled'
+    ? 'Match cancelled'
+    : match.status === 'full' || spotsRemaining === 0
+      ? 'Match full'
+      : match.status === 'confirmed'
+        ? 'Match confirmed'
+        : `${spotsRemaining} spots left`;
+  const statusColor = match.status === 'confirmed' || match.status === 'full'
+    ? colors.primary
+    : colors.mutedForeground;
   return (
     <View style={styles.progressArea}>
       <View style={styles.progressLabels}>
@@ -535,10 +544,10 @@ function ProgressArea({
         <Text
           style={[
             styles.progressStatus,
-            { color: isConfirmed ? colors.primary : colors.mutedForeground },
+            { color: statusColor },
           ]}
         >
-          {isConfirmed ? 'Match confirmed' : `Needs ${match.minPlayers} to confirm`}
+          {statusLabel}
         </Text>
       </View>
       <View
@@ -558,19 +567,9 @@ function ProgressArea({
             { backgroundColor: colors.primary, width: `${progress * 100}%` },
           ]}
         />
-        <View
-          pointerEvents="none"
-          style={[
-            styles.confirmationMarker,
-            {
-              backgroundColor: colors.foreground,
-              left: `${confirmationMarker * 100}%`,
-            },
-          ]}
-        />
       </View>
       <Text style={[styles.teamsNote, { color: colors.mutedForeground }]}>
-        Teams are balanced automatically once the match is confirmed.
+        Teams are balanced evenly as players join.
       </Text>
     </View>
   );
@@ -641,11 +640,14 @@ const styles = StyleSheet.create({
   matchTitle: { fontFamily: 'Georgia', fontSize: 29, lineHeight: 36, marginTop: 8 },
   matchSubtitle: { fontSize: 12, marginTop: 3 },
   sectionLabel: { fontSize: 10, letterSpacing: 1.6, fontWeight: '800', marginTop: 26, marginBottom: 12 },
-  pitch: { height: 432, borderWidth: 1, borderRadius: 18, overflow: 'hidden', position: 'relative', paddingHorizontal: 8 },
+  pitch: { height: 468, borderWidth: 1, borderRadius: 18, overflow: 'hidden', position: 'relative', paddingHorizontal: 8 },
   pitchOutline: { position: 'absolute', top: 8, bottom: 8, left: 12, right: 12, borderWidth: 1, borderColor: 'rgba(211,222,214,0.18)', borderRadius: 14 },
   pitchCenterLine: { position: 'absolute', top: '50%', left: 12, right: 12, height: 1, opacity: 0.8 },
   pitchCenterCircle: { position: 'absolute', top: '50%', left: '50%', width: 58, height: 58, marginLeft: -29, marginTop: -29, borderWidth: 1, borderRadius: 29, opacity: 0.8 },
   pitchHalf: { flex: 1, justifyContent: 'space-evenly', paddingVertical: 2 },
+  teamLabelRow: { height: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  teamDot: { width: 6, height: 6, borderRadius: 3 },
+  teamLabel: { fontSize: 8, fontWeight: '800', letterSpacing: 1.2 },
   pitchRow: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center' },
   playerSlot: { width: 74, height: 50, alignItems: 'center', justifyContent: 'flex-start' },
   openPlayerSlot: { justifyContent: 'center' },
@@ -661,7 +663,6 @@ const styles = StyleSheet.create({
   progressStatus: { fontSize: 11, fontWeight: '600', textAlign: 'right' },
   progressTrack: { height: 8, borderRadius: 5, overflow: 'visible', position: 'relative' },
   progressFill: { height: '100%', borderRadius: 5 },
-  confirmationMarker: { position: 'absolute', top: -4, width: 2, height: 16, marginLeft: -1 },
   teamsNote: { fontSize: 11, lineHeight: 16, marginTop: 10 },
   preferenceNote: { fontSize: 11, marginTop: -5, marginBottom: 12 },
   positionOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -674,3 +675,4 @@ const styles = StyleSheet.create({
   joinButtonText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
   paymentNote: { fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 8 },
 });
+

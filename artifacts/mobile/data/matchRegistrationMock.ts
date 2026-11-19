@@ -24,7 +24,6 @@ export type RegistrationMatch = {
   pitchName: string;
   area: string;
   pricePerPlayer: number;
-  minPlayers: number;
   maxPlayers: number;
   status: RegistrationMatchStatus;
 };
@@ -40,19 +39,19 @@ export const matchRegistrationMock: {
     pitchName: 'The Green Pitch',
     area: 'Al Malqa, Riyadh',
     pricePerPlayer: 30,
-    minPlayers: 12,
     maxPlayers: 14,
     status: 'open',
   },
   participants: [
-    { userId: 'player-01', firstName: 'Omar', avatarUrl: null, positionPreference: 'goalkeeper' },
-    { userId: 'player-02', firstName: 'Faisal', avatarUrl: null, positionPreference: 'defender' },
-    { userId: 'player-03', firstName: 'Khalid', avatarUrl: null, positionPreference: 'midfielder' },
-    { userId: 'player-04', firstName: 'Yousef', avatarUrl: null, positionPreference: 'attacker' },
-    { userId: 'player-05', firstName: 'Abdulrahman', avatarUrl: null, positionPreference: 'defender' },
+    { userId: 'player-01', firstName: 'Omar', avatarUrl: 'https://randomuser.me/api/portraits/men/32.jpg', positionPreference: 'goalkeeper' },
+    { userId: 'player-02', firstName: 'Faisal', avatarUrl: 'https://randomuser.me/api/portraits/men/45.jpg', positionPreference: 'defender' },
+    { userId: 'player-03', firstName: 'Khalid', avatarUrl: 'https://randomuser.me/api/portraits/men/18.jpg', positionPreference: 'midfielder' },
+    { userId: 'player-04', firstName: 'Yousef', avatarUrl: 'https://randomuser.me/api/portraits/men/67.jpg', positionPreference: 'attacker' },
+    { userId: 'player-05', firstName: 'Abdulrahman', avatarUrl: 'https://randomuser.me/api/portraits/men/12.jpg', positionPreference: 'defender' },
     { userId: 'player-06', firstName: 'Nasser', avatarUrl: null, positionPreference: 'midfielder' },
-    { userId: 'player-07', firstName: 'Saud', avatarUrl: null, positionPreference: 'anywhere' },
-    { userId: 'player-08', firstName: 'Majed', avatarUrl: null, positionPreference: 'goalkeeper' },
+    { userId: 'player-07', firstName: 'Saud', avatarUrl: 'https://randomuser.me/api/portraits/men/51.jpg', positionPreference: 'anywhere' },
+    { userId: 'player-08', firstName: 'Majed', avatarUrl: 'https://randomuser.me/api/portraits/men/9.jpg', positionPreference: 'goalkeeper' },
     { userId: 'player-09', firstName: 'Turki', avatarUrl: null, positionPreference: 'attacker' },
   ],
 };
+
