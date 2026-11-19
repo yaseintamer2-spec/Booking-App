@@ -12,16 +12,34 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useColors } from '@/hooks/useColors';
 import {
   matchRegistrationMock,
+  mockJoinMatch,
   type PositionPreference,
   type RegistrationMatch,
   type RegistrationParticipant,
 } from '@/data/matchRegistrationMock';
 
 const SHOW_PREVIEW_NOTICE = true;
-const MAX_GOALKEEPERS = 2;
+const SCREEN_COLORS = {
+  background: '#05111A',
+  card: '#12293A',
+  secondary: '#12293A',
+  border: '#1F3D52',
+  foreground: '#F5FBFF',
+  mutedForeground: '#A3BDCE',
+  primary: '#C8F53A',
+  primaryForeground: '#07120A',
+  accent: '#C8F53A',
+  secondaryForeground: '#A3BDCE',
+  destructive: '#FF1A2B',
+  amber: '#F5C451',
+  blue: '#0A62FF',
+  red: '#FF1A2B',
+  pitch: '#3AA860',
+  pitchDark: '#319956',
+  pitchOutline: '#0B3A26',
+};
 const PREVIEW_COPY =
   "For illustrative purposes only. This isn't the final result: the match shown is a sample, and the design and prices may change.";
 const POSITION_OPTIONS: { label: string; value: PositionPreference }[] = [
@@ -31,28 +49,49 @@ const POSITION_OPTIONS: { label: string; value: PositionPreference }[] = [
   { label: 'Midfielder', value: 'midfielder' },
   { label: 'Attacker', value: 'attacker' },
 ];
-const TEAM_A_ROWS = [[0], [1, 2], [3, 4, 5], [6]];
-const TEAM_B_ROWS = [[0], [1, 2, 3], [4, 5], [6]];
+const PITCH_HEIGHT = 700;
+const SLOT_HEIGHT = 68;
+const FORMATION_ROWS: [number, number[]][] = [
+  [14, [50]],
+  [100, [36, 64]],
+  [186, [18, 50, 82]],
+  [272, [50]],
+];
+const PITCH_SLOTS = [0, 1].flatMap((half) =>
+  FORMATION_ROWS.flatMap(([y, columns]) =>
+    columns.map((x) => ({
+      half,
+      x,
+      y: half ? PITCH_HEIGHT - (y + SLOT_HEIGHT) : y,
+    })),
+  ),
+);
 
-type Palette = ReturnType<typeof useColors>;
+type Palette = typeof SCREEN_COLORS;
 
 export default function MatchRegistrationScreen() {
-  const colors = useColors();
+  const colors = SCREEN_COLORS;
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [noticeVisible, setNoticeVisible] = useState(SHOW_PREVIEW_NOTICE);
   const [participants, setParticipants] = useState(
     matchRegistrationMock.participants,
   );
+  const [joinError, setJoinError] = useState<string | null>(null);
   const [positionPreference, setPositionPreference] =
     useState<PositionPreference>('anywhere');
   const [joining, setJoining] = useState(false);
-  const [joined, setJoined] = useState(false);
+  const [joined, setJoined] = useState(() =>
+    matchRegistrationMock.participants.some(
+      (participant) => participant.userId === matchRegistrationMock.currentUser.userId,
+    ),
+  );
+  const joinLock = useRef(false);
   const [focusedPosition, setFocusedPosition] =
     useState<PositionPreference | null>(null);
   const [joinButtonFocused, setJoinButtonFocused] = useState(false);
 
-  const { match } = matchRegistrationMock;
+  const { match, currentUser } = matchRegistrationMock;
   const joinedCount = participants.length;
   const isFull = joinedCount >= match.maxPlayers || match.status === 'full';
   const isCancelled = match.status === 'cancelled';
@@ -60,28 +99,37 @@ export default function MatchRegistrationScreen() {
   const goalkeeperCount = participants.filter(
     (participant) => participant.positionPreference === 'goalkeeper',
   ).length;
-  const goalkeeperLimitReached = goalkeeperCount >= MAX_GOALKEEPERS;
+  const goalkeeperLimitReached = goalkeeperCount >= match.maxGoalkeepers;
 
-  const joinMatch = () => {
-    if (joining || joined || isFull || isCancelled) return;
-
+  const joinMatch = async () => {
+    if (joinLock.current || joining || joined || isFull || isCancelled) return;
+    joinLock.current = true;
+    setJoinError(null);
     setJoining(true);
-    setTimeout(() => {
+    try {
+      await mockJoinMatch(match.id, positionPreference);
       setParticipants((current) => {
-        if (current.length >= match.maxPlayers) return current;
+        if (
+          current.length >= match.maxPlayers ||
+          current.some((participant) => participant.userId === currentUser.userId)
+        ) return current;
         return [
           ...current,
           {
-            userId: 'current-player',
-            firstName: 'You',
-            avatarUrl: null,
+            userId: currentUser.userId,
+            firstName: currentUser.firstName,
+            avatarUrl: currentUser.avatarUrl,
             positionPreference,
           },
         ];
       });
       setJoined(true);
+    } catch {
+      setJoinError('Could not join this match. Please try again.');
+    } finally {
+      joinLock.current = false;
       setJoining(false);
-    }, 550);
+    }
   };
 
   const dateTitle = formatMatchDate(match.startsAt);
@@ -125,7 +173,7 @@ export default function MatchRegistrationScreen() {
             />
           ) : null}
           <Text style={[styles.matchKicker, { color: colors.primary }]}>
-            7x7 · 2 HOURS · REFEREE INCLUDED
+            {`7x7 · ${match.durationHours} HOURS · REFEREE INCLUDED`}
           </Text>
           <Text style={[styles.matchTitle, { color: colors.foreground }]}>
             {dateTitle}
@@ -138,19 +186,14 @@ export default function MatchRegistrationScreen() {
           <Pitch
             participants={participants}
             colors={colors}
+            maxPlayers={match.maxPlayers}
             onJoinSpot={joinMatch}
-          />
-
-          <ProgressArea
-            joinedCount={joinedCount}
-            match={match}
-            spotsRemaining={spotsRemaining}
-            colors={colors}
+            disabled={joining || joined || isFull || isCancelled}
           />
 
           <SectionLabel colors={colors}>YOUR POSITION</SectionLabel>
           <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>
-            Just a preference — teams are balanced automatically.
+            Only a preference for balancing teams, not a fixed spot.
           </Text>
           <View style={styles.positionOptions}>
             {POSITION_OPTIONS.map((option) => {
@@ -181,7 +224,11 @@ export default function MatchRegistrationScreen() {
                   <Text
                     style={[
                       styles.positionLabel,
-                      { color: selected ? colors.primary : colors.foreground },
+                      {
+                        color: selected
+                          ? colors.primaryForeground
+                          : colors.foreground,
+                      },
                     ]}
                   >
                     {option.label}
@@ -192,9 +239,16 @@ export default function MatchRegistrationScreen() {
           </View>
           {goalkeeperLimitReached ? (
             <Text style={[styles.goalkeeperNote, { color: colors.mutedForeground }]}>
-              The match already has the maximum of {MAX_GOALKEEPERS} goalkeepers.
+              The match already has the maximum of {match.maxGoalkeepers} goalkeepers.
             </Text>
           ) : null}
+
+          <ProgressArea
+            joinedCount={joinedCount}
+            match={match}
+            spotsRemaining={spotsRemaining}
+            colors={colors}
+          />
         </View>
       </ScrollView>
 
@@ -250,6 +304,11 @@ export default function MatchRegistrationScreen() {
           <Text style={[styles.paymentNote, { color: colors.mutedForeground }]}>
             Pay with mada or Apple Pay · full refund if the match isn't confirmed
           </Text>
+          {joinError ? (
+            <Text accessibilityRole="alert" style={[styles.joinError, { color: colors.destructive }]}>
+              {joinError}
+            </Text>
+          ) : null}
         </View>
       </View>
     </View>
@@ -268,17 +327,19 @@ function PreviewNotice({
     <View
       style={[
         styles.previewNotice,
-        { backgroundColor: colors.card, borderColor: colors.border },
+        { backgroundColor: 'rgba(245,196,81,0.09)', borderColor: 'rgba(245,196,81,0.4)' },
       ]}
     >
-      <View style={[styles.previewTag, { backgroundColor: colors.accent }]}>
-        <Text style={[styles.previewTagText, { color: colors.primary }]}>
-          PREVIEW
+      <View style={styles.previewContent}>
+        <View style={[styles.previewTag, { backgroundColor: colors.amber }]}>
+          <Text style={[styles.previewTagText, { color: colors.background }]}>
+            PREVIEW
+          </Text>
+        </View>
+        <Text style={[styles.previewCopy, { color: colors.foreground }]}>
+          {PREVIEW_COPY}
         </Text>
       </View>
-      <Text style={[styles.previewCopy, { color: colors.secondaryForeground }]}>
-        {PREVIEW_COPY}
-      </Text>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Dismiss preview notice"
@@ -308,7 +369,7 @@ function SectionLabel({
   children: string;
 }) {
   return (
-    <Text style={[styles.sectionLabel, { color: colors.primary }]}>
+    <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
       {children}
     </Text>
   );
@@ -317,96 +378,56 @@ function SectionLabel({
 function Pitch({
   participants,
   colors,
+  maxPlayers,
   onJoinSpot,
+  disabled,
 }: {
   participants: RegistrationParticipant[];
   colors: Palette;
+  maxPlayers: number;
   onJoinSpot: () => void;
+  disabled: boolean;
 }) {
   const topHalf = participants.filter((_, index) => index % 2 === 0);
   const bottomHalf = participants.filter((_, index) => index % 2 === 1);
+  const teams = [topHalf, bottomHalf];
 
   return (
     <View
       style={[
         styles.pitch,
-        { backgroundColor: colors.accent, borderColor: colors.border },
+        { borderColor: colors.pitchOutline },
       ]}
+      accessibilityLabel={`Football pitch with ${maxPlayers} player spots`}
     >
       <View pointerEvents="none" style={styles.pitchStripes}>
-        {Array.from({ length: 6 }, (_, index) => (
+        {Array.from({ length: 12 }, (_, index) => (
           <View
             key={index}
             style={[
               styles.pitchStripe,
-              {
-                left: `${(index / 6) * 100}%`,
-                backgroundColor: index % 2 === 0 ? 'rgba(57,217,138,0.055)' : 'transparent',
-              },
+              { backgroundColor: index % 2 === 0 ? colors.pitch : colors.pitchDark },
             ]}
           />
         ))}
       </View>
       <View pointerEvents="none" style={styles.pitchOutline} />
-      <View pointerEvents="none" style={[styles.pitchCenterLine, { backgroundColor: colors.border }]} />
-      <View pointerEvents="none" style={[styles.pitchCenterCircle, { borderColor: colors.border }]} />
-      <PitchHalf
-        players={topHalf}
-        colors={colors}
-        teamLabel="TEAM A"
-        teamAccent="#45AEFF"
-        formationRows={TEAM_A_ROWS}
-        onJoinSpot={onJoinSpot}
-      />
-      <View pointerEvents="none" style={[styles.pitchCenterLine, { backgroundColor: colors.border }]} />
-      <View pointerEvents="none" style={[styles.pitchCenterCircle, { borderColor: colors.border }]} />
-      <PitchHalf
-        players={bottomHalf}
-        colors={colors}
-        teamLabel="TEAM B"
-        teamAccent="#FF8C8C"
-        formationRows={TEAM_B_ROWS}
-        onJoinSpot={onJoinSpot}
-      />
-    </View>
-  );
-}
-
-function PitchHalf({
-  players,
-  colors,
-  teamLabel,
-  teamAccent,
-  formationRows,
-  onJoinSpot,
-}: {
-  players: (RegistrationParticipant | null)[];
-  colors: Palette;
-  teamLabel: string;
-  teamAccent: string;
-  formationRows: number[][];
-  onJoinSpot: () => void;
-}) {
-  return (
-    <View style={styles.pitchHalf}>
-      <View style={styles.teamLabelRow}>
-        <View style={[styles.teamDot, { backgroundColor: teamAccent }]} />
-        <Text style={[styles.teamLabel, { color: teamAccent }]}>{teamLabel}</Text>
-      </View>
-      {formationRows.map((row, rowIndex) => (
+      <View pointerEvents="none" style={[styles.pitchMidLine, { backgroundColor: '#E7F5E9' }]} />
+      <View pointerEvents="none" style={styles.pitchCenterCircle} />
+      <View pointerEvents="none" style={[styles.pitchGoalBox, styles.pitchTopBox]} />
+      <View pointerEvents="none" style={[styles.pitchGoalBox, styles.pitchBottomBox]} />
+      {PITCH_SLOTS.map((slot, index) => (
         <View
-          key={`${teamLabel}-${rowIndex}`}
-          style={[styles.pitchRow, row.length === 2 && styles.pitchPairRow]}
+          key={`slot-${index}`}
+          style={[styles.absoluteSlot, { left: `${slot.x}%`, top: slot.y }]}
         >
-          {row.map((slotIndex) => (
-            <PlayerSlot
-              key={slotIndex}
-              participant={players[slotIndex] ?? null}
-              colors={colors}
-              teamAccent={teamAccent}
-              onJoinSpot={onJoinSpot}
-            />
-          ))}
+          <PlayerSlot
+            participant={teams[slot.half][index % 7] ?? null}
+            colors={colors}
+            teamAccent={slot.half === 0 ? colors.blue : colors.red}
+            onJoinSpot={onJoinSpot}
+            disabled={disabled}
+          />
         </View>
       ))}
     </View>
@@ -418,11 +439,13 @@ function PlayerSlot({
   colors,
   teamAccent,
   onJoinSpot,
+  disabled,
 }: {
   participant: RegistrationParticipant | null;
   colors: Palette;
   teamAccent: string;
   onJoinSpot: () => void;
+  disabled: boolean;
 }) {
   const opacity = useRef(new Animated.Value(participant ? 0 : 1)).current;
   const scale = useRef(new Animated.Value(participant ? 0.78 : 1)).current;
@@ -443,22 +466,27 @@ function PlayerSlot({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Open player spot. Join this match."
+        accessibilityState={{ disabled }}
+        disabled={disabled}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onPress={onJoinSpot}
         style={({ pressed }) => [
           styles.playerSlot,
           styles.openPlayerSlot,
-          { borderColor: teamAccent },
           {
             opacity: pressed ? 0.7 : 1,
+            borderRadius: 26,
             borderWidth: focused ? 2 : 0,
             borderColor: focused ? colors.foreground : 'transparent',
           },
         ]}
       >
-        <View style={[styles.openSpot, { borderColor: colors.secondaryForeground }]}>
+        <View style={styles.openSpot}>
           <Feather name="plus" size={18} color={colors.secondaryForeground} />
+        </View>
+        <View style={styles.nameChip}>
+          <Text style={styles.playerName}>Open</Text>
         </View>
       </Pressable>
     );
@@ -474,18 +502,24 @@ function PlayerSlot({
       <View
         style={[
           styles.playerAvatar,
-          { backgroundColor: colors.secondary, borderColor: teamAccent },
+          {
+            backgroundColor: colors.secondary,
+            borderColor: teamAccent,
+            shadowColor: teamAccent,
+          },
         ]}
       >
         <PlayerPortrait participant={participant} colors={colors} />
       </View>
-      <Text
-        numberOfLines={1}
-        ellipsizeMode="tail"
-        style={[styles.playerName, { color: colors.foreground }]}
-      >
-        {participant.firstName}
-      </Text>
+      <View style={styles.nameChip}>
+        <Text
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          style={styles.playerName}
+        >
+          {participant.firstName}
+        </Text>
+      </View>
     </Animated.View>
   );
 }
@@ -520,7 +554,7 @@ function PlayerPortrait({
     <View
       accessible
       accessibilityLabel={`${participant.firstName} profile picture unavailable`}
-      style={[styles.initialsAvatar, { backgroundColor: colors.secondary }]}
+        style={[styles.initialsAvatar, { backgroundColor: colors.secondary }]}
     >
       <Text style={[styles.initials, { color: colors.secondaryForeground }]}>
         {getInitials(participant.firstName)}
@@ -587,7 +621,7 @@ function ProgressArea({
         />
       </View>
       <Text style={[styles.teamsNote, { color: colors.mutedForeground }]}>
-        Teams are balanced evenly as players join.
+        Teams are balanced automatically once the match is confirmed.
       </Text>
     </View>
   );
@@ -649,51 +683,51 @@ const styles = StyleSheet.create({
   headerSubtitle: { fontSize: 12, letterSpacing: 0.4 },
   scrollContent: { flexGrow: 1, paddingBottom: 130 },
   content: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 20 },
-  previewNotice: { borderWidth: 1, borderRadius: 14, padding: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 9, marginBottom: 20 },
-  previewTag: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 12, marginTop: 1 },
-  previewTagText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
-  previewCopy: { flex: 1, fontSize: 11, lineHeight: 16 },
+  previewNotice: { borderWidth: 1, borderRadius: 16, padding: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 9, marginBottom: 20 },
+  previewContent: { flex: 1, paddingTop: 2 },
+  previewTag: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 8 },
+  previewTagText: { fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  previewCopy: { fontSize: 13, lineHeight: 19 },
   dismissButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginTop: -8, marginRight: -8 },
-  matchKicker: { fontSize: 10, letterSpacing: 1.4, fontWeight: '700', marginTop: 6 },
-  matchTitle: { fontFamily: 'Georgia', fontSize: 29, lineHeight: 36, marginTop: 8 },
-  matchSubtitle: { fontSize: 12, marginTop: 3 },
-  sectionLabel: { fontSize: 10, letterSpacing: 1.6, fontWeight: '800', marginTop: 26, marginBottom: 12 },
-  pitch: { height: 468, borderWidth: 1, borderRadius: 18, overflow: 'hidden', position: 'relative', paddingHorizontal: 8 },
-  pitchStripes: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
-  pitchStripe: { position: 'absolute', top: 0, bottom: 0, width: '16.667%' },
-  pitchOutline: { position: 'absolute', top: 8, bottom: 8, left: 12, right: 12, borderWidth: 1, borderColor: 'rgba(211,222,214,0.18)', borderRadius: 14 },
-  pitchCenterLine: { position: 'absolute', top: '50%', left: 12, right: 12, height: 1, opacity: 0.8 },
-  pitchCenterCircle: { position: 'absolute', top: '50%', left: '50%', width: 58, height: 58, marginLeft: -29, marginTop: -29, borderWidth: 1, borderRadius: 29, opacity: 0.8 },
-  pitchHalf: { flex: 1, justifyContent: 'space-evenly', paddingVertical: 2 },
-  teamLabelRow: { height: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  teamDot: { width: 6, height: 6, borderRadius: 3 },
-  teamLabel: { fontSize: 8, fontWeight: '800', letterSpacing: 1.2 },
-  pitchRow: { flexDirection: 'row', justifyContent: 'space-evenly', alignItems: 'center' },
-  pitchPairRow: { justifyContent: 'center', columnGap: 14 },
-  playerSlot: { width: 74, height: 50, alignItems: 'center', justifyContent: 'flex-start' },
-  openPlayerSlot: { justifyContent: 'center' },
-  playerAvatar: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  playerImage: { width: '100%', height: '100%', borderRadius: 17 },
-  initialsAvatar: { width: '100%', height: '100%', borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  matchKicker: { fontSize: 12, letterSpacing: 1.3, fontWeight: '700', marginTop: 6 },
+  matchTitle: { fontSize: 34, lineHeight: 40, fontWeight: '800', marginTop: 8 },
+  matchSubtitle: { fontSize: 14, marginTop: 3 },
+  sectionLabel: { fontSize: 12, letterSpacing: 1.5, fontWeight: '800', marginTop: 26, marginBottom: 12 },
+  pitch: { height: PITCH_HEIGHT, borderWidth: 3, borderRadius: 24, overflow: 'hidden', position: 'relative', backgroundColor: SCREEN_COLORS.pitch },
+  pitchStripes: { ...StyleSheet.absoluteFill, flexDirection: 'column' },
+  pitchStripe: { width: '100%', flex: 1 },
+  pitchOutline: { position: 'absolute', top: 8, bottom: 8, left: 8, right: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)', borderRadius: 14 },
+  pitchMidLine: { position: 'absolute', top: '50%', left: 0, right: 0, height: 2 },
+  pitchCenterCircle: { position: 'absolute', top: '50%', left: '50%', width: 68, height: 68, marginLeft: -34, marginTop: -34, borderWidth: 2, borderColor: 'rgba(255,255,255,0.82)', borderRadius: 34 },
+  pitchGoalBox: { position: 'absolute', left: '50%', width: 150, height: 46, marginLeft: -75, borderWidth: 2, borderColor: 'rgba(255,255,255,0.82)' },
+  pitchTopBox: { top: -2, borderTopWidth: 0 },
+  pitchBottomBox: { bottom: -2, borderBottomWidth: 0 },
+  absoluteSlot: { position: 'absolute', width: 76, marginLeft: -38 },
+  playerSlot: { width: 76, height: SLOT_HEIGHT, alignItems: 'center', justifyContent: 'flex-start' },
+  openPlayerSlot: { justifyContent: 'flex-start' },
+  playerAvatar: { width: 50, height: 50, borderRadius: 25, borderWidth: 3, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+  playerImage: { width: '100%', height: '100%', borderRadius: 25 },
+  initialsAvatar: { width: '100%', height: '100%', borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
   initials: { fontSize: 12, fontWeight: '700' },
-  playerName: { width: 72, textAlign: 'center', fontSize: 10, lineHeight: 13, marginTop: 3 },
-  openSpot: { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+  nameChip: { marginTop: 4, maxWidth: 76, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 7, backgroundColor: 'rgba(7,13,26,0.78)' },
+  playerName: { color: '#FFFFFF', textAlign: 'center', fontSize: 12, lineHeight: 14, fontWeight: '600' },
+  openSpot: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.9)', backgroundColor: 'rgba(7,13,26,0.45)', alignItems: 'center', justifyContent: 'center' },
   progressArea: { marginTop: 18 },
   progressLabels: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 11 },
-  progressJoined: { fontSize: 13, fontWeight: '700' },
-  progressStatus: { fontSize: 11, fontWeight: '600', textAlign: 'right' },
-  progressTrack: { height: 8, borderRadius: 5, overflow: 'visible', position: 'relative' },
+  progressJoined: { fontSize: 18, fontWeight: '700' },
+  progressStatus: { fontSize: 12, fontWeight: '600', textAlign: 'right' },
+  progressTrack: { height: 12, borderRadius: 6, overflow: 'visible', position: 'relative' },
   progressFill: { height: '100%', borderRadius: 5 },
-  teamsNote: { fontSize: 11, lineHeight: 16, marginTop: 10 },
-  preferenceNote: { fontSize: 11, marginTop: -5, marginBottom: 12 },
+  teamsNote: { fontSize: 13, lineHeight: 18, marginTop: 10 },
+  preferenceNote: { fontSize: 13, marginTop: -5, marginBottom: 12 },
   positionOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   positionPill: { minHeight: 44, paddingHorizontal: 14, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  positionLabel: { fontSize: 12, fontWeight: '600' },
+  positionLabel: { fontSize: 14, fontWeight: '600' },
   goalkeeperNote: { fontSize: 11, marginTop: 9 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopWidth: 1, paddingTop: 12, paddingHorizontal: 20 },
   footerContent: { width: '100%', maxWidth: 520, alignSelf: 'center' },
   joinButton: { minHeight: 54, borderRadius: 15, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
   joinButtonText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
   paymentNote: { fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 8 },
+  joinError: { fontSize: 11, textAlign: 'center', marginTop: 6 },
 });
-

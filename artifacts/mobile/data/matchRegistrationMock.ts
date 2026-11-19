@@ -24,34 +24,50 @@ export type RegistrationMatch = {
   pitchName: string;
   area: string;
   pricePerPlayer: number;
+  durationHours: number;
+  maxGoalkeepers: number;
   maxPlayers: number;
   status: RegistrationMatchStatus;
+};
+
+export type RegistrationCurrentUser = {
+  userId: string;
+  firstName: string;
+  avatarUrl: string | null;
 };
 
 // Mock data only: replace this fixture with the match and participant API later.
 export const matchRegistrationMock: {
   match: RegistrationMatch;
   participants: RegistrationParticipant[];
+  currentUser: RegistrationCurrentUser;
 } = {
   match: {
     id: 'riyadh-demo-match',
     startsAt: '2026-11-26T18:00:00.000Z',
-    pitchName: 'The Green Pitch',
+    pitchName: 'Al Malqa Arena',
     area: 'Al Malqa, Riyadh',
     pricePerPlayer: 30,
+    durationHours: 2,
+    maxGoalkeepers: 2,
     maxPlayers: 14,
     status: 'open',
   },
   participants: [
-    { userId: 'player-01', firstName: 'Omar', avatarUrl: 'https://randomuser.me/api/portraits/men/32.jpg', positionPreference: 'goalkeeper' },
-    { userId: 'player-02', firstName: 'Faisal', avatarUrl: 'https://randomuser.me/api/portraits/men/45.jpg', positionPreference: 'defender' },
-    { userId: 'player-03', firstName: 'Khalid', avatarUrl: 'https://randomuser.me/api/portraits/men/18.jpg', positionPreference: 'midfielder' },
-    { userId: 'player-04', firstName: 'Yousef', avatarUrl: 'https://randomuser.me/api/portraits/men/67.jpg', positionPreference: 'attacker' },
-    { userId: 'player-05', firstName: 'Abdulrahman', avatarUrl: 'https://randomuser.me/api/portraits/men/12.jpg', positionPreference: 'defender' },
-    { userId: 'player-06', firstName: 'Nasser', avatarUrl: null, positionPreference: 'midfielder' },
-    { userId: 'player-07', firstName: 'Saud', avatarUrl: 'https://randomuser.me/api/portraits/men/51.jpg', positionPreference: 'anywhere' },
-    { userId: 'player-08', firstName: 'Majed', avatarUrl: 'https://randomuser.me/api/portraits/men/9.jpg', positionPreference: 'goalkeeper' },
-    { userId: 'player-09', firstName: 'Turki', avatarUrl: null, positionPreference: 'attacker' },
+    { userId: 'u1', firstName: 'Marcus', avatarUrl: 'https://i.pravatar.cc/120?img=12', positionPreference: 'goalkeeper' },
+    { userId: 'u2', firstName: 'Jamie', avatarUrl: 'https://i.pravatar.cc/120?img=33', positionPreference: 'defender' },
+    { userId: 'u3', firstName: 'Alexandre', avatarUrl: 'https://i.pravatar.cc/120?img=15', positionPreference: 'midfielder' },
+    { userId: 'u4', firstName: 'Noah', avatarUrl: 'https://i.pravatar.cc/120?img=52', positionPreference: 'anywhere' },
+    { userId: 'u5', firstName: 'Theo', avatarUrl: 'https://i.pravatar.cc/120?img=60', positionPreference: 'attacker' },
+    { userId: 'u6', firstName: 'Sam', avatarUrl: 'https://i.pravatar.cc/120?img=68', positionPreference: 'anywhere' },
+    { userId: 'u7', firstName: 'Abdulrahman', avatarUrl: 'https://i.pravatar.cc/120?img=8', positionPreference: 'defender' },
+    { userId: 'u8', firstName: 'Turki', avatarUrl: null, positionPreference: 'midfielder' },
+    { userId: 'u9', firstName: 'Daniel', avatarUrl: 'https://i.pravatar.cc/120?img=14', positionPreference: 'attacker' },
   ],
+  currentUser: { userId: 'me', firstName: 'Yasein', avatarUrl: null },
 };
 
+/** Local-only stand-in; replace with the app's join/payment action later. */
+export function mockJoinMatch(_matchId: string, _position: PositionPreference) {
+  return new Promise<void>((resolve) => setTimeout(resolve, 900));
+}
