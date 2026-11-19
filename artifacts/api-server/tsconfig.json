@@ -10,10 +10,10 @@
   "include": ["src"],
   "references": [
     {
-      "path": "../../lib/db"
+      "path": "../../artifacts/lib/db"
     },
     {
-      "path": "../../lib/api-zod"
+      "path": "../../artifacts/lib/api-zod"
     }
   ]
 }
