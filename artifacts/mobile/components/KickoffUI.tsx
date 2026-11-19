@@ -14,6 +14,7 @@ import type { Match, CurrentUser } from '@workspace/api-client-react';
 WebBrowser.maybeCompleteAuthSession();
 
 export const heroImage = require('../assets/images/riyadh-pitch-hero.jpg');
+export const homeHeroImage = require('../assets/images/home-stadium-sunset.png');
 export const cardImage = require('../assets/images/football-match-card.jpg');
 export const formatSar = (halalas: number) => {
   const amount = halalas / 100;

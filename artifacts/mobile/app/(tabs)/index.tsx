@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { getGetCurrentUserQueryKey, getListMatchesQueryKey, useGetCurrentUser, useListMatches } from '@workspace/api-client-react';
 import { BrandHeader, EmptyState, LoadingState, MatchCard, Screen, SectionTitle } from '@/components/KickoffUI';
-import { heroImage } from '@/components/KickoffUI';
+import { homeHeroImage } from '@/components/KickoffUI';
 import { useColors } from '@/hooks/useColors';
 
 export default function HomeScreen() {
@@ -14,7 +14,7 @@ export default function HomeScreen() {
   return <Screen refreshing={matches.isRefetching} onRefresh={() => { void matches.refetch(); }}>
     <BrandHeader user={user.data} subtitle="RIYADH, SA" />
     <View style={styles.greeting}><Text style={[styles.hello, { color: colors.mutedForeground }]}>GOOD EVENING{user.data?.name ? `, ${user.data.name.split(' ')[0].toUpperCase()}` : ''}</Text><Text style={[styles.headline, { color: colors.foreground }]}>Find your{'\n'}next match.</Text></View>
-    <ImageBackground source={heroImage} resizeMode="cover" style={styles.featureImage} imageStyle={{ borderRadius: 20 }}>
+    <ImageBackground source={homeHeroImage} resizeMode="cover" style={styles.featureImage} imageStyle={{ borderRadius: 20 }}>
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(4,12,7,0.43)', borderRadius: 20 }]} />
       <View style={[styles.featureTag, { backgroundColor: 'rgba(7,18,13,.8)' }]}><Text style={[styles.tagText, { color: colors.primary }]}>THE KICKOFF STANDARD</Text></View>
       <View style={styles.featureBottom}><View><Text style={[styles.featureTitle, { color: colors.foreground }]}>All game.{'\n'}No group chat.</Text><Text style={[styles.featureCaption, { color: colors.secondaryForeground }]}>7v7, set up and ready to play.</Text></View><Pressable onPress={() => router.push('/(tabs)/matches')} style={[styles.roundArrow, { backgroundColor: colors.primary }]}><Feather name="arrow-up-right" size={19} color={colors.primaryForeground} /></Pressable></View>
