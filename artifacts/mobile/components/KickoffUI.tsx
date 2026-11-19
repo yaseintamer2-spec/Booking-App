@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ImageBackground, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, ImageBackground, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useClerk, useSSO } from '@clerk/expo';
+import { useClerk, useSSO, useUser } from '@clerk/expo';
 import { useQueryClient } from '@tanstack/react-query';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
@@ -146,6 +146,7 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
   const colors = useColors();
   const router = useRouter();
   const { signOut } = useClerk();
+  const { user: clerkUser } = useUser();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -190,7 +191,11 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
         <View style={[styles.drawer, { backgroundColor: colors.card, paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 67 : 0) + 20, paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 34 : 0) + 24 }]}>
           <View style={styles.drawerTop}><View><Text style={[styles.eyebrow, { color: colors.primary }]}>RIYADH · 7V7</Text><Text style={[styles.drawerTitle, { color: colors.foreground }]}>Your game,{'\n'}already organized.</Text></View><Pressable onPress={() => setOpen(false)} style={styles.closeButton}><Feather name="x" size={20} color={colors.foreground} /></Pressable></View>
           <View style={[styles.drawerProfile, { borderColor: colors.border }]}>
-            <View style={[styles.avatar, { backgroundColor: colors.accent }]}><Text style={[styles.avatarText, { color: colors.accentForeground }]}>{(user?.name || 'K').slice(0, 1).toUpperCase()}</Text></View>
+            <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
+              {clerkUser?.imageUrl
+                ? <Image source={{ uri: clerkUser.imageUrl }} style={styles.avatarImage} />
+                : <Text style={[styles.avatarText, { color: colors.accentForeground }]}>{(user?.name || 'K').slice(0, 1).toUpperCase()}</Text>}
+            </View>
             <View style={{ flex: 1 }}><Text style={[styles.drawerName, { color: colors.foreground }]}>{user?.name || 'Player'}</Text><Text style={[styles.small, { color: colors.mutedForeground }]}>{user?.email || 'Your football profile'}</Text></View>
           </View>
           <View style={{ gap: 5, marginTop: 20 }}>
@@ -287,6 +292,7 @@ const styles = StyleSheet.create({
   drawerTitle: { fontSize: 28, lineHeight: 34, fontWeight: '600', fontFamily: 'Georgia', marginTop: 8 },
   drawerProfile: { borderBottomWidth: 1, borderTopWidth: 1, marginTop: 25, paddingVertical: 18, flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: { width: 40, height: 40, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  avatarImage: { width: '100%', height: '100%' },
   avatarText: { fontSize: 16, fontWeight: '700' },
   drawerName: { fontSize: 14, fontWeight: '600', marginBottom: 3 },
   small: { fontSize: 11 },

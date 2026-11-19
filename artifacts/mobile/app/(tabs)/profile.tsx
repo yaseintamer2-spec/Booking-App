@@ -1,18 +1,138 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { useUser } from '@clerk/expo';
+import * as ImagePicker from 'expo-image-picker';
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
 import { BrandHeader, EmptyState, Screen } from '@/components/KickoffUI';
 import { useColors } from '@/hooks/useColors';
 
 export default function ProfileScreen() {
-  const colors = useColors(); const router = useRouter();
+  const colors = useColors();
+  const router = useRouter();
+  const { user: clerkUser } = useUser();
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageSaved, setImageSaved] = useState(false);
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
-  return <Screen><BrandHeader user={user.data} subtitle="PLAYER CARD" /><Text style={[styles.kicker, { color: colors.primary }]}>YOUR KICKOFF PROFILE</Text><Text style={[styles.title, { color: colors.foreground }]}>Player profile.</Text>
-    <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={[styles.avatar, { backgroundColor: colors.accent }]}><Text style={[styles.initial, { color: colors.primary }]}>{(user.data?.name || 'K').slice(0, 1).toUpperCase()}</Text></View><Text style={[styles.name, { color: colors.foreground }]}>{user.data?.name || 'Player'}</Text><Text style={[styles.email, { color: colors.mutedForeground }]}>{user.data?.email || ' '}</Text><View style={[styles.line, { backgroundColor: colors.border }]} /><View style={styles.info}><Feather name="map-pin" size={15} color={colors.primary} /><Text style={[styles.email, { color: colors.mutedForeground }]}>Riyadh, Saudi Arabia</Text></View><View style={styles.info}><Feather name="users" size={15} color={colors.primary} /><Text style={[styles.email, { color: colors.mutedForeground }]}>7v7 player</Text></View></View>
-    <Pressable onPress={() => router.push('/settings')} style={[styles.settingsRow, { borderColor: colors.border }]}><Feather name="settings" size={17} color={colors.mutedForeground} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Account settings</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable>
-    <EmptyState icon="bar-chart-2" title="Your stats start on the pitch." body="Match history and player performance will be connected here as the product's player activity API becomes available." />
-  </Screen>;
+  const chooseProfileImage = async () => {
+    if (!clerkUser || uploadingImage) return;
+
+    setUploadingImage(true);
+    setImageError(null);
+    setImageSaved(false);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setImageError('Photo access was not granted. Allow access in your device settings to choose a photo.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+
+      const image = result.assets[0];
+      if (!image?.uri) {
+        throw new Error('The selected image could not be read.');
+      }
+
+      await clerkUser.setProfileImage({ file: image.uri });
+      await clerkUser.reload();
+      setImageSaved(true);
+    } catch (error) {
+      console.error('Failed to update profile picture:', error);
+      setImageError('Could not update your profile picture. Please try again.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const profileImageUrl = clerkUser?.imageUrl;
+  const imageLabel = profileImageUrl ? 'Change profile picture' : 'Add profile picture';
+
+  return (
+    <Screen>
+      <BrandHeader user={user.data} subtitle="PLAYER CARD" />
+      <Text style={[styles.kicker, { color: colors.primary }]}>YOUR KICKOFF PROFILE</Text>
+      <Text style={[styles.title, { color: colors.foreground }]}>Player profile.</Text>
+      <View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={imageLabel}
+          accessibilityState={{ disabled: !clerkUser || uploadingImage, busy: uploadingImage }}
+          disabled={!clerkUser || uploadingImage}
+          onPress={chooseProfileImage}
+          style={[styles.avatar, { backgroundColor: colors.accent, opacity: uploadingImage ? 0.7 : 1 }]}
+          testID="profile-picture-picker"
+        >
+          {profileImageUrl ? (
+            <Image source={{ uri: profileImageUrl }} style={styles.avatarImage} />
+          ) : (
+            <Text style={[styles.initial, { color: colors.primary }]}>
+              {(user.data?.name || 'K').slice(0, 1).toUpperCase()}
+            </Text>
+          )}
+          <View style={[styles.cameraBadge, { backgroundColor: colors.primary }]}>
+            {uploadingImage
+              ? <ActivityIndicator size="small" color={colors.primaryForeground} />
+              : <Feather name="camera" size={13} color={colors.primaryForeground} />}
+          </View>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={!clerkUser || uploadingImage}
+          onPress={chooseProfileImage}
+          style={styles.photoAction}
+          testID="profile-picture-action"
+        >
+          <Text style={[styles.photoActionText, { color: colors.primary }]}>
+            {uploadingImage ? 'Updating photo…' : imageLabel}
+          </Text>
+        </Pressable>
+        {imageError ? <Text accessibilityLiveRegion="polite" style={[styles.photoMessage, { color: colors.destructive }]}>{imageError}</Text> : null}
+        {imageSaved ? <Text accessibilityLiveRegion="polite" style={[styles.photoMessage, { color: colors.primary }]}>Profile picture updated.</Text> : null}
+        <Text style={[styles.name, { color: colors.foreground }]}>{user.data?.name || 'Player'}</Text>
+        <Text style={[styles.email, { color: colors.mutedForeground }]}>{user.data?.email || ' '}</Text>
+        <View style={[styles.line, { backgroundColor: colors.border }]} />
+        <View style={styles.info}>
+          <Feather name="map-pin" size={15} color={colors.primary} />
+          <Text style={[styles.email, { color: colors.mutedForeground }]}>Riyadh, Saudi Arabia</Text>
+        </View>
+        <View style={styles.info}>
+          <Feather name="users" size={15} color={colors.primary} />
+          <Text style={[styles.email, { color: colors.mutedForeground }]}>7v7 player</Text>
+        </View>
+      </View>
+      <Pressable onPress={() => router.push('/settings')} style={[styles.settingsRow, { borderColor: colors.border }]}>
+        <Feather name="settings" size={17} color={colors.mutedForeground} />
+        <Text style={[styles.settingsText, { color: colors.foreground }]}>Account settings</Text>
+        <Feather name="chevron-right" size={17} color={colors.mutedForeground} />
+      </Pressable>
+      <EmptyState icon="bar-chart-2" title="Your stats start on the pitch." body="Match history and player performance will be connected here as the product's player activity API becomes available." />
+    </Screen>
+  );
 }
-const styles = StyleSheet.create({ kicker: { fontSize: 10, letterSpacing: 1.8, fontWeight: '700', marginTop: 18 }, title: { fontSize: 35, fontFamily: 'Georgia', marginTop: 8 }, profileCard: { borderWidth: 1, borderRadius: 18, padding: 20, alignItems: 'center', marginTop: 21 }, avatar: { width: 66, height: 66, borderRadius: 23, alignItems: 'center', justifyContent: 'center' }, initial: { fontSize: 25, fontWeight: '700' }, name: { fontSize: 18, fontFamily: 'Georgia', marginTop: 12 }, email: { fontSize: 12, marginTop: 4 }, line: { height: 1, width: '100%', marginVertical: 18 }, info: { flexDirection: 'row', alignItems: 'center', gap: 9, alignSelf: 'flex-start', marginBottom: 10 }, settingsRow: { borderBottomWidth: 1, height: 56, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 }, settingsText: { flex: 1, fontSize: 13, fontWeight: '600' } });
+const styles = StyleSheet.create({
+  kicker: { fontSize: 10, letterSpacing: 1.8, fontWeight: '700', marginTop: 18 },
+  title: { fontSize: 35, fontFamily: 'Georgia', marginTop: 8 },
+  profileCard: { borderWidth: 1, borderRadius: 18, padding: 20, alignItems: 'center', marginTop: 21 },
+  avatar: { width: 66, height: 66, borderRadius: 23, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImage: { width: '100%', height: '100%' },
+  cameraBadge: { position: 'absolute', right: 0, bottom: 0, width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#0A100E' },
+  initial: { fontSize: 25, fontWeight: '700' },
+  photoAction: { paddingVertical: 8, paddingHorizontal: 10 },
+  photoActionText: { fontSize: 12, fontWeight: '700' },
+  photoMessage: { fontSize: 11, textAlign: 'center', marginTop: 2 },
+  name: { fontSize: 18, fontFamily: 'Georgia', marginTop: 8 },
+  email: { fontSize: 12, marginTop: 4 },
+  line: { height: 1, width: '100%', marginVertical: 18 },
+  info: { flexDirection: 'row', alignItems: 'center', gap: 9, alignSelf: 'flex-start', marginBottom: 10 },
+  settingsRow: { borderBottomWidth: 1, height: 56, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 },
+  settingsText: { flex: 1, fontSize: 13, fontWeight: '600' },
+});
