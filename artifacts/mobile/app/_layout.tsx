@@ -28,17 +28,13 @@ const proxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
 if (domain) setBaseUrl(`https://${domain}`);
 
 function RootLayoutNav() {
-  const { getToken } = useAuth();
   const colors = useColors();
-  useEffect(() => {
-    setAuthTokenGetter(async () => (await getToken()) ?? null);
-    return () => setAuthTokenGetter(async () => null);
-  }, [getToken]);
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back', headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="match-registration" />
       <Stack.Screen name="match/[id]" />
       <Stack.Screen name="checkout/[id]" />
       <Stack.Screen name="wallet" />
@@ -46,6 +42,15 @@ function RootLayoutNav() {
       <Stack.Screen name="admin" />
     </Stack>
   );
+}
+
+function AuthTokenBridge() {
+  const { getToken } = useAuth();
+  useEffect(() => {
+    setAuthTokenGetter(async () => (await getToken()) ?? null);
+    return () => setAuthTokenGetter(async () => null);
+  }, [getToken]);
+  return null;
 }
 
 export default function RootLayout() {
@@ -64,20 +69,27 @@ export default function RootLayout() {
 
   if (!fontsLoaded && !fontError) return null;
 
+  const app = (
+    <SafeAreaProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <KeyboardProvider>
+              <RootLayoutNav />
+            </KeyboardProvider>
+          </GestureHandlerRootView>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </SafeAreaProvider>
+  );
+
+  if (!publishableKey) return app;
+
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache} proxyUrl={proxyUrl}>
       <ClerkLoaded>
-        <SafeAreaProvider>
-          <ErrorBoundary>
-            <QueryClientProvider client={queryClient}>
-              <GestureHandlerRootView style={{ flex: 1 }}>
-                <KeyboardProvider>
-                  <RootLayoutNav />
-                </KeyboardProvider>
-              </GestureHandlerRootView>
-            </QueryClientProvider>
-          </ErrorBoundary>
-        </SafeAreaProvider>
+        <AuthTokenBridge />
+        {app}
       </ClerkLoaded>
     </ClerkProvider>
   );
