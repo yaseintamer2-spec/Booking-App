@@ -34,7 +34,17 @@
           "photosPermission": "Allow KICKOFF to select a profile picture.",
           "microphonePermission": false
         }
-      ]
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow KICKOFF to scan match check-in codes.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -42,3 +52,4 @@
     }
   }
 }
+
