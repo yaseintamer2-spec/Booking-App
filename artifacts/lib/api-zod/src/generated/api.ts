@@ -31,6 +31,10 @@ export const GetCurrentUserResponse = zod.object({
 /**
  * @summary List published matches open for discovery
  */
+export const listMatchesResponseImageUrlsMax = 3;
+
+
+
 export const ListMatchesResponseItem = zod.object({
   "id": zod.string().uuid(),
   "venueName": zod.string(),
@@ -48,6 +52,7 @@ export const ListMatchesResponseItem = zod.object({
   "refereeIncluded": zod.boolean(),
   "waterIncluded": zod.boolean(),
   "imageUrl": zod.string(),
+  "imageUrls": zod.array(zod.string()).max(listMatchesResponseImageUrlsMax),
   "isDemo": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
@@ -60,6 +65,10 @@ export const ListMatchesResponse = zod.array(ListMatchesResponseItem)
 export const GetMatchParams = zod.object({
   "id": zod.coerce.string().uuid()
 })
+
+export const getMatchResponseImageUrlsMax = 3;
+
+
 
 export const GetMatchResponse = zod.object({
   "id": zod.string().uuid(),
@@ -78,6 +87,7 @@ export const GetMatchResponse = zod.object({
   "refereeIncluded": zod.boolean(),
   "waterIncluded": zod.boolean(),
   "imageUrl": zod.string(),
+  "imageUrls": zod.array(zod.string()).max(getMatchResponseImageUrlsMax),
   "isDemo": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
@@ -86,6 +96,10 @@ export const GetMatchResponse = zod.object({
 /**
  * @summary List all matches for administrators
  */
+export const listAdminMatchesResponseImageUrlsMax = 3;
+
+
+
 export const ListAdminMatchesResponseItem = zod.object({
   "id": zod.string().uuid(),
   "venueName": zod.string(),
@@ -103,6 +117,7 @@ export const ListAdminMatchesResponseItem = zod.object({
   "refereeIncluded": zod.boolean(),
   "waterIncluded": zod.boolean(),
   "imageUrl": zod.string(),
+  "imageUrls": zod.array(zod.string()).max(listAdminMatchesResponseImageUrlsMax),
   "isDemo": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
@@ -128,6 +143,8 @@ export const createAdminMatchBodyPriceHalalasMin = 0;
 
 export const createAdminMatchBodyCompareAtPriceHalalasMin = 0;
 
+export const createAdminMatchBodyImageUrlsMax = 3;
+
 
 
 export const CreateAdminMatchBody = zod.object({
@@ -142,8 +159,13 @@ export const CreateAdminMatchBody = zod.object({
   "status": zod.enum(['draft', 'published', 'cancelled']),
   "refereeIncluded": zod.boolean(),
   "waterIncluded": zod.boolean(),
-  "imageUrl": zod.string()
+  "imageUrl": zod.string(),
+  "imageUrls": zod.array(zod.string()).max(createAdminMatchBodyImageUrlsMax).optional()
 })
+
+export const createAdminMatchResponseImageUrlsMax = 3;
+
+
 
 export const CreateAdminMatchResponse = zod.object({
   "id": zod.string().uuid(),
@@ -162,6 +184,7 @@ export const CreateAdminMatchResponse = zod.object({
   "refereeIncluded": zod.boolean(),
   "waterIncluded": zod.boolean(),
   "imageUrl": zod.string(),
+  "imageUrls": zod.array(zod.string()).max(createAdminMatchResponseImageUrlsMax),
   "isDemo": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
@@ -190,6 +213,8 @@ export const updateAdminMatchBodyPriceHalalasMin = 0;
 
 export const updateAdminMatchBodyCompareAtPriceHalalasMin = 0;
 
+export const updateAdminMatchBodyImageUrlsMax = 3;
+
 
 
 export const UpdateAdminMatchBody = zod.object({
@@ -204,8 +229,13 @@ export const UpdateAdminMatchBody = zod.object({
   "status": zod.enum(['draft', 'published', 'cancelled']).optional(),
   "refereeIncluded": zod.boolean().optional(),
   "waterIncluded": zod.boolean().optional(),
-  "imageUrl": zod.string().optional()
+  "imageUrl": zod.string().optional(),
+  "imageUrls": zod.array(zod.string()).max(updateAdminMatchBodyImageUrlsMax).optional()
 })
+
+export const updateAdminMatchResponseImageUrlsMax = 3;
+
+
 
 export const UpdateAdminMatchResponse = zod.object({
   "id": zod.string().uuid(),
@@ -224,6 +254,7 @@ export const UpdateAdminMatchResponse = zod.object({
   "refereeIncluded": zod.boolean(),
   "waterIncluded": zod.boolean(),
   "imageUrl": zod.string(),
+  "imageUrls": zod.array(zod.string()).max(updateAdminMatchResponseImageUrlsMax),
   "isDemo": zod.boolean(),
   "createdAt": zod.coerce.date()
 })
