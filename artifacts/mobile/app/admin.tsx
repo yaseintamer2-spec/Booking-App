@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useQueryClient } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
@@ -13,11 +14,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 type FormState = {
   venueName: string; neighborhood: string; address: string; startsAt: string;
   durationMinutes: string; capacity: string; price: string; compareAt: string;
-  status: 'draft' | 'published' | 'cancelled'; refereeIncluded: boolean; waterIncluded: boolean; imageUrl: string;
+  status: 'draft' | 'published' | 'cancelled'; refereeIncluded: boolean; waterIncluded: boolean; imageUrl: string; imageUrls: string[];
 };
-const freshForm = (): FormState => ({ venueName: '', neighborhood: '', address: '', startsAt: toRiyadhLocalInput(new Date(Date.now() + 86400000)), durationMinutes: '120', capacity: '14', price: '30', compareAt: '35', status: 'draft', refereeIncluded: true, waterIncluded: true, imageUrl: '' });
+const freshForm = (): FormState => ({ venueName: '', neighborhood: '', address: '', startsAt: toRiyadhLocalInput(new Date(Date.now() + 86400000)), durationMinutes: '120', capacity: '14', price: '30', compareAt: '35', status: 'draft', refereeIncluded: true, waterIncluded: true, imageUrl: '', imageUrls: [] });
 function fromMatch(match: Match): FormState {
-  return { venueName: match.venueName, neighborhood: match.neighborhood, address: match.address, startsAt: toRiyadhLocalInput(match.startsAt), durationMinutes: String(match.durationMinutes), capacity: String(match.capacity), price: String(match.priceHalalas / 100), compareAt: String(match.compareAtPriceHalalas / 100), status: match.status, refereeIncluded: match.refereeIncluded, waterIncluded: match.waterIncluded, imageUrl: match.imageUrl || '' };
+  const imageUrls = match.imageUrls?.length ? match.imageUrls : /^https:\/\//i.test(match.imageUrl) ? [match.imageUrl] : [];
+  return { venueName: match.venueName, neighborhood: match.neighborhood, address: match.address, startsAt: toRiyadhLocalInput(match.startsAt), durationMinutes: String(match.durationMinutes), capacity: String(match.capacity), price: String(match.priceHalalas / 100), compareAt: String(match.compareAtPriceHalalas / 100), status: match.status, refereeIncluded: match.refereeIncluded, waterIncluded: match.waterIncluded, imageUrl: imageUrls[0] || '', imageUrls };
 }
 
 export default function AdminScreen() {
@@ -35,7 +37,7 @@ export default function AdminScreen() {
     setFormError('');
     const startsAt = parseRiyadhLocalInput(form.startsAt);
     if (!form.venueName.trim() || !form.neighborhood.trim() || form.address.trim().length < 5 || !startsAt) { setFormError('Add a venue, Riyadh neighborhood, full address, and date/time in YYYY-MM-DDTHH:mm format.'); return; }
-    const payload = { venueName: form.venueName.trim(), neighborhood: form.neighborhood.trim(), address: form.address.trim(), startsAt: startsAt.toISOString(), durationMinutes: Number(form.durationMinutes), capacity: Number(form.capacity), priceHalalas: Math.round(Number(form.price) * 100), compareAtPriceHalalas: Math.round(Number(form.compareAt) * 100), status: form.status, refereeIncluded: form.refereeIncluded, waterIncluded: form.waterIncluded, imageUrl: form.imageUrl.trim() };
+    const payload = { venueName: form.venueName.trim(), neighborhood: form.neighborhood.trim(), address: form.address.trim(), startsAt: startsAt.toISOString(), durationMinutes: Number(form.durationMinutes), capacity: Number(form.capacity), priceHalalas: Math.round(Number(form.price) * 100), compareAtPriceHalalas: Math.round(Number(form.compareAt) * 100), status: form.status, refereeIncluded: form.refereeIncluded, waterIncluded: form.waterIncluded, imageUrl: form.imageUrls[0] || 'match-card', imageUrls: form.imageUrls };
     if (!Number.isInteger(payload.durationMinutes) || payload.durationMinutes < 30 || payload.durationMinutes > 240 || !Number.isInteger(payload.capacity) || payload.capacity < 2 || payload.capacity > 30 || !Number.isFinite(payload.priceHalalas) || payload.priceHalalas < 0 || !Number.isFinite(payload.compareAtPriceHalalas) || payload.compareAtPriceHalalas <= payload.priceHalalas) { setFormError('Use 30–240 minutes, 2–30 players, and a compare-at price above the SAR player price.'); return; }
     if (startsAt.getTime() <= Date.now()) { setFormError('Match start time must be in the future.'); return; }
     try { if (editing) await update.mutateAsync({ id: editing.id, data: payload }); else await create.mutateAsync({ data: payload }); await refresh(); setFormOpen(false); }
@@ -43,6 +45,19 @@ export default function AdminScreen() {
   };
   const deleteMatch = (match: Match) => Alert.alert('Remove this match?', `${match.venueName} will be removed from KICKOFF.`, [{ text: 'Keep match', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: async () => { try { await remove.mutateAsync({ id: match.id }); await refresh(); } catch { Alert.alert('Could not remove match', 'Try again shortly.'); } } }]);
   const change = (key: keyof FormState, value: string | boolean) => setForm(old => ({ ...old, [key]: value }));
+  const addPhotos = async () => {
+    const slots = 3 - form.imageUrls.length;
+    if (slots <= 0) return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, selectionLimit: slots, quality: 0.4, base64: true });
+    if (result.canceled) return;
+    const added = result.assets.flatMap(asset => asset.base64 ? [`data:${asset.mimeType || 'image/jpeg'};base64,${asset.base64}`] : []);
+    if (!added.length) { setFormError('Those photos could not be prepared. Choose another image format.'); return; }
+    const imageUrls = [...form.imageUrls, ...added].slice(0, 3);
+    if (imageUrls.reduce((total, uri) => total + uri.length, 0) > 4_200_000) { setFormError('Please choose smaller photos. Match galleries support up to 3 compressed photos.'); return; }
+    setForm(old => ({ ...old, imageUrls, imageUrl: imageUrls[0] || '' }));
+    setFormError('');
+  };
+  const removePhoto = (index: number) => setForm(old => { const imageUrls = old.imageUrls.filter((_, photoIndex) => photoIndex !== index); return { ...old, imageUrls, imageUrl: imageUrls[0] || '' }; });
   if (me.isLoading) return <Screen><BrandHeader back user={me.data} subtitle="KICKOFF OPERATIONS" /><LoadingState /></Screen>;
   if (me.data && !isAdmin) return <Screen><BrandHeader back user={me.data} /><EmptyState icon="shield" title="Admin access only." body="Your account is not allowlisted for the KICKOFF admin console." /></Screen>;
   if (me.error || !me.data) return <Screen><BrandHeader back subtitle="KICKOFF OPERATIONS" /><EmptyState icon="alert-circle" title="Admin data unavailable." body="Sign in with an administrator account to use the match console." /></Screen>;
@@ -64,7 +79,9 @@ export default function AdminScreen() {
           <Text style={[styles.formGroupTitle, { color: colors.primary }]}>MATCH SETUP</Text>
           <View style={styles.inlineFields}><View style={{ flex: 1 }}><Field label="DURATION (MIN)" value={form.durationMinutes} onChangeText={v => change('durationMinutes', v)} placeholder="120" keyboardType="numeric" /></View><View style={{ flex: 1 }}><Field label="CAPACITY" value={form.capacity} onChangeText={v => change('capacity', v)} placeholder="14" keyboardType="numeric" /></View></View>
           <View style={styles.inlineFields}><View style={{ flex: 1 }}><Field label="PLAYER PRICE (SAR)" value={form.price} onChangeText={v => change('price', v)} placeholder="30" keyboardType="numeric" /></View><View style={{ flex: 1 }}><Field label="COMPARE AT (SAR)" value={form.compareAt} onChangeText={v => change('compareAt', v)} placeholder="35" keyboardType="numeric" /></View></View>
-          <Field label="IMAGE URL (OPTIONAL)" value={form.imageUrl} onChangeText={v => change('imageUrl', v)} placeholder="Leave blank for KICKOFF imagery" />
+          <Text style={[styles.formGroupTitle, { color: colors.primary }]}>PITCH PHOTOS · {form.imageUrls.length}/3</Text>
+          <Text style={[styles.photoHint, { color: colors.mutedForeground }]}>Add up to three photos. They rotate on the match card and can also be swiped.</Text>
+          <View style={styles.photoRow}>{form.imageUrls.map((uri, index) => <View key={`${index}-${uri.slice(0, 30)}`} style={styles.photoPreviewWrap}><Image source={{ uri }} style={styles.photoPreview} /><Pressable accessibilityRole="button" accessibilityLabel={`Remove pitch photo ${index + 1}`} onPress={() => removePhoto(index)} style={[styles.removePhoto, { backgroundColor: colors.background, borderColor: colors.border }]}><Feather name="x" size={15} color={colors.foreground} /></Pressable></View>)}{form.imageUrls.length < 3 ? <Pressable accessibilityRole="button" accessibilityLabel="Choose pitch photos" onPress={() => void addPhotos()} style={[styles.addPhoto, { borderColor: colors.border, backgroundColor: colors.card }]}><Feather name="image" size={19} color={colors.primary} /><Text style={[styles.addPhotoText, { color: colors.foreground }]}>Add photos</Text></Pressable> : null}</View>
           <Text style={[styles.formGroupTitle, { color: colors.primary }]}>STATUS AND INCLUSIONS</Text>
           <View style={styles.statusChoices}>{(['draft', 'published', 'cancelled'] as const).map(status => <Pressable key={status} onPress={() => change('status', status)} style={[styles.statusChoice, { borderColor: form.status === status ? colors.primary : colors.border, backgroundColor: form.status === status ? colors.accent : colors.card }]}><Text style={{ color: form.status === status ? colors.primary : colors.mutedForeground, fontSize: 10, fontWeight: '700' }}>{status.toUpperCase()}</Text></Pressable>)}</View>
           <ToggleRow label="Referee included" value={form.refereeIncluded} onPress={() => change('refereeIncluded', !form.refereeIncluded)} />
@@ -102,6 +119,13 @@ const styles = StyleSheet.create({
   modalClose: { width: 38, height: 40, alignItems: 'center', justifyContent: 'center' },
   modalTitle: { fontSize: 17, fontWeight: '700' },
   formGroupTitle: { fontSize: 9, letterSpacing: 1.6, fontWeight: '800', marginBottom: 13, marginTop: 8 },
+  photoHint: { fontSize: 11, lineHeight: 16, marginTop: -5, marginBottom: 12 },
+  photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
+  photoPreviewWrap: { width: 84, height: 84 },
+  photoPreview: { width: 84, height: 84, borderRadius: 12 },
+  removePhoto: { position: 'absolute', top: 0, right: 0, width: 44, height: 44, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  addPhoto: { minHeight: 84, minWidth: 100, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 12 },
+  addPhotoText: { fontSize: 10, fontWeight: '700' },
   inlineFields: { flexDirection: 'row', gap: 12 },
   statusChoices: { flexDirection: 'row', gap: 7, marginBottom: 12 },
   statusChoice: { borderWidth: 1, borderRadius: 11, paddingVertical: 10, paddingHorizontal: 12 },
@@ -111,4 +135,3 @@ const styles = StyleSheet.create({
   toggleDot: { width: 16, height: 16, borderRadius: 8 },
   error: { fontSize: 12, lineHeight: 18, marginVertical: 12 },
 });
-
