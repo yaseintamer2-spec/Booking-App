@@ -16,10 +16,19 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import * as Notifications from 'expo-notifications';
 import { useColors } from '@/hooks/useColors';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 const queryClient = new QueryClient();
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
@@ -40,6 +49,7 @@ function RootLayoutNav() {
       <Stack.Screen name="wallet" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="admin" />
+      <Stack.Screen name="staff-check-in" />
     </Stack>
   );
 }
@@ -94,3 +104,4 @@ export default function RootLayout() {
     </ClerkProvider>
   );
 }
+
