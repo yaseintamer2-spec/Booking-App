@@ -53,6 +53,7 @@ export interface Match {
   refereeIncluded: boolean;
   waterIncluded: boolean;
   imageUrl: string;
+  imageUrls: string[];
   isDemo: boolean;
   createdAt: string;
 }
@@ -92,6 +93,7 @@ export interface MatchInput {
   refereeIncluded: boolean;
   waterIncluded: boolean;
   imageUrl: string;
+  imageUrls?: string[];
 }
 
 export type MatchUpdateStatus = typeof MatchUpdateStatus[keyof typeof MatchUpdateStatus];
@@ -129,6 +131,7 @@ export interface MatchUpdate {
   refereeIncluded?: boolean;
   waterIncluded?: boolean;
   imageUrl?: string;
+  imageUrls?: string[];
 }
 
 /**
