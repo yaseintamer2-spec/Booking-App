@@ -14,8 +14,9 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useLocalSearchParams } from 'expo-router';
 import { getGetCurrentUserQueryKey, getGetMatchQueryKey, useGetCurrentUser, useGetMatch } from '@workspace/api-client-react';
-import { useAuth } from '@clerk/expo';
+import { useAuth, useUser } from '@clerk/expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CheckInQrModal } from '@/components/CheckInQrModal';
 import {
   matchRegistrationMock,
   mockJoinMatch,
@@ -80,6 +81,7 @@ export default function MatchRegistrationScreen() {
   const { id: routeId } = useLocalSearchParams<{ id?: string }>();
   const liveMatchId = Array.isArray(routeId) ? routeId[0] : routeId;
   const { getToken } = useAuth();
+  const { user: clerkUser } = useUser();
   const remoteMatch = useGetMatch(liveMatchId || '', { query: { queryKey: getGetMatchQueryKey(liveMatchId || ''), enabled: !!liveMatchId } });
   const account = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: !!liveMatchId, retry: false } });
   const match = remoteMatch.data ? {
@@ -97,7 +99,7 @@ export default function MatchRegistrationScreen() {
   const currentUser = account.data ? {
     userId: account.data.id,
     firstName: account.data.name.split(' ')[0],
-    avatarUrl: null,
+    avatarUrl: clerkUser?.imageUrl ?? null,
   } : matchRegistrationMock.currentUser;
   const [noticeVisible, setNoticeVisible] = useState(SHOW_PREVIEW_NOTICE);
   const [participants, setParticipants] = useState(
@@ -107,6 +109,7 @@ export default function MatchRegistrationScreen() {
   const [positionPreference, setPositionPreference] =
     useState<PositionPreference>('anywhere');
   const [joining, setJoining] = useState(false);
+  const [checkInQr, setCheckInQr] = useState<{ value: string; venue: string; expiresAt: string } | null>(null);
   const [waitlisted, setWaitlisted] = useState(false);
   const [joined, setJoined] = useState(() =>
     matchRegistrationMock.participants.some(
@@ -128,6 +131,12 @@ export default function MatchRegistrationScreen() {
       .catch(() => { if (active) setJoinError('Could not load the live player list. Please try again.'); });
     return () => { active = false; };
   }, [liveMatchId, currentUser.userId]);
+  useEffect(() => {
+    if (!currentUser.avatarUrl) return;
+    setParticipants((current) => current.map((participant) => participant.userId === currentUser.userId
+      ? { ...participant, avatarUrl: currentUser.avatarUrl }
+      : participant));
+  }, [currentUser.avatarUrl, currentUser.userId]);
   const joinedCount = participants.length;
   const isFull = joinedCount >= match.maxPlayers || match.status === 'full';
   const isCancelled = match.status === 'cancelled';
@@ -153,6 +162,10 @@ export default function MatchRegistrationScreen() {
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || 'Could not join this match.');
+        if (typeof payload.checkInToken === 'string') {
+          const expiresAt = new Date(new Date(match.startsAt).getTime() + match.durationHours * 60 * 60_000).toISOString();
+          setCheckInQr({ venue: match.pitchName, expiresAt, value: `kickoff://check-in?matchId=${encodeURIComponent(liveMatchId)}&token=${encodeURIComponent(payload.checkInToken)}` });
+        }
       } else {
         await mockJoinMatch(match.id, positionPreference);
       }
@@ -385,6 +398,7 @@ export default function MatchRegistrationScreen() {
           ) : null}
         </View>
       </View>
+      {checkInQr ? <CheckInQrModal value={checkInQr.value} venue={checkInQr.venue} expiresAt={checkInQr.expiresAt} onClose={() => setCheckInQr(null)} /> : null}
     </View>
   );
 }
@@ -807,3 +821,4 @@ const styles = StyleSheet.create({
   paymentNote: { fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 8 },
   joinError: { fontSize: 11, textAlign: 'center', marginTop: 6 },
 });
+
