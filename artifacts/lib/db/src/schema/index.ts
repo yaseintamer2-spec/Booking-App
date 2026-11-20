@@ -23,6 +23,7 @@ import {
   index,
   integer,
   pgTable,
+  uniqueIndex,
   text,
   timestamp,
   uuid,
@@ -72,3 +73,45 @@ export const matchesTable = pgTable(
     ),
   ],
 );
+
+export const registrationsTable = pgTable(
+  "match_registrations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    matchId: uuid("match_id").notNull().references(() => matchesTable.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull(),
+    firstName: text("first_name").notNull(),
+    avatarUrl: text("avatar_url"),
+    positionPreference: text("position_preference").notNull().default("anywhere"),
+    status: text("status").notNull().default("joined"),
+    paymentStatus: text("payment_status").notNull().default("unpaid"),
+    checkinTokenHash: text("checkin_token_hash"),
+    checkinExpiresAt: timestamp("checkin_expires_at", { withTimezone: true }),
+    checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
+    offerExpiresAt: timestamp("offer_expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("match_registrations_match_user_idx").on(table.matchId, table.userId),
+    index("match_registrations_match_status_created_idx").on(table.matchId, table.status, table.createdAt),
+    index("match_registrations_user_status_idx").on(table.userId, table.status),
+    check("match_registrations_status_check", sql`${table.status} IN ('joined', 'waitlisted', 'offered', 'cancelled', 'checked_in')`),
+    check("match_registrations_position_check", sql`${table.positionPreference} IN ('anywhere', 'goalkeeper', 'defender', 'midfielder', 'attacker')`),
+  ],
+);
+
+export const notificationsTable = pgTable(
+  "player_notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    matchId: uuid("match_id").references(() => matchesTable.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    message: text("message").notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("player_notifications_user_created_idx").on(table.userId, table.createdAt)],
+);
+
