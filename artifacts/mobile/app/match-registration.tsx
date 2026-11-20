@@ -1,21 +1,24 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
   Image,
   Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { getGetCurrentUserQueryKey, getGetMatchQueryKey, useGetCurrentUser, useGetMatch } from '@workspace/api-client-react';
 import { useAuth } from '@clerk/expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import QRCode from 'react-native-qrcode-svg';
+import { NotificationsButton } from '@/components/NotificationsButton';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import {
   matchRegistrationMock,
@@ -73,6 +76,22 @@ const PITCH_SLOTS = [0, 1].flatMap((half) =>
 );
 
 type Palette = typeof SCREEN_COLORS;
+type ConfirmationTicket = {
+  id: string;
+  firstName: string;
+  pitchSlot: number;
+  value: string;
+  expiresAt: string;
+};
+type RegistrationTicket = {
+  id: string;
+  userId: string;
+  firstName: string;
+  avatarUrl: string | null;
+  pitchSlot: number;
+  checkInToken: string;
+  expiresAt: string;
+};
 
 export default function MatchRegistrationScreen() {
   const colors = SCREEN_COLORS;
@@ -107,6 +126,9 @@ export default function MatchRegistrationScreen() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [positionPreference, setPositionPreference] =
     useState<PositionPreference>('anywhere');
+  const [friendEmails, setFriendEmails] = useState<string[]>([]);
+  const [selectedPitchSlots, setSelectedPitchSlots] = useState<number[]>([]);
+  const [confirmationTickets, setConfirmationTickets] = useState<ConfirmationTicket[]>([]);
   const [joining, setJoining] = useState(false);
   const [waitlisted, setWaitlisted] = useState(false);
   const [joined, setJoined] = useState(() =>
@@ -119,16 +141,21 @@ export default function MatchRegistrationScreen() {
     useState<PositionPreference | null>(null);
   const [joinButtonFocused, setJoinButtonFocused] = useState(false);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (!liveMatchId) return;
-    const apiBase = apiBaseUrl;
     let active = true;
-    fetch(`${apiBase}/api/matches/${liveMatchId}/participants`)
+    fetch(`${apiBaseUrl}/api/matches/${liveMatchId}/participants`)
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('Could not load players.')))
-      .then((rows: RegistrationParticipant[]) => { if (active) { setParticipants(rows); setJoined(rows.some((player) => player.userId === currentUser.userId)); } })
+      .then((rows: RegistrationParticipant[]) => {
+        if (!active) return;
+        setParticipants(rows);
+        const currentRegistration = rows.find((player) => player.userId === currentUser.userId);
+        setJoined(Boolean(currentRegistration));
+        setSelectedPitchSlots(currentRegistration?.pitchSlot == null ? [] : [currentRegistration.pitchSlot]);
+      })
       .catch(() => { if (active) setJoinError('Could not load the live player list. Please try again.'); });
     return () => { active = false; };
-  }, [liveMatchId, currentUser.userId]);
+  }, [liveMatchId, currentUser.userId]));
   const joinedCount = participants.length;
   const isFull = joinedCount >= match.maxPlayers || match.status === 'full';
   const isCancelled = match.status === 'cancelled';
@@ -137,41 +164,98 @@ export default function MatchRegistrationScreen() {
     (participant) => participant.positionPreference === 'goalkeeper',
   ).length;
   const goalkeeperLimitReached = goalkeeperCount >= match.maxGoalkeepers;
+  const friendLimit = Math.min(13, Math.max(0, Math.min(match.maxPlayers, spotsRemaining) - 1));
+  const expectedTicketCount = friendEmails.length + 1;
+  const hasAllSelectedPitchSlots = selectedPitchSlots.length === expectedTicketCount;
+
+  const addFriend = () => {
+    if (!liveMatchId || friendEmails.length >= friendLimit) return;
+    setFriendEmails((current) => [...current, '']);
+    setJoinError(null);
+  };
+  const removeFriend = (index: number) => {
+    const updatedEmails = friendEmails.filter((_, emailIndex) => emailIndex !== index);
+    setFriendEmails(updatedEmails);
+    setSelectedPitchSlots((current) => current.slice(0, updatedEmails.length + 1));
+    setJoinError(null);
+  };
+  const selectPitchSpot = (slot: number) => {
+    setJoinError(null);
+    if (selectedPitchSlots.includes(slot)) {
+      setSelectedPitchSlots((current) => current.filter((selected) => selected !== slot));
+    } else if (selectedPitchSlots.length >= expectedTicketCount) {
+      setJoinError('You have one spot selected per ticket. Tap a selected spot to change it.');
+    } else {
+      setSelectedPitchSlots((current) => [...current, slot]);
+    }
+  };
 
   const joinMatch = async () => {
     if (joinLock.current || joining || joined || isFull || isCancelled) return;
+    const normalizedFriendEmails = friendEmails.map((email) => email.trim());
+    if (normalizedFriendEmails.some((email) => !email)) {
+      setJoinError('Enter an email for each friend, or remove the empty friend row.');
+      return;
+    }
+    if (new Set(normalizedFriendEmails.map((email) => email.toLowerCase())).size !== normalizedFriendEmails.length) {
+      setJoinError('Use a different email for each friend.');
+      return;
+    }
+    if (selectedPitchSlots.length !== normalizedFriendEmails.length + 1) {
+      setJoinError('Choose one open pitch spot for each ticket.');
+      return;
+    }
     joinLock.current = true;
     setJoinError(null);
     setJoining(true);
     try {
       if (liveMatchId) {
         const token = await getToken();
-        const apiBase = apiBaseUrl;
-        const response = await fetch(`${apiBase}/api/matches/${liveMatchId}/registrations`, {
+        const response = await fetch(`${apiBaseUrl}/api/matches/${liveMatchId}/registrations`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ positionPreference }),
+          body: JSON.stringify({ positionPreference, friendEmails: normalizedFriendEmails, pitchSlots: selectedPitchSlots }),
         });
-        const payload = await response.json();
+        const payload = await response.json() as { error?: string; tickets?: unknown };
         if (!response.ok) throw new Error(payload.error || 'Could not join this match.');
+        const ticketRows = Array.isArray(payload.tickets) ? payload.tickets.filter(isRegistrationTicket) : [];
+        const qrTickets = ticketRows
+          .map((ticket) => ({
+            id: ticket.id,
+            firstName: ticket.firstName || 'Player',
+            pitchSlot: ticket.pitchSlot,
+            value: `kickoff://check-in?matchId=${encodeURIComponent(liveMatchId)}&token=${encodeURIComponent(ticket.checkInToken)}`,
+            expiresAt: ticket.expiresAt,
+          }));
+        setParticipants((current) => {
+          const registeredUserIds = new Set(ticketRows.map((ticket) => ticket.userId));
+          const additions = ticketRows.map((ticket, index) => ({
+            userId: ticket.userId,
+            firstName: ticket.firstName || 'Player',
+            avatarUrl: ticket.avatarUrl || null,
+            pitchSlot: ticket.pitchSlot,
+            positionPreference: index === 0 ? positionPreference : 'anywhere' as const,
+          }));
+          return [...current.filter((participant) => !registeredUserIds.has(participant.userId)), ...additions];
+        });
+        if (qrTickets.length === normalizedFriendEmails.length + 1) {
+          setConfirmationTickets(qrTickets);
+        } else {
+          setJoinError('Your places are confirmed, but the QR codes could not be displayed. Reopen them from My Matches.');
+        }
       } else {
         await mockJoinMatch(match.id, positionPreference);
-      }
-      setParticipants((current) => {
-        if (
-          current.length >= match.maxPlayers ||
-          current.some((participant) => participant.userId === currentUser.userId)
-        ) return current;
-        return [
+        setParticipants((current) => current.some((participant) => participant.userId === currentUser.userId) ? current : [
           ...current,
           {
             userId: currentUser.userId,
             firstName: currentUser.firstName,
             avatarUrl: currentUser.avatarUrl,
+            pitchSlot: selectedPitchSlots[0],
             positionPreference,
           },
-        ];
-      });
+        ]);
+      }
       setJoined(true);
     } catch (error) {
       setJoinError(error instanceof Error ? error.message : 'Could not join this match. Please try again.');
@@ -200,7 +284,19 @@ export default function MatchRegistrationScreen() {
     isFull,
     isCancelled,
     pricePerPlayer: match.pricePerPlayer,
+    hasSelectedPitchSlot: hasAllSelectedPitchSlots,
+    requiredPitchSlots: expectedTicketCount,
   });
+  const joinDisabled =
+    joining ||
+    joined ||
+    isFull ||
+    isCancelled ||
+    !hasAllSelectedPitchSlots ||
+    match.pricePerPlayer > 0;
+  const selectedSpotSummary = selectedPitchSlots.map((slot, index) =>
+    `${index === 0 ? 'You' : friendEmails[index - 1]?.trim() || `Friend ${index}`} · spot ${slot + 1}`,
+  ).join('  |  ');
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -226,6 +322,7 @@ export default function MatchRegistrationScreen() {
             <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
               MATCH REGISTRATION
             </Text>
+            <NotificationsButton />
           </View>
           {noticeVisible ? (
             <PreviewNotice
@@ -256,18 +353,63 @@ export default function MatchRegistrationScreen() {
             <Feather name="arrow-up-right" size={13} color={colors.primary} />
           </Pressable>
 
+          {liveMatchId ? <>
+            <SectionLabel colors={colors}>BOOK FOR FRIENDS</SectionLabel>
+            <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>
+              Friends need a KICKOFF account with a verified email. Each person gets their own free ticket and QR code.
+            </Text>
+            {friendEmails.map((email, index) => (
+              <View key={`friend-${index}`} style={[styles.friendRow, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                <TextInput
+                  accessibilityLabel={`Friend ${index + 1} verified account email`}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  placeholder="friend@example.com"
+                  placeholderTextColor={colors.mutedForeground}
+                  returnKeyType="done"
+                  value={email}
+                  onChangeText={(value) => setFriendEmails((current) => current.map((entry, emailIndex) => emailIndex === index ? value : entry))}
+                  style={[styles.friendInput, { color: colors.foreground }]}
+                />
+                <Pressable accessibilityRole="button" accessibilityLabel={`Remove friend ${index + 1}`} onPress={() => removeFriend(index)} style={styles.removeFriend}>
+                  <Feather name="x" size={17} color={colors.mutedForeground} />
+                </Pressable>
+              </View>
+            ))}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: friendEmails.length >= friendLimit || joining }}
+              disabled={friendEmails.length >= friendLimit || joining}
+              onPress={addFriend}
+              style={[styles.addFriendButton, { borderColor: colors.border, opacity: friendEmails.length >= friendLimit || joining ? 0.5 : 1 }]}
+            >
+              <Feather name="user-plus" size={15} color={colors.primary} />
+              <Text style={[styles.addFriendText, { color: colors.primary }]}>Add a friend</Text>
+            </Pressable>
+          </> : null}
+
           <SectionLabel colors={colors}>PLAYERS</SectionLabel>
           <Pitch
             participants={participants}
             colors={colors}
             maxPlayers={match.maxPlayers}
-            onJoinSpot={joinMatch}
+            selectedPitchSlots={selectedPitchSlots}
+            onSelectSpot={selectPitchSpot}
             disabled={joining || joined || isFull || isCancelled}
           />
+          <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>
+            {joined
+              ? `Your spot is confirmed. Reopen each ticket QR from My Matches.`
+              : !selectedPitchSlots.length
+              ? `Tap open + spots to choose ${expectedTicketCount} spot${expectedTicketCount === 1 ? '' : 's'}; they are not confirmed until you join.`
+              : `Selected: ${selectedSpotSummary}. Tap an open or selected spot to adjust.`}
+          </Text>
 
           <SectionLabel colors={colors}>YOUR POSITION</SectionLabel>
           <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>
-            Only a preference for balancing teams, not a fixed spot.
+            Position preference is for team balancing; your selected pitch spot is saved separately.
           </Text>
           <View style={styles.positionOptions}>
             {POSITION_OPTIONS.map((option) => {
@@ -340,10 +482,10 @@ export default function MatchRegistrationScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityState={{
-              disabled: joining || joined || isFull || isCancelled,
+              disabled: joinDisabled,
               busy: joining,
             }}
-            disabled={joining || joined || isFull || isCancelled}
+            disabled={joinDisabled}
             onFocus={() => setJoinButtonFocused(true)}
             onBlur={() => setJoinButtonFocused(false)}
             onPress={joinMatch}
@@ -351,12 +493,7 @@ export default function MatchRegistrationScreen() {
               styles.joinButton,
               {
                 backgroundColor: colors.primary,
-                opacity:
-                  isFull || isCancelled
-                    ? 0.48
-                    : pressed && !joining && !joined
-                      ? 0.82
-                      : 1,
+                opacity: joinDisabled ? 0.48 : pressed ? 0.82 : 1,
                 borderWidth: joinButtonFocused ? 2 : 0,
                 borderColor: joinButtonFocused ? colors.foreground : 'transparent',
               },
@@ -376,7 +513,9 @@ export default function MatchRegistrationScreen() {
             </Text>
           </Pressable>
           <Text style={[styles.paymentNote, { color: colors.mutedForeground }]}>
-            Pay with mada or Apple Pay · full refund if the match isn't confirmed
+            {match.pricePerPlayer > 0
+              ? 'Paid checkout is disabled. Your selected spot is not held.'
+              : 'This match is free. No payment is collected.'}
           </Text>
           {isFull && liveMatchId ? <Pressable accessibilityRole="button" accessibilityState={{ disabled: joining || waitlisted }} disabled={joining || waitlisted} onPress={joinWaitlist} style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 8, borderWidth: 1, borderRadius: 14, borderColor: colors.border }}><Text style={{ color: colors.foreground, fontSize: 13, fontWeight: '700' }}>{waitlisted ? 'You’re on the waitlist' : 'Join waitlist'}</Text></Pressable> : null}
           {joinError ? (
@@ -386,6 +525,26 @@ export default function MatchRegistrationScreen() {
           ) : null}
         </View>
       </View>
+      <Modal visible={confirmationTickets.length > 0} transparent animationType="fade" onRequestClose={() => setConfirmationTickets([])}>
+        <View style={styles.ticketBackdrop}>
+          <View style={[styles.ticketModal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.ticketTitle, { color: colors.foreground }]}>You’re registered</Text>
+            <Text style={[styles.ticketSubtitle, { color: colors.mutedForeground }]}>Your free check-in QR codes are ready. You can reopen them any time from My Matches.</Text>
+            <ScrollView style={styles.ticketList} contentContainerStyle={styles.ticketListContent} showsVerticalScrollIndicator={false}>
+              {confirmationTickets.map((ticket) => (
+                <View key={ticket.id} style={[styles.ticketCard, { borderColor: colors.border }]}>
+                  <Text style={[styles.ticketName, { color: colors.foreground }]}>{ticket.firstName} · Spot {ticket.pitchSlot + 1}</Text>
+                  <QRCode value={ticket.value} size={190} color="#07120A" backgroundColor="#FFFFFF" />
+                  <Text style={[styles.ticketExpiry, { color: colors.mutedForeground }]}>Valid until {new Date(ticket.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <Pressable accessibilityRole="button" onPress={() => setConfirmationTickets([])} style={[styles.joinButton, { backgroundColor: colors.primary, marginTop: 10 }]}>
+              <Text style={[styles.joinButtonText, { color: colors.primaryForeground }]}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -454,18 +613,35 @@ function Pitch({
   participants,
   colors,
   maxPlayers,
-  onJoinSpot,
+  selectedPitchSlots,
+  onSelectSpot,
   disabled,
 }: {
   participants: RegistrationParticipant[];
   colors: Palette;
   maxPlayers: number;
-  onJoinSpot: () => void;
+  selectedPitchSlots: number[];
+  onSelectSpot: (slotIndex: number) => void;
   disabled: boolean;
 }) {
-  const topHalf = participants.filter((_, index) => index % 2 === 0);
-  const bottomHalf = participants.filter((_, index) => index % 2 === 1);
-  const teams = [topHalf, bottomHalf];
+  const participantsBySlot = new Map<number, RegistrationParticipant>();
+  participants.forEach((participant) => {
+    if (participant.pitchSlot !== null && participant.pitchSlot !== undefined) {
+      participantsBySlot.set(participant.pitchSlot, participant);
+    }
+  });
+  participants.forEach((participant, index) => {
+    if (participant.pitchSlot !== null && participant.pitchSlot !== undefined) return;
+    const preferredSlot = index % 2 === 0
+      ? Math.floor(index / 2)
+      : 7 + Math.floor(index / 2);
+    if (!participantsBySlot.has(preferredSlot)) {
+      participantsBySlot.set(preferredSlot, participant);
+      return;
+    }
+    const availableSlot = PITCH_SLOTS.findIndex((_, slotIndex) => !participantsBySlot.has(slotIndex));
+    if (availableSlot >= 0) participantsBySlot.set(availableSlot, participant);
+  });
 
   return (
     <View
@@ -491,16 +667,18 @@ function Pitch({
       <View pointerEvents="none" style={styles.pitchCenterCircle} />
       <View pointerEvents="none" style={[styles.pitchGoalBox, styles.pitchTopBox]} />
       <View pointerEvents="none" style={[styles.pitchGoalBox, styles.pitchBottomBox]} />
-      {PITCH_SLOTS.map((slot, index) => (
+      {PITCH_SLOTS.slice(0, maxPlayers).map((slot, index) => (
         <View
           key={`slot-${index}`}
           style={[styles.absoluteSlot, { left: `${slot.x}%`, top: slot.y }]}
         >
           <PlayerSlot
-            participant={teams[slot.half][index % 7] ?? null}
+            participant={participantsBySlot.get(index) ?? null}
             colors={colors}
             teamAccent={slot.half === 0 ? colors.blue : colors.red}
-            onJoinSpot={onJoinSpot}
+            slotIndex={index}
+            selected={selectedPitchSlots.includes(index)}
+            onSelectSpot={onSelectSpot}
             disabled={disabled}
           />
         </View>
@@ -513,13 +691,17 @@ function PlayerSlot({
   participant,
   colors,
   teamAccent,
-  onJoinSpot,
+  slotIndex,
+  selected,
+  onSelectSpot,
   disabled,
 }: {
   participant: RegistrationParticipant | null;
   colors: Palette;
   teamAccent: string;
-  onJoinSpot: () => void;
+  slotIndex: number;
+  selected: boolean;
+  onSelectSpot: (slotIndex: number) => void;
   disabled: boolean;
 }) {
   const opacity = useRef(new Animated.Value(participant ? 0 : 1)).current;
@@ -540,28 +722,28 @@ function PlayerSlot({
     return (
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Open player spot. Join this match."
-        accessibilityState={{ disabled }}
+        accessibilityLabel={selected ? `Pitch spot ${slotIndex + 1} selected; tap to remove` : `Select open pitch spot ${slotIndex + 1}`}
+        accessibilityState={{ disabled, selected }}
         disabled={disabled}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        onPress={onJoinSpot}
+        onPress={() => onSelectSpot(slotIndex)}
         style={({ pressed }) => [
           styles.playerSlot,
           styles.openPlayerSlot,
           {
             opacity: pressed ? 0.7 : 1,
             borderRadius: 26,
-            borderWidth: focused ? 2 : 0,
-            borderColor: focused ? colors.foreground : 'transparent',
+            borderWidth: focused || selected ? 2 : 0,
+            borderColor: selected ? colors.primary : focused ? colors.foreground : 'transparent',
           },
         ]}
       >
-        <View style={styles.openSpot}>
-          <Feather name="plus" size={18} color={colors.secondaryForeground} />
+        <View style={[styles.openSpot, selected && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+          <Feather name={selected ? 'check' : 'plus'} size={18} color={selected ? colors.primaryForeground : colors.secondaryForeground} />
         </View>
         <View style={styles.nameChip}>
-          <Text style={styles.playerName}>Open</Text>
+          <Text style={styles.playerName}>{selected ? 'Selected' : 'Open'}</Text>
         </View>
       </Pressable>
     );
@@ -720,24 +902,41 @@ function getInitials(name: string) {
     .join('');
 }
 
+function isRegistrationTicket(value: unknown): value is RegistrationTicket {
+  if (!value || typeof value !== 'object') return false;
+  const ticket = value as Record<string, unknown>;
+  return typeof ticket.id === 'string'
+    && typeof ticket.userId === 'string'
+    && typeof ticket.firstName === 'string'
+    && (typeof ticket.avatarUrl === 'string' || ticket.avatarUrl === null)
+    && typeof ticket.pitchSlot === 'number'
+    && typeof ticket.checkInToken === 'string'
+    && typeof ticket.expiresAt === 'string';
+}
+
 function getJoinLabel({
   joining,
   joined,
   isFull,
   isCancelled,
   pricePerPlayer,
+  hasSelectedPitchSlot,
+  requiredPitchSlots,
 }: {
   joining: boolean;
   joined: boolean;
   isFull: boolean;
   isCancelled: boolean;
   pricePerPlayer: number;
+  hasSelectedPitchSlot: boolean;
+  requiredPitchSlots: number;
 }) {
   if (joining) return 'Joining…';
   if (joined) return "You're in";
   if (isCancelled) return 'Match cancelled';
   if (isFull) return 'Match full';
-  return `Join match · ${pricePerPlayer} SAR`;
+  if (pricePerPlayer > 0) return 'Payment unavailable';
+  return hasSelectedPitchSlot ? 'Confirm selected spots' : `Choose ${requiredPitchSlots} pitch spot${requiredPitchSlots === 1 ? '' : 's'}`;
 }
 
 const styles = StyleSheet.create({
@@ -756,6 +955,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerSubtitle: { fontSize: 12, letterSpacing: 0.4 },
+  friendRow: { minHeight: 48, borderWidth: 1, borderRadius: 13, flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingLeft: 12 },
+  friendInput: { flex: 1, minHeight: 46, fontSize: 13 },
+  removeFriend: { width: 42, height: 46, alignItems: 'center', justifyContent: 'center' },
+  addFriendButton: { minHeight: 44, borderWidth: 1, borderStyle: 'dashed', borderRadius: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 1 },
+  addFriendText: { fontSize: 12, fontWeight: '700' },
   scrollContent: { flexGrow: 1, paddingBottom: 130 },
   content: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 20 },
   previewNotice: { borderWidth: 1, borderRadius: 16, padding: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 9, marginBottom: 20 },
@@ -807,4 +1011,13 @@ const styles = StyleSheet.create({
   joinButtonText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
   paymentNote: { fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 8 },
   joinError: { fontSize: 11, textAlign: 'center', marginTop: 6 },
+  ticketBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.78)', justifyContent: 'center', alignItems: 'center', padding: 18 },
+  ticketModal: { width: '100%', maxWidth: 430, maxHeight: '90%', borderWidth: 1, borderRadius: 22, padding: 18 },
+  ticketTitle: { fontSize: 25, fontFamily: 'Georgia', fontWeight: '700', textAlign: 'center' },
+  ticketSubtitle: { fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 6, marginBottom: 8 },
+  ticketList: { flexGrow: 0, flexShrink: 1, maxHeight: '65%' },
+  ticketListContent: { paddingVertical: 5, gap: 10 },
+  ticketCard: { minHeight: 260, borderWidth: 1, borderRadius: 16, padding: 12, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  ticketName: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  ticketExpiry: { fontSize: 10, textAlign: 'center' },
 });

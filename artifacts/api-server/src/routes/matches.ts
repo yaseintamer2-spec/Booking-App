@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { clerkClient } from "@clerk/express";
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, desc, eq, gt, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
 import {
   CreateAdminMatchBody,
   CreateAdminMatchResponse,
@@ -56,6 +56,30 @@ async function sendPushToUser(userId: string, title: string, body: string, data:
       // In-app notifications remain available if Expo's push service is temporarily unreachable.
     }
   }
+}
+
+async function getNotificationRecipientIds(): Promise<string[]> {
+  const userIds: string[] = [];
+  let offset = 0;
+  while (true) {
+    const page = await clerkClient.users.getUserList({ limit: 100, offset });
+    userIds.push(...page.data.map((user) => user.id));
+    if (page.data.length < 100) return userIds;
+    offset += page.data.length;
+  }
+}
+
+function getNewMatchMessage(match: { venueName: string; neighborhood: string; startsAt: Date; priceHalalas: number }): string {
+  const time = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Riyadh",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(match.startsAt);
+  const price = match.priceHalalas === 0 ? "Free" : `SAR ${(match.priceHalalas / 100).toFixed(2)}`;
+  return `New match at ${match.venueName}, ${match.neighborhood} · ${time} Riyadh · ${price} per player.`;
 }
 
 async function expireWaitlistOffers(): Promise<void> {
@@ -152,7 +176,7 @@ router.get("/matches", async (req, res): Promise<void> => {
 router.get("/matches/:id/participants", async (req, res): Promise<void> => {
   const [match] = await db.select({ id: matchesTable.id }).from(matchesTable).where(and(eq(matchesTable.id, paramId(req.params.id)), eq(matchesTable.status, "published"))).limit(1);
   if (!match) { res.status(404).json({ error: "Match not found." }); return; }
-  const rows = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, avatarUrl: registrationsTable.avatarUrl, positionPreference: registrationsTable.positionPreference })
+  const rows = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, avatarUrl: registrationsTable.avatarUrl, pitchSlot: registrationsTable.pitchSlot, positionPreference: registrationsTable.positionPreference })
     .from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`)).orderBy(asc(registrationsTable.createdAt));
   res.json(rows);
 });
@@ -160,28 +184,113 @@ router.get("/matches/:id/participants", async (req, res): Promise<void> => {
 router.post("/matches/:id/registrations", requireAuth, async (req, res): Promise<void> => {
   const userId = res.locals.userId as string;
   const positionPreference = req.body?.positionPreference;
+  const friendEmails = req.body?.friendEmails;
+  const pitchSlots = req.body?.pitchSlots;
   if (!["anywhere", "goalkeeper", "defender", "midfielder", "attacker"].includes(positionPreference)) {
     res.status(400).json({ error: "Choose a valid position preference." }); return;
   }
+  if (!Array.isArray(friendEmails) || friendEmails.length > 13 || friendEmails.some((email: unknown) => typeof email !== "string")) {
+    res.status(400).json({ error: "Add up to 13 friends by email." }); return;
+  }
+  const normalizedEmails = friendEmails.map((email: string) => email.trim().toLowerCase());
+  if (
+    normalizedEmails.some((email: string) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) ||
+    new Set(normalizedEmails).size !== normalizedEmails.length
+  ) { res.status(400).json({ error: "Use a different, valid email for each friend." }); return; }
+  if (
+    !Array.isArray(pitchSlots) ||
+    pitchSlots.length !== normalizedEmails.length + 1 ||
+    pitchSlots.some((slot: unknown) => !Number.isInteger(slot) || (slot as number) < 0 || (slot as number) >= 14) ||
+    new Set(pitchSlots).size !== pitchSlots.length
+  ) { res.status(400).json({ error: "Choose one different open pitch spot per attendee." }); return; }
+
   const user = await clerkClient.users.getUser(userId);
-  const firstName = user.firstName || user.fullName?.split(" ")[0] || "Player";
-  const avatarUrl = user.imageUrl || null;
+  const friendUsers = normalizedEmails.length
+    ? (await clerkClient.users.getUserList({ emailAddress: normalizedEmails, limit: 100 })).data
+    : [];
+  const attendees = [{
+    userId,
+    firstName: user.firstName || user.fullName?.split(" ")[0] || "Player",
+    avatarUrl: user.imageUrl || null,
+  }];
+  for (const email of normalizedEmails) {
+    const friend = friendUsers.find((candidate) =>
+      candidate.emailAddresses.some((address) =>
+        address.emailAddress.toLowerCase() === email && address.verification?.status === "verified",
+      ),
+    );
+    if (!friend || friend.id === userId) {
+      res.status(400).json({ error: "Each friend must have a different KICKOFF account with a verified email." }); return;
+    }
+    attendees.push({
+      userId: friend.id,
+      firstName: friend.firstName || friend.fullName?.split(" ")[0] || "Player",
+      avatarUrl: friend.imageUrl || null,
+    });
+  }
+  if (new Set(attendees.map((attendee) => attendee.userId)).size !== attendees.length) {
+    res.status(400).json({ error: "Each ticket needs a different KICKOFF account." }); return;
+  }
+
   const outcome = await db.transaction(async (tx) => {
     const [match] = await tx.select().from(matchesTable).where(eq(matchesTable.id, paramId(req.params.id))).for("update").limit(1);
     if (!match || match.status !== "published" || match.startsAt <= new Date()) return { error: "Match is no longer available.", status: 404 } as const;
-    const [existing] = await tx.select().from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.userId, userId))).limit(1);
-    if (existing && ["joined", "checked_in"].includes(existing.status)) return { error: "You already joined this match.", status: 409 } as const;
+    if (pitchSlots.some((slot: number) => slot >= Math.min(match.capacity, 14))) return { error: "A selected pitch spot is outside this match's capacity.", status: 400 } as const;
+    if (match.bookedCount + attendees.length > match.capacity) return { error: "There are not enough places left for everyone selected.", status: 409 } as const;
     if (!canConfirmPaidRegistration(match.priceHalalas, false)) return { error: "Paid booking is unavailable until the payment provider is configured. No seat has been held.", status: 503 } as const;
     const [goalkeepers] = await tx.select({ count: sql<number>`count(*)::int` }).from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`, eq(registrationsTable.positionPreference, "goalkeeper")));
     if (positionPreference === "goalkeeper" && (goalkeepers?.count ?? 0) >= 2) return { error: "The goalkeeper preference is full for this match.", status: 409 } as const;
-    if (!canReserveSeat(match.bookedCount, match.capacity)) return { error: "This match is full. Join the waitlist instead.", status: 409 } as const;
-    const token = randomBytes(32).toString("base64url");
-    const tokenHash = createHash("sha256").update(token).digest("hex");
+
     const checkinExpiresAt = getMatchEndAt(match.startsAt, match.durationMinutes);
-    if (existing) await tx.update(registrationsTable).set({ firstName, avatarUrl, positionPreference, status: "joined", paymentStatus: "free", checkedInAt: null, checkinTokenHash: tokenHash, checkinExpiresAt, updatedAt: new Date() }).where(eq(registrationsTable.id, existing.id));
-    else await tx.insert(registrationsTable).values({ matchId: match.id, userId, firstName, avatarUrl, positionPreference, status: "joined", paymentStatus: "free", checkinTokenHash: tokenHash, checkinExpiresAt });
-    await tx.update(matchesTable).set({ bookedCount: match.bookedCount + 1, updatedAt: new Date() }).where(eq(matchesTable.id, match.id));
-    return { status: 201, data: { status: "joined", checkInToken: token, matchId: match.id } } as const;
+    const existingRegistrations: Array<typeof registrationsTable.$inferSelect | undefined> = [];
+    for (const [index, attendee] of attendees.entries()) {
+      const [existing] = await tx.select().from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.userId, attendee.userId))).limit(1);
+      if (existing && ["joined", "checked_in", "waitlisted", "offered"].includes(existing.status)) {
+        return { error: `${attendee.firstName} already has an active place for this match.`, status: 409 } as const;
+      }
+      const pitchSlot = pitchSlots[index] as number;
+      const [occupiedPitchSlot] = await tx.select({ id: registrationsTable.id }).from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.pitchSlot, pitchSlot), sql`${registrationsTable.status} IN ('joined', 'checked_in')`)).limit(1);
+      if (occupiedPitchSlot) return { error: "A selected pitch spot was just taken. Choose another open spot.", status: 409 } as const;
+      existingRegistrations.push(existing);
+    }
+
+    const tickets: Array<{ id: string; userId: string; firstName: string; avatarUrl: string | null; pitchSlot: number; checkInToken: string; expiresAt: string }> = [];
+    for (const [index, attendee] of attendees.entries()) {
+      const existing = existingRegistrations[index];
+      const pitchSlot = pitchSlots[index] as number;
+
+      const token = randomBytes(32).toString("base64url");
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+      const values = {
+        bookedByUserId: userId,
+        firstName: attendee.firstName,
+        avatarUrl: attendee.avatarUrl,
+        pitchSlot,
+        positionPreference: index === 0 ? positionPreference : "anywhere",
+        status: "joined",
+        paymentStatus: "free",
+        checkedInAt: null,
+        checkinTokenHash: tokenHash,
+        checkinExpiresAt,
+        offerExpiresAt: null,
+        updatedAt: new Date(),
+      };
+      const [registration] = existing
+        ? await tx.update(registrationsTable).set(values).where(eq(registrationsTable.id, existing.id)).returning({ id: registrationsTable.id })
+        : await tx.insert(registrationsTable).values({ matchId: match.id, userId: attendee.userId, ...values }).returning({ id: registrationsTable.id });
+      tickets.push({ id: registration.id, userId: attendee.userId, firstName: attendee.firstName, avatarUrl: attendee.avatarUrl, pitchSlot, checkInToken: token, expiresAt: checkinExpiresAt.toISOString() });
+    }
+
+    await tx.update(matchesTable).set({ bookedCount: match.bookedCount + attendees.length, updatedAt: new Date() }).where(eq(matchesTable.id, match.id));
+    if (attendees.length > 1) {
+      await tx.insert(notificationsTable).values(attendees.slice(1).map((attendee) => ({
+        userId: attendee.userId,
+        matchId: match.id,
+        kind: "match_invitation",
+        message: `${attendees[0].firstName} booked you a free spot at ${match.venueName}. Your check-in QR is in My Matches.`,
+      })));
+    }
+    return { status: 201, data: { status: "joined", matchId: match.id, venueName: match.venueName, tickets } } as const;
   });
   if ("error" in outcome) { res.status(outcome.status).json({ error: outcome.error }); return; }
   res.status(outcome.status).json(outcome.data);
@@ -198,7 +307,7 @@ router.post("/matches/:id/waitlist", requireAuth, async (req, res): Promise<void
     if (existing && existing.status === "waitlisted") return { error: "You are already on the waitlist.", status: 409 } as const;
     if (existing && ["joined", "checked_in", "offered"].includes(existing.status)) return { error: "You already have a place or offer for this match.", status: 409 } as const;
     const positionPreference = ["anywhere", "goalkeeper", "defender", "midfielder", "attacker"].includes(req.body?.positionPreference) ? req.body.positionPreference : "anywhere";
-    const values = { firstName: user.firstName || user.fullName?.split(" ")[0] || "Player", avatarUrl: user.imageUrl || null, positionPreference, status: "waitlisted", paymentStatus: "unpaid", checkinTokenHash: null, checkinExpiresAt: null, offerExpiresAt: null, updatedAt: new Date() };
+    const values = { bookedByUserId: userId, firstName: user.firstName || user.fullName?.split(" ")[0] || "Player", avatarUrl: user.imageUrl || null, pitchSlot: null, positionPreference, status: "waitlisted", paymentStatus: "unpaid", checkinTokenHash: null, checkinExpiresAt: null, offerExpiresAt: null, updatedAt: new Date() };
     if (existing) await tx.update(registrationsTable).set(values).where(eq(registrationsTable.id, existing.id));
     else await tx.insert(registrationsTable).values({ matchId: match.id, userId, ...values });
     const [count] = await tx.select({ count: sql<number>`count(*)::int` }).from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.status, "waitlisted")));
@@ -210,10 +319,17 @@ router.post("/matches/:id/waitlist", requireAuth, async (req, res): Promise<void
 
 router.delete("/matches/:id/registrations/me", requireAuth, async (req, res): Promise<void> => {
   const userId = res.locals.userId as string;
+  const registrationId = typeof req.query.registrationId === "string" ? req.query.registrationId : null;
+  if (registrationId && !GetMatchParams.safeParse({ id: registrationId }).success) {
+    res.status(400).json({ error: "Choose a valid registration." }); return;
+  }
   const promoted = await db.transaction(async (tx) => {
     const [match] = await tx.select().from(matchesTable).where(eq(matchesTable.id, paramId(req.params.id))).for("update").limit(1);
     if (!match) return { error: "Match not found.", status: 404 } as const;
-    const [registration] = await tx.select().from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.userId, userId))).limit(1);
+    const registrationAccess = registrationId
+      ? and(eq(registrationsTable.id, registrationId), or(eq(registrationsTable.userId, userId), eq(registrationsTable.bookedByUserId, userId)))
+      : eq(registrationsTable.userId, userId);
+    const [registration] = await tx.select().from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), registrationAccess)).limit(1);
     if (!registration || registration.status === "cancelled") return { error: "You do not have an active place.", status: 404 } as const;
     if (registration.status === "checked_in") return { error: "A checked-in player cannot cancel their place.", status: 409 } as const;
     if (registration.paymentStatus === "paid") return { error: "A refund provider must be configured before a paid booking can be cancelled here.", status: 503 } as const;
@@ -258,23 +374,41 @@ router.post("/matches/:id/waitlist/accept", requireAuth, async (req, res): Promi
 router.get("/me/registrations", requireAuth, async (_req, res): Promise<void> => {
   await expireWaitlistOffers();
   const userId = res.locals.userId as string;
-  const rows = await db.select({ registration: registrationsTable, match: matchesTable }).from(registrationsTable).innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id)).where(and(eq(registrationsTable.userId, userId), sql`${registrationsTable.status} IN ('joined', 'offered', 'waitlisted', 'checked_in')`)).orderBy(asc(matchesTable.startsAt));
-  res.json(rows.map(({ registration, match }) => ({ id: registration.id, status: registration.status, offerExpiresAt: registration.offerExpiresAt, checkInAvailable: registration.status === "joined", match: toMatch(match) })));
+  const rows = await db.select({ registration: registrationsTable, match: matchesTable }).from(registrationsTable).innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id)).where(and(or(eq(registrationsTable.userId, userId), eq(registrationsTable.bookedByUserId, userId)), sql`${registrationsTable.status} IN ('joined', 'offered', 'waitlisted', 'checked_in')`)).orderBy(asc(matchesTable.startsAt));
+  res.json(rows.map(({ registration, match }) => ({
+    id: registration.id,
+    userId: registration.userId,
+    bookedByUserId: registration.bookedByUserId,
+    firstName: registration.firstName,
+    pitchSlot: registration.pitchSlot,
+    paymentStatus: registration.paymentStatus,
+    status: registration.status,
+    offerExpiresAt: registration.offerExpiresAt,
+    checkInAvailable: registration.status === "joined",
+    match: toMatch(match),
+  })));
 });
 
 router.get("/matches/:id/check-in-token", requireAuth, async (req, res): Promise<void> => {
   const userId = res.locals.userId as string;
   const matchId = paramId(req.params.id);
-  const [entry] = await db.select({ id: registrationsTable.id, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, matchStatus: matchesTable.status })
+  const registrationId = typeof req.query.registrationId === "string" ? req.query.registrationId : null;
+  if (registrationId && !GetMatchParams.safeParse({ id: registrationId }).success) {
+    res.status(400).json({ error: "Choose a valid registration." }); return;
+  }
+  const registrationAccess = registrationId
+    ? and(eq(registrationsTable.id, registrationId), or(eq(registrationsTable.userId, userId), eq(registrationsTable.bookedByUserId, userId)))
+    : eq(registrationsTable.userId, userId);
+  const [entry] = await db.select({ id: registrationsTable.id, firstName: registrationsTable.firstName, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, matchStatus: matchesTable.status })
     .from(registrationsTable).innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id))
-    .where(and(eq(registrationsTable.matchId, matchId), eq(registrationsTable.userId, userId), eq(registrationsTable.status, "joined"))).limit(1);
+    .where(and(eq(registrationsTable.matchId, matchId), registrationAccess, eq(registrationsTable.status, "joined"))).limit(1);
   if (!entry) { res.status(404).json({ error: "An active registration is required to get a check-in code." }); return; }
   const expiresAt = getMatchEndAt(entry.startsAt, entry.durationMinutes);
   if (entry.matchStatus !== "published" || expiresAt <= new Date()) { res.status(410).json({ error: "The check-in window closes when this match ends." }); return; }
   const token = randomBytes(32).toString("base64url");
   const [row] = await db.update(registrationsTable).set({ checkinTokenHash: createHash("sha256").update(token).digest("hex"), checkinExpiresAt: expiresAt, updatedAt: new Date() }).where(and(eq(registrationsTable.id, entry.id), eq(registrationsTable.status, "joined"))).returning({ id: registrationsTable.id });
   if (!row) { res.status(404).json({ error: "An active registration is required to get a check-in code." }); return; }
-  res.json({ token, expiresAt: expiresAt.toISOString() });
+  res.json({ token, firstName: entry.firstName, expiresAt: expiresAt.toISOString() });
 });
 
 router.post("/admin/matches/:id/check-in", requireMatchStaff, async (req, res): Promise<void> => {
@@ -297,8 +431,51 @@ router.post("/admin/matches/:id/check-in", requireMatchStaff, async (req, res): 
 });
 
 router.get("/me/notifications", requireAuth, async (_req, res): Promise<void> => {
-  const rows = await db.select().from(notificationsTable).where(eq(notificationsTable.userId, res.locals.userId as string)).orderBy(desc(notificationsTable.createdAt)).limit(50);
-  res.json(rows);
+  const rows = await db.select({ notification: notificationsTable, match: matchesTable })
+    .from(notificationsTable)
+    .leftJoin(matchesTable, eq(notificationsTable.matchId, matchesTable.id))
+    .where(eq(notificationsTable.userId, res.locals.userId as string))
+    .orderBy(desc(notificationsTable.createdAt))
+    .limit(50);
+  res.json(rows.map(({ notification, match }) => ({
+    ...notification,
+    match: match ? {
+      id: match.id,
+      venueName: match.venueName,
+      neighborhood: match.neighborhood,
+      startsAt: match.startsAt,
+      priceHalalas: match.priceHalalas,
+    } : null,
+  })));
+});
+
+router.patch("/me/notifications/read-all", requireAuth, async (_req, res): Promise<void> => {
+  await db.update(notificationsTable)
+    .set({ readAt: new Date() })
+    .where(and(eq(notificationsTable.userId, res.locals.userId as string), isNull(notificationsTable.readAt)));
+  res.json({ read: true });
+});
+
+router.patch("/me/notifications/:id/read", requireAuth, async (req, res): Promise<void> => {
+  const [notification] = await db.update(notificationsTable)
+    .set({ readAt: new Date() })
+    .where(and(eq(notificationsTable.id, paramId(req.params.id)), eq(notificationsTable.userId, res.locals.userId as string)))
+    .returning({ id: notificationsTable.id });
+  if (!notification) { res.status(404).json({ error: "Notification not found." }); return; }
+  res.json({ read: true });
+});
+
+router.patch("/me/avatar", requireAuth, async (_req, res): Promise<void> => {
+  const userId = res.locals.userId as string;
+  const user = await clerkClient.users.getUser(userId);
+  const updated = await db.update(registrationsTable)
+    .set({ avatarUrl: user.imageUrl || null, updatedAt: new Date() })
+    .where(and(
+      eq(registrationsTable.userId, userId),
+      sql`${registrationsTable.status} IN ('joined', 'checked_in', 'waitlisted', 'offered')`,
+    ))
+    .returning({ id: registrationsTable.id });
+  res.json({ updatedRegistrations: updated.length });
 });
 
 router.get("/matches/:id", async (req, res): Promise<void> => {
@@ -365,10 +542,23 @@ router.post(
       return;
     }
 
-    const [row] = await db
-      .insert(matchesTable)
-      .values({ ...parsed.data, imageUrls, imageUrl: parsed.data.imageUrls?.length ? "match-card" : parsed.data.imageUrl })
-      .returning();
+    const recipients = parsed.data.status === "published" ? await getNotificationRecipientIds() : [];
+    const [row] = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(matchesTable)
+        .values({ ...parsed.data, imageUrls, imageUrl: parsed.data.imageUrls?.length ? "match-card" : parsed.data.imageUrl })
+        .returning();
+      const message = getNewMatchMessage(created);
+      for (let offset = 0; offset < recipients.length; offset += 100) {
+        await tx.insert(notificationsTable).values(recipients.slice(offset, offset + 100).map((recipientId) => ({
+          userId: recipientId,
+          matchId: created.id,
+          kind: "new_match",
+          message,
+        })));
+      }
+      return [created] as const;
+    });
 
     res
       .status(201)
@@ -422,15 +612,31 @@ router.patch(
       return;
     }
 
-    const [row] = await db
-      .update(matchesTable)
-      .set({
+    const shouldAnnounce = existing.status !== "published" && parsed.data.status === "published";
+    const recipients = shouldAnnounce ? await getNotificationRecipientIds() : [];
+    const [row] = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(matchesTable)
+        .set({
         ...parsed.data,
         ...(parsed.data.imageUrls !== undefined ? { imageUrls, imageUrl: "match-card" } : parsed.data.imageUrl ? { imageUrls: [] } : {}),
         updatedAt: new Date(),
-      })
-      .where(eq(matchesTable.id, params.data.id))
-      .returning();
+        })
+        .where(eq(matchesTable.id, params.data.id))
+        .returning();
+      if (shouldAnnounce) {
+        const message = getNewMatchMessage(updated);
+        for (let offset = 0; offset < recipients.length; offset += 100) {
+          await tx.insert(notificationsTable).values(recipients.slice(offset, offset + 100).map((recipientId) => ({
+            userId: recipientId,
+            matchId: updated.id,
+            kind: "new_match",
+            message,
+          })));
+        }
+      }
+      return [updated] as const;
+    });
 
     res.json(UpdateAdminMatchResponse.parse(toMatch(row)));
   },

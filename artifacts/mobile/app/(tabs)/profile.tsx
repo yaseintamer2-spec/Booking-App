@@ -27,35 +27,50 @@ export default function ProfileScreen() {
     setImageError(null);
     setImageSaved(false);
     try {
-      if (Platform.OS !== 'web') {
+      let file: File | string;
+      if (Platform.OS === 'web') {
+        const browserFile = await chooseBrowserImage();
+        if (!browserFile) return;
+        file = browserFile;
+      } else {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) {
           setImageError('Photo access was not granted. Allow access in your device settings to choose a photo.');
           return;
         }
-      }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-      if (result.canceled) return;
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+        if (result.canceled) return;
 
-      const image = result.assets[0];
-      if (!image?.uri) {
-        throw new Error('The selected image could not be read.');
-      }
+        const image = result.assets[0];
+        if (!image?.uri) {
+          throw new Error('The selected image could not be read.');
+        }
 
-      const file = Platform.OS === 'web' ? image.file : image.uri;
-      if (!file) {
-        throw new Error('The selected image could not be uploaded. Please choose another photo.');
+        file = image.uri;
       }
 
       await clerkUser.setProfileImage({ file });
       await clerkUser.reload();
       setImageSaved(true);
+      try {
+        const token = await getToken();
+        const response = await fetch(`${apiBaseUrl}/api/me/avatar`, {
+          method: 'PATCH',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || 'Could not refresh match lineups.');
+      } catch (syncError) {
+        setImageError(syncError instanceof Error
+          ? `Profile picture updated, but match lineups could not be refreshed: ${syncError.message}`
+          : 'Profile picture updated, but match lineups could not be refreshed. Try again later.');
+      }
     } catch (error) {
       console.error('Failed to update profile picture:', error);
       setImageError(error instanceof Error ? error.message : 'Could not update your profile picture. Please try again.');
@@ -130,6 +145,34 @@ export default function ProfileScreen() {
     </Screen>
   );
 }
+
+function chooseBrowserImage(): Promise<File | null> {
+  if (typeof document === 'undefined') {
+    return Promise.reject(new Error('The browser file picker is unavailable.'));
+  }
+
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/jpeg,image/png,image/webp';
+    input.style.position = 'fixed';
+    input.style.left = '-9999px';
+    document.body.appendChild(input);
+
+    const finish = (file: File | null) => {
+      input.removeEventListener('change', onChange);
+      input.removeEventListener('cancel', onCancel);
+      input.remove();
+      resolve(file);
+    };
+    const onChange = () => finish(input.files?.[0] ?? null);
+    const onCancel = () => finish(null);
+    input.addEventListener('change', onChange, { once: true });
+    input.addEventListener('cancel', onCancel, { once: true });
+    input.click();
+  });
+}
+
 const styles = StyleSheet.create({
   kicker: { fontSize: 10, letterSpacing: 1.8, fontWeight: '700', marginTop: 18 },
   title: { fontSize: 35, fontFamily: 'Georgia', marginTop: 8 },

@@ -82,8 +82,10 @@ export const registrationsTable = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     matchId: uuid("match_id").notNull().references(() => matchesTable.id, { onDelete: "cascade" }),
     userId: text("user_id").notNull(),
+    bookedByUserId: text("booked_by_user_id").notNull(),
     firstName: text("first_name").notNull(),
     avatarUrl: text("avatar_url"),
+    pitchSlot: integer("pitch_slot"),
     positionPreference: text("position_preference").notNull().default("anywhere"),
     status: text("status").notNull().default("joined"),
     paymentStatus: text("payment_status").notNull().default("unpaid"),
@@ -96,9 +98,14 @@ export const registrationsTable = pgTable(
   },
   (table) => [
     uniqueIndex("match_registrations_match_user_idx").on(table.matchId, table.userId),
+    uniqueIndex("match_registrations_match_pitch_slot_idx")
+      .on(table.matchId, table.pitchSlot)
+      .where(sql`${table.pitchSlot} IS NOT NULL AND ${table.status} IN ('joined', 'checked_in')`),
     index("match_registrations_match_status_created_idx").on(table.matchId, table.status, table.createdAt),
     index("match_registrations_user_status_idx").on(table.userId, table.status),
+    index("match_registrations_booker_status_idx").on(table.bookedByUserId, table.status),
     check("match_registrations_status_check", sql`${table.status} IN ('joined', 'waitlisted', 'offered', 'cancelled', 'checked_in')`),
+    check("match_registrations_pitch_slot_check", sql`${table.pitchSlot} IS NULL OR (${table.pitchSlot} >= 0 AND ${table.pitchSlot} < 14)`),
     check("match_registrations_position_check", sql`${table.positionPreference} IN ('anywhere', 'goalkeeper', 'defender', 'midfielder', 'attacker')`),
   ],
 );

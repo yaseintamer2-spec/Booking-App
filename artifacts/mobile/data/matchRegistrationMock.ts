@@ -15,6 +15,7 @@ export type RegistrationParticipant = {
   userId: string;
   firstName: string;
   avatarUrl: string | null;
+  pitchSlot?: number | null;
   positionPreference: PositionPreference;
 };
 

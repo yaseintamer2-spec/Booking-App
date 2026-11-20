@@ -10,6 +10,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import type { Match, CurrentUser } from '@workspace/api-client-react';
+import { NotificationsButton } from './NotificationsButton';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -181,6 +182,7 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
         <Pressable onPress={() => router.push('/(tabs)')} style={styles.brandLockup}><View style={[styles.brandMark, { backgroundColor: colors.primary }]}><Feather name="activity" size={15} color={colors.primaryForeground} /></View><Text style={[styles.brand, { color: colors.foreground }]}>{title}</Text></Pressable>}
       <View style={styles.headerRight}>
         {subtitle ? <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{subtitle}</Text> : null}
+        <NotificationsButton />
         {!hideMenu ? <Pressable style={[styles.menuButton, { borderColor: colors.border }]} onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel="Open navigation menu" testID="open-drawer">
           <View style={[styles.menuLine, { backgroundColor: colors.foreground }]} /><View style={[styles.menuLine, { backgroundColor: colors.foreground }]} /><View style={[styles.menuLine, { backgroundColor: colors.foreground }]} />
         </Pressable> : null}
@@ -303,8 +305,8 @@ const styles = StyleSheet.create({
   brandLockup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   brandMark: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   brand: { fontSize: 15, letterSpacing: 2.2, fontWeight: '700' },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  headerSubtitle: { fontSize: 12, letterSpacing: 0.4 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerSubtitle: { fontSize: 12, letterSpacing: 0.4, flexShrink: 1, maxWidth: 120, textAlign: 'right' },
   menuButton: { height: 42, width: 46, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 4 },
   menuLine: { height: 1.5, width: 17, borderRadius: 1 },
   headerIcon: { width: 42, height: 42, justifyContent: 'center' },
