@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -86,6 +87,7 @@ export default function MatchRegistrationScreen() {
     id: remoteMatch.data.id,
     pitchName: remoteMatch.data.venueName,
     area: remoteMatch.data.neighborhood,
+    address: remoteMatch.data.address,
     startsAt: remoteMatch.data.startsAt,
     durationHours: remoteMatch.data.durationMinutes / 60,
     maxPlayers: remoteMatch.data.capacity,
@@ -239,6 +241,19 @@ export default function MatchRegistrationScreen() {
           <Text style={[styles.matchSubtitle, { color: colors.mutedForeground }]}>
             {match.pitchName} · {match.area}
           </Text>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={`Open ${match.pitchName} in Google Maps`}
+            onPress={() => {
+              const query = `${match.pitchName}, ${match.address || match.area}, Riyadh`;
+              void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
+            }}
+            style={styles.mapsLink}
+          >
+            <Feather name="map-pin" size={14} color={colors.primary} />
+            <Text style={[styles.mapsLinkText, { color: colors.primary }]}>View pitch location in Google Maps</Text>
+            <Feather name="arrow-up-right" size={13} color={colors.primary} />
+          </Pressable>
 
           <SectionLabel colors={colors}>PLAYERS</SectionLabel>
           <Pitch
@@ -751,6 +766,8 @@ const styles = StyleSheet.create({
   matchKicker: { fontSize: 12, letterSpacing: 1.3, fontWeight: '700', marginTop: 6 },
   matchTitle: { fontSize: 34, lineHeight: 40, fontWeight: '800', marginTop: 8 },
   matchSubtitle: { fontSize: 14, marginTop: 3 },
+  mapsLink: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 8, paddingRight: 8, marginTop: 2, marginBottom: 5 },
+  mapsLinkText: { fontSize: 11, fontWeight: '700', textDecorationLine: 'underline' },
   sectionLabel: { fontSize: 12, letterSpacing: 1.5, fontWeight: '800', marginTop: 26, marginBottom: 12 },
   pitch: { height: PITCH_HEIGHT, borderWidth: 3, borderRadius: 24, overflow: 'hidden', position: 'relative', backgroundColor: SCREEN_COLORS.pitch },
   pitchStripes: { ...StyleSheet.absoluteFill, flexDirection: 'column' },
@@ -790,4 +807,3 @@ const styles = StyleSheet.create({
   paymentNote: { fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 8 },
   joinError: { fontSize: 11, textAlign: 'center', marginTop: 6 },
 });
-
