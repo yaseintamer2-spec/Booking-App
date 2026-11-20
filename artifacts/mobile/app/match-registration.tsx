@@ -132,7 +132,6 @@ export default function MatchRegistrationScreen() {
     return () => { active = false; };
   }, [liveMatchId, currentUser.userId]);
   useEffect(() => {
-    if (!currentUser.avatarUrl) return;
     setParticipants((current) => current.map((participant) => participant.userId === currentUser.userId
       ? { ...participant, avatarUrl: currentUser.avatarUrl }
       : participant));
