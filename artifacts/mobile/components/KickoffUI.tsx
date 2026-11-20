@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Image, ImageBackground, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { Image, ImageBackground, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewInstance } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -224,22 +224,44 @@ export function MatchCard({ match, compact = false, onPress }: { match: Match; c
   const time = formatRiyadhTime(start);
   const price = formatSar(match.priceHalalas);
   const compare = formatSar(match.compareAtPriceHalalas);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${match.venueName}, ${formatSar(match.priceHalalas)} per player`} testID={`match-${match.id}`} onPress={onPress} style={[styles.matchCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-    <ImageBackground source={match.imageUrl && /^https?:\/\//i.test(match.imageUrl) ? { uri: match.imageUrl } : cardImage} style={[styles.matchPhoto, compact && { height: 126 }]} imageStyle={{ borderTopLeftRadius: 18, borderTopRightRadius: 18 }}>
-      <View style={styles.photoShade} />
-      <View style={styles.photoPills}><Text style={[styles.photoPill, { color: match.isDemo ? colors.destructive : colors.foreground, backgroundColor: 'rgba(8,16,12,.82)' }]}>{match.isDemo ? 'DEMO LISTING' : '7V7 · RIYADH'}</Text><Text style={[styles.spotsPill, { color: colors.primaryForeground, backgroundColor: colors.primary }]}>{match.spotsRemaining} SPOTS LEFT</Text></View>
-      <View style={styles.photoVenue}><Text style={[styles.venueName, { color: colors.foreground }]}>{match.venueName}</Text><Text style={[styles.venueLocation, { color: colors.secondaryForeground }]}>{match.neighborhood}  /  {day}</Text></View>
-    </ImageBackground>
+  const photos = match.imageUrls?.length ? match.imageUrls.slice(0, 3) : match.imageUrl && (/^https:\/\//i.test(match.imageUrl) || /^data:image\//i.test(match.imageUrl)) ? [match.imageUrl] : [];
+  const gallery = photos.length ? photos : [null];
+  const [activePhoto, setActivePhoto] = useState(0);
+  const [photoWidth, setPhotoWidth] = useState(320);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  useEffect(() => {
+    if (gallery.length < 2) return;
+    const timer = setInterval(() => setActivePhoto(current => {
+      const next = (current + 1) % gallery.length;
+      scrollRef.current?.scrollTo({ x: next * photoWidth, animated: true });
+      return next;
+    }), 5000);
+    return () => clearInterval(timer);
+  }, [gallery.length, photoWidth]);
+  const goToPhoto = (index: number) => { setActivePhoto(index); scrollRef.current?.scrollTo({ x: index * photoWidth, animated: true }); };
+  return <View testID={`match-${match.id}`} style={[styles.matchCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={[styles.gallery, compact && { height: 126 }]} onLayout={event => setPhotoWidth(event.nativeEvent.layout.width)}>
+      <ScrollView ref={scrollRef} horizontal pagingEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={event => setActivePhoto(Math.min(gallery.length - 1, Math.round(event.nativeEvent.contentOffset.x / photoWidth)))}>
+        {gallery.map((photo, index) => <Pressable key={`${index}-${photo?.slice(0, 22) || 'default'}`} accessibilityRole="button" accessibilityLabel={`Open registration for ${match.venueName}, pitch photo ${index + 1} of ${gallery.length}`} onPress={onPress}><ImageBackground source={photo ? { uri: photo } : cardImage} resizeMode="cover" style={[styles.matchPhoto, { width: photoWidth }, compact && { height: 126 }]}>
+          <View style={styles.photoShade} />
+          <View style={styles.photoPills}><Text style={[styles.photoPill, { color: match.isDemo ? colors.destructive : colors.foreground, backgroundColor: 'rgba(8,16,12,.82)' }]}>{match.isDemo ? 'DEMO LISTING' : '7V7 · RIYADH'}</Text><Text style={[styles.spotsPill, { color: colors.primaryForeground, backgroundColor: colors.primary }]}>{match.spotsRemaining} SPOTS LEFT</Text></View>
+          {gallery.length === 1 ? <View style={styles.photoVenue}><Text style={[styles.venueName, { color: colors.foreground }]}>{match.venueName}</Text><Text style={[styles.venueLocation, { color: colors.secondaryForeground }]}>{match.neighborhood}  /  {day}</Text></View> : null}
+        </ImageBackground></Pressable>)}
+      </ScrollView>
+      {gallery.length > 1 ? <View style={styles.galleryDots}>{gallery.map((_, index) => <Pressable key={index} accessibilityRole="button" accessibilityLabel={`Show pitch photo ${index + 1} of ${gallery.length}`} onPress={() => goToPhoto(index)} style={styles.galleryDotHit}><View style={[styles.galleryDot, { backgroundColor: index === activePhoto ? colors.googleBlue : 'rgba(232,238,233,.72)' }]} /></Pressable>)}</View> : null}
+    </View>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${match.venueName}, ${match.address}, ${formatSar(match.priceHalalas)} per player. Open match registration.`} onPress={onPress} style={styles.matchBody}>
     <View style={styles.matchInfo}>
-      <View style={styles.matchFacts}><Feather name="clock" size={14} color={colors.primary} /><Text style={[styles.factText, { color: colors.foreground }]}>{time}</Text><View style={[styles.factDot, { backgroundColor: colors.border }]} /><Text style={[styles.factText, { color: colors.mutedForeground }]}>{match.durationMinutes} min</Text></View>
-      <View style={styles.priceBlock}><Text style={[styles.priceCaption, { color: colors.mutedForeground }]}>PER PLAYER</Text><Text style={[styles.oldPrice, { color: colors.destructive }]}>{compare}</Text><Text style={[styles.price, { color: colors.foreground }]}>{price}</Text></View>
+      <View style={styles.matchTitleLocation}><Text numberOfLines={1} style={[styles.venueName, { color: colors.foreground }]}>{match.venueName}</Text><View style={styles.cardLocation}><Feather name="map-pin" size={12} color={colors.primary} /><Text numberOfLines={1} style={[styles.venueLocation, { color: colors.mutedForeground }]}>{match.neighborhood} · {match.address}</Text></View></View>
+      <View style={styles.matchInfoRight}><View style={styles.matchFacts}><Feather name="clock" size={14} color={colors.primary} /><Text style={[styles.factText, { color: colors.foreground }]}>{time}</Text><View style={[styles.factDot, { backgroundColor: colors.border }]} /><Text style={[styles.factText, { color: colors.mutedForeground }]}>{match.durationMinutes} min</Text></View><View style={styles.priceBlock}><Text style={[styles.priceCaption, { color: colors.mutedForeground }]}>PER PLAYER</Text><Text style={[styles.oldPrice, { color: colors.destructive }]}>{compare}</Text><Text style={[styles.price, { color: colors.foreground }]}>{price}</Text></View></View>
     </View>
     <View style={[styles.perksRow, { borderTopColor: colors.border }]}>
       <Perk icon="check-circle" label={match.refereeIncluded ? 'Referee included' : 'No referee'} active={match.refereeIncluded} />
       <Perk icon="droplet" label={match.waterIncluded ? 'Water provided' : 'Bring water'} active={match.waterIncluded} />
       <Feather name="arrow-up-right" size={16} color={colors.primary} />
     </View>
-  </Pressable>;
+    </Pressable>
+  </View>;
 }
 
 function Perk({ icon, label, active }: { icon: string; label: string; active: boolean }) {
@@ -307,7 +329,12 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 23, fontFamily: 'Georgia', marginTop: 4 },
   actionText: { fontSize: 12, fontWeight: '700', marginBottom: 3 },
   matchCard: { borderWidth: 1, borderRadius: 18, overflow: 'hidden', marginBottom: 16 },
+  gallery: { height: 188, overflow: 'hidden' },
   matchPhoto: { height: 188, justifyContent: 'space-between', padding: 14 },
+  galleryDots: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  galleryDotHit: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  galleryDot: { width: 7, height: 7, borderRadius: 4 },
+  matchBody: { flex: 1 },
   photoShade: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(5,12,8,0.25)' },
   photoPills: { flexDirection: 'row', justifyContent: 'space-between' },
   photoPill: { fontSize: 9, fontWeight: '700', letterSpacing: 1.2, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, overflow: 'hidden' },
@@ -315,7 +342,10 @@ const styles = StyleSheet.create({
   photoVenue: { gap: 3 },
   venueName: { fontSize: 21, fontFamily: 'Georgia', fontWeight: '600' },
   venueLocation: { fontSize: 11, letterSpacing: 0.6 },
-  matchInfo: { paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  matchInfo: { paddingHorizontal: 16, paddingVertical: 14 },
+  matchTitleLocation: { gap: 4, marginBottom: 13 },
+  cardLocation: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  matchInfoRight: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   matchFacts: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   factText: { fontSize: 12, fontWeight: '600' },
   factDot: { width: 3, height: 3, borderRadius: 3, marginHorizontal: 1 },
