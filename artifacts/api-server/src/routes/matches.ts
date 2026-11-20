@@ -17,7 +17,7 @@ import {
 } from "@workspace/api-zod";
 import { db, matchesTable, notificationsTable, pushTokensTable, registrationsTable } from "@workspace/db";
 import { isAdminUser, isMatchStaffUser, requireAdmin, requireAuth, requireMatchStaff } from "../middlewares/auth";
-import { CHECK_IN_TOKEN_TTL_MS, WAITLIST_OFFER_TTL_MS, canConfirmPaidRegistration, canReserveSeat, isOfferExpired } from "../lib/registration-rules";
+import { getMatchEndAt, WAITLIST_OFFER_TTL_MS, canConfirmPaidRegistration, canReserveSeat, isCheckInTokenValid, isOfferExpired, isValidMatchImageList } from "../lib/registration-rules";
 
 const router: IRouter = Router();
 
@@ -26,8 +26,12 @@ function paramId(value: string | string[] | undefined): string {
 }
 
 function toMatch(row: typeof matchesTable.$inferSelect) {
+  const imageUrls = Array.isArray(row.imageUrls) && row.imageUrls.length
+    ? row.imageUrls
+    : /^https:\/\//i.test(row.imageUrl) || /^data:image\//i.test(row.imageUrl) ? [row.imageUrl] : [];
   return {
     ...row,
+    imageUrls,
     spotsRemaining: Math.max(0, row.capacity - row.bookedCount),
   };
 }
@@ -173,8 +177,9 @@ router.post("/matches/:id/registrations", requireAuth, async (req, res): Promise
     if (!canReserveSeat(match.bookedCount, match.capacity)) return { error: "This match is full. Join the waitlist instead.", status: 409 } as const;
     const token = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest("hex");
-    if (existing) await tx.update(registrationsTable).set({ firstName, avatarUrl, positionPreference, status: "joined", paymentStatus: "free", checkedInAt: null, checkinTokenHash: tokenHash, checkinExpiresAt: new Date(Date.now() + CHECK_IN_TOKEN_TTL_MS), updatedAt: new Date() }).where(eq(registrationsTable.id, existing.id));
-    else await tx.insert(registrationsTable).values({ matchId: match.id, userId, firstName, avatarUrl, positionPreference, status: "joined", paymentStatus: "free", checkinTokenHash: tokenHash, checkinExpiresAt: new Date(Date.now() + CHECK_IN_TOKEN_TTL_MS) });
+    const checkinExpiresAt = getMatchEndAt(match.startsAt, match.durationMinutes);
+    if (existing) await tx.update(registrationsTable).set({ firstName, avatarUrl, positionPreference, status: "joined", paymentStatus: "free", checkedInAt: null, checkinTokenHash: tokenHash, checkinExpiresAt, updatedAt: new Date() }).where(eq(registrationsTable.id, existing.id));
+    else await tx.insert(registrationsTable).values({ matchId: match.id, userId, firstName, avatarUrl, positionPreference, status: "joined", paymentStatus: "free", checkinTokenHash: tokenHash, checkinExpiresAt });
     await tx.update(matchesTable).set({ bookedCount: match.bookedCount + 1, updatedAt: new Date() }).where(eq(matchesTable.id, match.id));
     return { status: 201, data: { status: "joined", checkInToken: token, matchId: match.id } } as const;
   });
@@ -236,13 +241,14 @@ router.post("/matches/:id/waitlist/accept", requireAuth, async (req, res): Promi
     const [match] = await tx.select().from(matchesTable).where(eq(matchesTable.id, paramId(req.params.id))).for("update").limit(1);
     const [entry] = await tx.select().from(registrationsTable).where(and(eq(registrationsTable.matchId, paramId(req.params.id)), eq(registrationsTable.userId, userId))).limit(1);
     if (!match || !entry || entry.status !== "offered") return { error: "There is no active place offer.", status: 404 } as const;
+    if (match.status !== "published" || match.startsAt <= new Date()) return { error: "This match has already started; the offer can no longer be accepted.", status: 410 } as const;
     if (isOfferExpired(entry.offerExpiresAt)) {
       await tx.update(registrationsTable).set({ status: "cancelled", offerExpiresAt: null, updatedAt: new Date() }).where(eq(registrationsTable.id, entry.id));
       return { error: "This place offer has expired.", status: 410 } as const;
     }
     if (match.priceHalalas > 0) return { error: "Paid booking is unavailable until the payment provider is configured. Your offer remains active.", status: 503 } as const;
     const token = randomBytes(32).toString("base64url");
-    await tx.update(registrationsTable).set({ status: "joined", paymentStatus: "free", offerExpiresAt: null, checkinTokenHash: createHash("sha256").update(token).digest("hex"), checkinExpiresAt: new Date(Date.now() + CHECK_IN_TOKEN_TTL_MS), updatedAt: new Date() }).where(eq(registrationsTable.id, entry.id));
+    await tx.update(registrationsTable).set({ status: "joined", paymentStatus: "free", offerExpiresAt: null, checkinTokenHash: createHash("sha256").update(token).digest("hex"), checkinExpiresAt: getMatchEndAt(match.startsAt, match.durationMinutes), updatedAt: new Date() }).where(eq(registrationsTable.id, entry.id));
     return { data: { status: "joined", checkInToken: token } } as const;
   });
   if ("error" in outcome) { res.status(outcome.status ?? 500).json({ error: outcome.error }); return; }
@@ -258,9 +264,15 @@ router.get("/me/registrations", requireAuth, async (_req, res): Promise<void> =>
 
 router.get("/matches/:id/check-in-token", requireAuth, async (req, res): Promise<void> => {
   const userId = res.locals.userId as string;
+  const matchId = paramId(req.params.id);
+  const [entry] = await db.select({ id: registrationsTable.id, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, matchStatus: matchesTable.status })
+    .from(registrationsTable).innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id))
+    .where(and(eq(registrationsTable.matchId, matchId), eq(registrationsTable.userId, userId), eq(registrationsTable.status, "joined"))).limit(1);
+  if (!entry) { res.status(404).json({ error: "An active registration is required to get a check-in code." }); return; }
+  const expiresAt = getMatchEndAt(entry.startsAt, entry.durationMinutes);
+  if (entry.matchStatus !== "published" || expiresAt <= new Date()) { res.status(410).json({ error: "The check-in window closes when this match ends." }); return; }
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + CHECK_IN_TOKEN_TTL_MS);
-  const [row] = await db.update(registrationsTable).set({ checkinTokenHash: createHash("sha256").update(token).digest("hex"), checkinExpiresAt: expiresAt, updatedAt: new Date() }).where(and(eq(registrationsTable.matchId, paramId(req.params.id)), eq(registrationsTable.userId, userId), eq(registrationsTable.status, "joined"))).returning({ id: registrationsTable.id });
+  const [row] = await db.update(registrationsTable).set({ checkinTokenHash: createHash("sha256").update(token).digest("hex"), checkinExpiresAt: expiresAt, updatedAt: new Date() }).where(and(eq(registrationsTable.id, entry.id), eq(registrationsTable.status, "joined"))).returning({ id: registrationsTable.id });
   if (!row) { res.status(404).json({ error: "An active registration is required to get a check-in code." }); return; }
   res.json({ token, expiresAt: expiresAt.toISOString() });
 });
@@ -269,7 +281,17 @@ router.post("/admin/matches/:id/check-in", requireMatchStaff, async (req, res): 
   const token = req.body?.token;
   if (typeof token !== "string" || token.length < 32) { res.status(400).json({ error: "Scan a valid player check-in QR code." }); return; }
   const hash = createHash("sha256").update(token).digest("hex");
-  const [row] = await db.update(registrationsTable).set({ status: "checked_in", checkedInAt: new Date(), checkinTokenHash: null, checkinExpiresAt: null, updatedAt: new Date() }).where(and(eq(registrationsTable.matchId, paramId(req.params.id)), eq(registrationsTable.checkinTokenHash, hash), gt(registrationsTable.checkinExpiresAt, new Date()), eq(registrationsTable.status, "joined"))).returning({ id: registrationsTable.id, firstName: registrationsTable.firstName });
+  const now = new Date();
+  const row = await db.transaction(async (tx) => {
+    const [entry] = await tx.select({ id: registrationsTable.id, firstName: registrationsTable.firstName, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, matchStatus: matchesTable.status })
+      .from(registrationsTable).innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id))
+      .where(and(eq(registrationsTable.matchId, paramId(req.params.id)), eq(registrationsTable.checkinTokenHash, hash), eq(registrationsTable.status, "joined"))).for("update").limit(1);
+    if (!entry || entry.matchStatus !== "published" || !isCheckInTokenValid(getMatchEndAt(entry.startsAt, entry.durationMinutes), now)) return null;
+    const [checkedIn] = await tx.update(registrationsTable).set({ status: "checked_in", checkedInAt: now, checkinTokenHash: null, checkinExpiresAt: null, updatedAt: now })
+      .where(and(eq(registrationsTable.id, entry.id), eq(registrationsTable.status, "joined"), eq(registrationsTable.checkinTokenHash, hash)))
+      .returning({ id: registrationsTable.id, firstName: registrationsTable.firstName });
+    return checkedIn ?? null;
+  });
   if (!row) { res.status(409).json({ error: "This code is invalid, expired, or already used." }); return; }
   res.json({ checkedIn: true, playerName: row.firstName });
 });
@@ -329,6 +351,9 @@ router.post(
       return;
     }
 
+    if (!isValidMatchImageList(parsed.data.imageUrls)) { res.status(400).json({ error: "Add up to 3 HTTPS photos. Each photo must be under 1.45 MB." }); return; }
+    const imageUrls = parsed.data.imageUrls ?? [];
+
     if (
       parsed.data.compareAtPriceHalalas < parsed.data.priceHalalas ||
       parsed.data.startsAt <= new Date()
@@ -342,7 +367,7 @@ router.post(
 
     const [row] = await db
       .insert(matchesTable)
-      .values(parsed.data)
+      .values({ ...parsed.data, imageUrls, imageUrl: imageUrls[0] ?? parsed.data.imageUrl })
       .returning();
 
     res
@@ -367,6 +392,9 @@ router.patch(
       res.status(400).json({ error: parsed.error.message });
       return;
     }
+
+    if (!isValidMatchImageList(parsed.data.imageUrls)) { res.status(400).json({ error: "Add up to 3 HTTPS photos. Each photo must be under 1.45 MB." }); return; }
+    const imageUrls = parsed.data.imageUrls ?? [];
 
     const [existing] = await db
       .select()
@@ -396,7 +424,11 @@ router.patch(
 
     const [row] = await db
       .update(matchesTable)
-      .set({ ...parsed.data, updatedAt: new Date() })
+      .set({
+        ...parsed.data,
+        ...(parsed.data.imageUrls !== undefined ? { imageUrls, imageUrl: imageUrls[0] ?? "match-card" } : parsed.data.imageUrl ? { imageUrls: [parsed.data.imageUrl] } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(matchesTable.id, params.data.id))
       .returning();
 
@@ -430,4 +462,3 @@ router.delete(
 );
 
 export default router;
-
