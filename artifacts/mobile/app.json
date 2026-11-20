@@ -31,8 +31,14 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow KICKOFF to select a profile picture.",
+          "photosPermission": "Allow KICKOFF admins to choose match photos and players to choose a profile picture.",
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow KICKOFF to use your location while you are using the app."
         }
       ],
       [
@@ -52,4 +58,3 @@
     }
   }
 }
-
