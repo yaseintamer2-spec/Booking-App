@@ -15,8 +15,8 @@ import {
   UpdateAdminMatchParams,
   UpdateAdminMatchResponse,
 } from "@workspace/api-zod";
-import { db, matchesTable, notificationsTable, registrationsTable } from "@workspace/db";
-import { isAdminUser, requireAdmin, requireAuth } from "../middlewares/auth";
+import { db, matchesTable, notificationsTable, pushTokensTable, registrationsTable } from "@workspace/db";
+import { isAdminUser, isMatchStaffUser, requireAdmin, requireAuth, requireMatchStaff } from "../middlewares/auth";
 import { CHECK_IN_TOKEN_TTL_MS, WAITLIST_OFFER_TTL_MS, canConfirmPaidRegistration, canReserveSeat, isOfferExpired } from "../lib/registration-rules";
 
 const router: IRouter = Router();
@@ -32,21 +32,49 @@ function toMatch(row: typeof matchesTable.$inferSelect) {
   };
 }
 
+async function sendPushToUser(userId: string, title: string, body: string, data: Record<string, string>): Promise<void> {
+  const tokens = await db.select().from(pushTokensTable).where(eq(pushTokensTable.userId, userId));
+  if (!tokens.length) return;
+  for (let offset = 0; offset < tokens.length; offset += 100) {
+    const batch = tokens.slice(offset, offset + 100);
+    try {
+      const response = await fetch("https://exp.host/--/api/v2/push/send", {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json", ...(process.env.EXPO_ACCESS_TOKEN ? { Authorization: `Bearer ${process.env.EXPO_ACCESS_TOKEN}` } : {}) },
+        body: JSON.stringify(batch.map(({ expoPushToken }) => ({ to: expoPushToken, title, body, data, sound: "default", channelId: "match-updates" }))),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) continue;
+      const result = await response.json() as { data?: Array<{ status?: string; details?: { error?: string } }> };
+      const stale = batch.filter((_, index) => result.data?.[index]?.details?.error === "DeviceNotRegistered");
+      for (const entry of stale) await db.delete(pushTokensTable).where(eq(pushTokensTable.expoPushToken, entry.expoPushToken));
+    } catch {
+      // In-app notifications remain available if Expo's push service is temporarily unreachable.
+    }
+  }
+}
+
 async function expireWaitlistOffers(): Promise<void> {
   const now = new Date();
   const expired = await db.select().from(registrationsTable).where(and(eq(registrationsTable.status, "offered"), lt(registrationsTable.offerExpiresAt, now)));
-  for (const entry of expired) await db.transaction(async (tx) => {
+  for (const entry of expired) {
+    const promotedUserId = await db.transaction(async (tx) => {
     const [match] = await tx.select().from(matchesTable).where(eq(matchesTable.id, entry.matchId)).for("update").limit(1);
     const [stillExpired] = await tx.select().from(registrationsTable).where(and(eq(registrationsTable.id, entry.id), eq(registrationsTable.status, "offered"), lt(registrationsTable.offerExpiresAt, new Date()))).for("update").limit(1);
-    if (!match || !stillExpired) return;
+    if (!match || !stillExpired) return null;
     await tx.update(registrationsTable).set({ status: "cancelled", offerExpiresAt: null, updatedAt: new Date() }).where(eq(registrationsTable.id, entry.id));
     const [next] = await tx.select().from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.status, "waitlisted"))).orderBy(asc(registrationsTable.createdAt)).for("update").limit(1);
     if (next) {
       const offerExpiresAt = new Date(Date.now() + WAITLIST_OFFER_TTL_MS);
       await tx.update(registrationsTable).set({ status: "offered", offerExpiresAt, updatedAt: new Date() }).where(eq(registrationsTable.id, next.id));
       await tx.insert(notificationsTable).values({ userId: next.userId, matchId: match.id, kind: "waitlist_offer", message: `A place is available at ${match.venueName}. Accept within 10 minutes.` });
-    } else await tx.update(matchesTable).set({ bookedCount: Math.max(0, match.bookedCount - 1), updatedAt: new Date() }).where(eq(matchesTable.id, match.id));
-  });
+      return next.userId;
+    }
+    await tx.update(matchesTable).set({ bookedCount: Math.max(0, match.bookedCount - 1), updatedAt: new Date() }).where(eq(matchesTable.id, match.id));
+    return null;
+    });
+    if (promotedUserId) await sendPushToUser(promotedUserId, "A place just opened", "Your waitlist offer expires in 10 minutes.", { matchId: entry.matchId, screen: "my-matches" });
+  }
 }
 
 router.get("/me", requireAuth, async (_req, res): Promise<void> => {
@@ -65,6 +93,28 @@ router.get("/me", requireAuth, async (_req, res): Promise<void> => {
       isAdmin: await isAdminUser(userId),
     }),
   );
+});
+
+router.get("/me/match-staff", requireAuth, async (_req, res): Promise<void> => {
+  res.json({ isStaff: await isMatchStaffUser(res.locals.userId as string) });
+});
+
+router.post("/me/push-token", requireAuth, async (req, res): Promise<void> => {
+  const token = req.body?.token;
+  const platform = req.body?.platform;
+  if (typeof token !== "string" || !/^Expo(nent)?PushToken\[[^\]]+\]$/.test(token) || !["ios", "android"].includes(platform)) {
+    res.status(400).json({ error: "A valid Expo push token and mobile platform are required." }); return;
+  }
+  const userId = res.locals.userId as string;
+  await db.insert(pushTokensTable).values({ userId, expoPushToken: token, platform }).onConflictDoUpdate({ target: pushTokensTable.expoPushToken, set: { userId, platform, updatedAt: new Date() } });
+  res.status(201).json({ registered: true });
+});
+
+router.delete("/me/push-token", requireAuth, async (req, res): Promise<void> => {
+  const token = req.body?.token;
+  if (typeof token !== "string") { res.status(400).json({ error: "Push token is required." }); return; }
+  await db.delete(pushTokensTable).where(and(eq(pushTokensTable.userId, res.locals.userId as string), eq(pushTokensTable.expoPushToken, token)));
+  res.sendStatus(204);
 });
 
 router.get("/matches", async (req, res): Promise<void> => {
@@ -176,6 +226,7 @@ router.delete("/matches/:id/registrations/me", requireAuth, async (req, res): Pr
     return { promotedUser: next.userId } as const;
   });
   if ("error" in promoted) { res.status(promoted.status ?? 500).json({ error: promoted.error }); return; }
+  if (promoted.promotedUser) await sendPushToUser(promoted.promotedUser, "A place just opened", "Your waitlist offer expires in 10 minutes.", { matchId: paramId(req.params.id), screen: "my-matches" });
   res.json({ cancelled: true, waitlistedPlayerNotified: Boolean(promoted.promotedUser) });
 });
 
@@ -214,7 +265,7 @@ router.get("/matches/:id/check-in-token", requireAuth, async (req, res): Promise
   res.json({ token, expiresAt: expiresAt.toISOString() });
 });
 
-router.post("/admin/matches/:id/check-in", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+router.post("/admin/matches/:id/check-in", requireMatchStaff, async (req, res): Promise<void> => {
   const token = req.body?.token;
   if (typeof token !== "string" || token.length < 32) { res.status(400).json({ error: "Scan a valid player check-in QR code." }); return; }
   const hash = createHash("sha256").update(token).digest("hex");
