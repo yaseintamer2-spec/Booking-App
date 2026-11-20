@@ -11,6 +11,9 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { getGetCurrentUserQueryKey, getGetMatchQueryKey, useGetCurrentUser, useGetMatch } from '@workspace/api-client-react';
+import { useAuth } from '@clerk/expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   matchRegistrationMock,
@@ -73,6 +76,27 @@ export default function MatchRegistrationScreen() {
   const colors = SCREEN_COLORS;
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { id: routeId } = useLocalSearchParams<{ id?: string }>();
+  const liveMatchId = Array.isArray(routeId) ? routeId[0] : routeId;
+  const { getToken } = useAuth();
+  const remoteMatch = useGetMatch(liveMatchId || '', { query: { queryKey: getGetMatchQueryKey(liveMatchId || ''), enabled: !!liveMatchId } });
+  const account = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: !!liveMatchId, retry: false } });
+  const match = remoteMatch.data ? {
+    ...matchRegistrationMock.match,
+    id: remoteMatch.data.id,
+    pitchName: remoteMatch.data.venueName,
+    area: remoteMatch.data.neighborhood,
+    startsAt: remoteMatch.data.startsAt,
+    durationHours: remoteMatch.data.durationMinutes / 60,
+    maxPlayers: remoteMatch.data.capacity,
+    pricePerPlayer: remoteMatch.data.priceHalalas / 100,
+    status: remoteMatch.data.status === 'cancelled' ? 'cancelled' as const : remoteMatch.data.bookedCount >= remoteMatch.data.capacity ? 'full' as const : 'open' as const,
+  } : matchRegistrationMock.match;
+  const currentUser = account.data ? {
+    userId: account.data.id,
+    firstName: account.data.name.split(' ')[0],
+    avatarUrl: null,
+  } : matchRegistrationMock.currentUser;
   const [noticeVisible, setNoticeVisible] = useState(SHOW_PREVIEW_NOTICE);
   const [participants, setParticipants] = useState(
     matchRegistrationMock.participants,
@@ -81,6 +105,7 @@ export default function MatchRegistrationScreen() {
   const [positionPreference, setPositionPreference] =
     useState<PositionPreference>('anywhere');
   const [joining, setJoining] = useState(false);
+  const [waitlisted, setWaitlisted] = useState(false);
   const [joined, setJoined] = useState(() =>
     matchRegistrationMock.participants.some(
       (participant) => participant.userId === matchRegistrationMock.currentUser.userId,
@@ -91,7 +116,16 @@ export default function MatchRegistrationScreen() {
     useState<PositionPreference | null>(null);
   const [joinButtonFocused, setJoinButtonFocused] = useState(false);
 
-  const { match, currentUser } = matchRegistrationMock;
+  useEffect(() => {
+    if (!liveMatchId) return;
+    const apiBase = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : '';
+    let active = true;
+    fetch(`${apiBase}/api/matches/${liveMatchId}/participants`)
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Could not load players.')))
+      .then((rows: RegistrationParticipant[]) => { if (active) { setParticipants(rows); setJoined(rows.some((player) => player.userId === currentUser.userId)); } })
+      .catch(() => { if (active) setJoinError('Could not load the live player list. Please try again.'); });
+    return () => { active = false; };
+  }, [liveMatchId, currentUser.userId]);
   const joinedCount = participants.length;
   const isFull = joinedCount >= match.maxPlayers || match.status === 'full';
   const isCancelled = match.status === 'cancelled';
@@ -107,7 +141,19 @@ export default function MatchRegistrationScreen() {
     setJoinError(null);
     setJoining(true);
     try {
-      await mockJoinMatch(match.id, positionPreference);
+      if (liveMatchId) {
+        const token = await getToken();
+        const apiBase = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : '';
+        const response = await fetch(`${apiBase}/api/matches/${liveMatchId}/registrations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          body: JSON.stringify({ positionPreference }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || 'Could not join this match.');
+      } else {
+        await mockJoinMatch(match.id, positionPreference);
+      }
       setParticipants((current) => {
         if (
           current.length >= match.maxPlayers ||
@@ -124,12 +170,24 @@ export default function MatchRegistrationScreen() {
         ];
       });
       setJoined(true);
-    } catch {
-      setJoinError('Could not join this match. Please try again.');
+    } catch (error) {
+      setJoinError(error instanceof Error ? error.message : 'Could not join this match. Please try again.');
     } finally {
       joinLock.current = false;
       setJoining(false);
     }
+  };
+
+  const joinWaitlist = async () => {
+    if (!liveMatchId || joining || waitlisted || isCancelled) return;
+    setJoinError(null); setJoining(true);
+    try {
+      const token = await getToken(); const apiBase = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : '';
+      const response = await fetch(`${apiBase}/api/matches/${liveMatchId}/waitlist`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ positionPreference }) });
+      const payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'Could not join the waitlist.');
+      setWaitlisted(true); setJoinError(`You're #${payload.position} on the waitlist. We'll notify you when a place opens.`);
+    } catch (error) { setJoinError(error instanceof Error ? error.message : 'Could not join the waitlist.'); }
+    finally { setJoining(false); }
   };
 
   const dateTitle = formatMatchDate(match.startsAt);
@@ -304,6 +362,7 @@ export default function MatchRegistrationScreen() {
           <Text style={[styles.paymentNote, { color: colors.mutedForeground }]}>
             Pay with mada or Apple Pay · full refund if the match isn't confirmed
           </Text>
+          {isFull && liveMatchId ? <Pressable accessibilityRole="button" accessibilityState={{ disabled: joining || waitlisted }} disabled={joining || waitlisted} onPress={joinWaitlist} style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 8, borderWidth: 1, borderRadius: 14, borderColor: colors.border }}><Text style={{ color: colors.foreground, fontSize: 13, fontWeight: '700' }}>{waitlisted ? 'You’re on the waitlist' : 'Join waitlist'}</Text></Pressable> : null}
           {joinError ? (
             <Text accessibilityRole="alert" style={[styles.joinError, { color: colors.destructive }]}>
               {joinError}
@@ -731,3 +790,4 @@ const styles = StyleSheet.create({
   paymentNote: { fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 8 },
   joinError: { fontSize: 11, textAlign: 'center', marginTop: 6 },
 });
+
