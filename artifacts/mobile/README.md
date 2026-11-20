@@ -3,7 +3,7 @@
 ## Sign-in
 
 - Players can create an account with email and password, then verify the email once. Password sign-in does not request an email code.
-- Google sign-in is available after Google is enabled for this app in Replit's Auth settings.
+- Google sign-in is available after Google is enabled for this app in the Clerk Dashboard.
 - Keep email as the account identifier and do not require a phone number for sign-up.
 - Phone numbers and phone-based OTP are not part of the sign-in flow.
 - Clerk is responsible for account identity and unique email addresses.
@@ -11,12 +11,14 @@
 ## Give someone administrator access
 
 1. Have the person create their account and verify their email first.
-2. Add `ADMIN_EMAILS` to the server's Replit environment variables. Use the exact verified email; separate multiple emails with commas.
+2. Add `ADMIN_EMAILS` to the repository-root `.env` file. Use the exact verified email; separate multiple emails with commas.
 3. Restart the API server and have the person sign in again.
 
 The API checks this allowlist on every administrator request. A user cannot grant themselves administrator access from the app. Keep the allowlist on the server and never put it in the mobile app.
 
-Development and production use separate Clerk user stores. Create the account in each environment and configure the matching `ADMIN_EMAILS` value in each environment where that person needs access.
+Clerk development and production applications use separate user stores. Create accounts in the appropriate Clerk application and configure the matching `ADMIN_EMAILS` value in the API environment.
+
+See the repository-root README for local PostgreSQL, Clerk, API, and browser-preview setup.
 
 ## Match data
 

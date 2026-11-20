@@ -5,6 +5,7 @@ import { useAuth } from '@clerk/expo';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { BrandHeader, EmptyState, Screen } from '@/components/KickoffUI';
+import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
 
 function readCheckInCode(value: string): { matchId: string; token: string } | null {
@@ -20,7 +21,7 @@ export default function StaffCheckInScreen() {
   const colors = useColors(); const router = useRouter(); const { getToken } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const [staff, setStaff] = useState<boolean | null>(null); const [manualCode, setManualCode] = useState(''); const [busy, setBusy] = useState(false); const [cameraActive, setCameraActive] = useState(false); const [message, setMessage] = useState(''); const [success, setSuccess] = useState(false);
-  const apiBase = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : '';
+  const apiBase = apiBaseUrl;
   useEffect(() => { let active = true; (async () => { try { const token = await getToken(); const response = await fetch(`${apiBase}/api/me/match-staff`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active) setStaff(response.ok && result.isStaff === true); } catch { if (active) setStaff(false); } })(); return () => { active = false; }; }, [apiBase, getToken]);
   const checkIn = async (rawCode: string) => {
     if (busy) return;

@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import QRCode from 'react-native-qrcode-svg';
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
 import { BrandHeader, EmptyState, Screen, formatRiyadhDate, formatRiyadhTime } from '@/components/KickoffUI';
+import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
 
 type Registration = { id: string; status: 'joined' | 'offered' | 'waitlisted' | 'checked_in'; offerExpiresAt?: string | null; match: { id: string; venueName: string; neighborhood: string; address: string; startsAt: string; durationMinutes: number; bookedCount: number; capacity: number } };
@@ -18,7 +19,7 @@ export default function MyMatchesScreen() {
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const [items, setItems] = useState<Registration[]>([]); const [notifications, setNotifications] = useState<Notification[]>([]); const [error, setError] = useState(''); const [busy, setBusy] = useState<string | null>(null);
   const [qr, setQr] = useState<{ value: string; venue: string; expiresAt: string } | null>(null); const [pushEnabled, setPushEnabled] = useState(false);
-  const apiBase = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : '';
+  const apiBase = apiBaseUrl;
   const request = useCallback(async (path: string, init: RequestInit = {}) => { const token = await getToken(); const response = await fetch(`${apiBase}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } }); const payload = response.status === 204 ? null : await response.json(); if (!response.ok) throw new Error(payload?.error || 'Could not complete your request.'); return payload; }, [apiBase, getToken]);
   const load = useCallback(async () => { try { const [registrations, alerts] = await Promise.all([request('/me/registrations'), request('/me/notifications')]); setItems(registrations); setNotifications(alerts); setError(''); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load your matches.'); } }, [request]);
   useEffect(() => { void load(); }, [load]);

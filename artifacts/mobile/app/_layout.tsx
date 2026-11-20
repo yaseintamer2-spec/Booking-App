@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { ClerkLoaded, ClerkProvider, useAuth } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import { setAuthTokenGetter, setBaseUrl } from '@workspace/api-client-react';
@@ -34,10 +35,9 @@ if (Platform.OS !== 'web') {
 }
 
 const queryClient = new QueryClient();
-const domain = process.env.EXPO_PUBLIC_DOMAIN;
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? '';
 const proxyUrl = process.env.EXPO_PUBLIC_CLERK_PROXY_URL || undefined;
-if (domain) setBaseUrl(`https://${domain}`);
+if (apiBaseUrl) setBaseUrl(apiBaseUrl);
 
 function RootLayoutNav() {
   const colors = useColors();
@@ -81,6 +81,18 @@ export default function RootLayout() {
   }, [fontsLoaded, fontError]);
 
   if (!fontsLoaded && !fontError) return null;
+  if (!publishableKey) {
+    return (
+      <SafeAreaProvider>
+        <View style={styles.configurationNotice}>
+          <Text style={styles.configurationTitle}>Clerk configuration required</Text>
+          <Text style={styles.configurationText}>
+            Copy .env.example to .env in artifacts/mobile and add your Clerk development publishable key.
+          </Text>
+        </View>
+      </SafeAreaProvider>
+    );
+  }
 
   const app = (
     <SafeAreaProvider>
@@ -96,8 +108,6 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 
-  if (!publishableKey) return app;
-
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache} proxyUrl={proxyUrl}>
       <ClerkLoaded>
@@ -107,4 +117,24 @@ export default function RootLayout() {
     </ClerkProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  configurationNotice: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 28,
+    backgroundColor: '#0A100E',
+  },
+  configurationTitle: {
+    color: '#F3F7F2',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  configurationText: {
+    color: '#A8B5AC',
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 10,
+  },
+});
 

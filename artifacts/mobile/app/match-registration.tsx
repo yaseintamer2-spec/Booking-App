@@ -16,6 +16,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { getGetCurrentUserQueryKey, getGetMatchQueryKey, useGetCurrentUser, useGetMatch } from '@workspace/api-client-react';
 import { useAuth } from '@clerk/expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import {
   matchRegistrationMock,
   mockJoinMatch,
@@ -120,7 +121,7 @@ export default function MatchRegistrationScreen() {
 
   useEffect(() => {
     if (!liveMatchId) return;
-    const apiBase = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : '';
+    const apiBase = apiBaseUrl;
     let active = true;
     fetch(`${apiBase}/api/matches/${liveMatchId}/participants`)
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('Could not load players.')))
@@ -145,7 +146,7 @@ export default function MatchRegistrationScreen() {
     try {
       if (liveMatchId) {
         const token = await getToken();
-        const apiBase = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : '';
+        const apiBase = apiBaseUrl;
         const response = await fetch(`${apiBase}/api/matches/${liveMatchId}/registrations`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -184,7 +185,7 @@ export default function MatchRegistrationScreen() {
     if (!liveMatchId || joining || waitlisted || isCancelled) return;
     setJoinError(null); setJoining(true);
     try {
-      const token = await getToken(); const apiBase = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : '';
+      const token = await getToken(); const apiBase = apiBaseUrl;
       const response = await fetch(`${apiBase}/api/matches/${liveMatchId}/waitlist`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ positionPreference }) });
       const payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'Could not join the waitlist.');
       setWaitlisted(true); setJoinError(`You're #${payload.position} on the waitlist. We'll notify you when a place opens.`);

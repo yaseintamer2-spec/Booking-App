@@ -6,6 +6,7 @@ import { useAuth, useUser } from '@clerk/expo';
 import * as ImagePicker from 'expo-image-picker';
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
 import { BrandHeader, EmptyState, Screen } from '@/components/KickoffUI';
+import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
 
 export default function ProfileScreen() {
@@ -18,7 +19,7 @@ export default function ProfileScreen() {
   const [imageError, setImageError] = useState<string | null>(null);
   const [imageSaved, setImageSaved] = useState(false);
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
-  useEffect(() => { let active = true; (async () => { try { const token = await getToken(); const base = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : ''; const response = await fetch(`${base}/api/me/match-staff`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active) setIsMatchStaff(response.ok && result.isStaff === true); } catch { if (active) setIsMatchStaff(false); } })(); return () => { active = false; }; }, [getToken]);
+  useEffect(() => { let active = true; (async () => { try { const token = await getToken(); const response = await fetch(`${apiBaseUrl}/api/me/match-staff`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active) setIsMatchStaff(response.ok && result.isStaff === true); } catch { if (active) setIsMatchStaff(false); } })(); return () => { active = false; }; }, [getToken]);
   const chooseProfileImage = async () => {
     if (!clerkUser || uploadingImage) return;
 
