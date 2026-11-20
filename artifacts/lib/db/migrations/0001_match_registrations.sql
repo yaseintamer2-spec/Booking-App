@@ -34,5 +34,17 @@ CREATE TABLE IF NOT EXISTS player_notifications (
 );
 CREATE INDEX IF NOT EXISTS player_notifications_user_created_idx ON player_notifications(user_id, created_at);
 
+CREATE TABLE IF NOT EXISTS player_push_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id text NOT NULL,
+  expo_push_token text NOT NULL,
+  platform text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT player_push_tokens_platform_check CHECK (platform IN ('ios', 'android'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS player_push_tokens_token_idx ON player_push_tokens(expo_push_token);
+CREATE INDEX IF NOT EXISTS player_push_tokens_user_idx ON player_push_tokens(user_id);
+
 COMMIT;
 
