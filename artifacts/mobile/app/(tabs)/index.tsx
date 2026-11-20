@@ -21,7 +21,7 @@ export default function HomeScreen() {
     </ImageBackground>
     <SectionTitle kicker="OPEN GAMES" title="On the calendar" action="See all" onAction={() => router.push('/(tabs)/matches')} />
     {matches.isLoading ? <LoadingState /> : matches.isError ? <EmptyState icon="alert-circle" title="Couldn't load matches" body="Your connection may be taking a breather. Try again." action="Retry" onAction={() => matches.refetch()} /> :
-      matches.data?.length ? matches.data.slice(0, 2).map(match => <MatchCard key={match.id} match={match} onPress={() => router.push(`/match/${match.id}`)} />) :
+      matches.data?.length ? matches.data.slice(0, 2).map(match => <MatchCard key={match.id} match={match} onPress={() => router.push({ pathname: '/match-registration', params: { id: match.id } })} />) :
         <EmptyState icon="sunset" title="A little calm before kickoff." body="There are no published matches right now. Check back soon for organized 7v7 games around Riyadh." />}
     <View style={[styles.note, { borderColor: colors.border, backgroundColor: colors.card }]}><Feather name="shield" size={16} color={colors.primary} /><Text style={[styles.noteText, { color: colors.mutedForeground }]}>Match format, timing, player capacity, and referee and water inclusions are shown before you choose.</Text></View>
   </Screen>;
