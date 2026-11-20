@@ -115,3 +115,20 @@ export const notificationsTable = pgTable(
   (table) => [index("player_notifications_user_created_idx").on(table.userId, table.createdAt)],
 );
 
+export const pushTokensTable = pgTable(
+  "player_push_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    expoPushToken: text("expo_push_token").notNull(),
+    platform: text("platform").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("player_push_tokens_token_idx").on(table.expoPushToken),
+    index("player_push_tokens_user_idx").on(table.userId),
+    check("player_push_tokens_platform_check", sql`${table.platform} IN ('ios', 'android')`),
+  ],
+);
+
