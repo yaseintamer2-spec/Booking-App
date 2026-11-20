@@ -33,4 +33,6 @@ export interface MatchInput {
   refereeIncluded: boolean;
   waterIncluded: boolean;
   imageUrl: string;
+  /** @maxItems 3 */
+  imageUrls?: string[];
 }
