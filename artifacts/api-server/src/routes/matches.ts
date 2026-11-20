@@ -96,8 +96,10 @@ router.get("/matches", async (req, res): Promise<void> => {
 });
 
 router.get("/matches/:id/participants", async (req, res): Promise<void> => {
+  const [match] = await db.select({ id: matchesTable.id }).from(matchesTable).where(and(eq(matchesTable.id, paramId(req.params.id)), eq(matchesTable.status, "published"))).limit(1);
+  if (!match) { res.status(404).json({ error: "Match not found." }); return; }
   const rows = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, avatarUrl: registrationsTable.avatarUrl, positionPreference: registrationsTable.positionPreference })
-    .from(registrationsTable).where(and(eq(registrationsTable.matchId, paramId(req.params.id)), eq(registrationsTable.status, "joined"))).orderBy(asc(registrationsTable.createdAt));
+    .from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`)).orderBy(asc(registrationsTable.createdAt));
   res.json(rows);
 });
 
@@ -116,7 +118,7 @@ router.post("/matches/:id/registrations", requireAuth, async (req, res): Promise
     const [existing] = await tx.select().from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.userId, userId))).limit(1);
     if (existing && ["joined", "checked_in"].includes(existing.status)) return { error: "You already joined this match.", status: 409 } as const;
     if (!canConfirmPaidRegistration(match.priceHalalas, false)) return { error: "Paid booking is unavailable until the payment provider is configured. No seat has been held.", status: 503 } as const;
-    const [goalkeepers] = await tx.select({ count: sql<number>`count(*)::int` }).from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.status, "joined"), eq(registrationsTable.positionPreference, "goalkeeper")));
+    const [goalkeepers] = await tx.select({ count: sql<number>`count(*)::int` }).from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`, eq(registrationsTable.positionPreference, "goalkeeper")));
     if (positionPreference === "goalkeeper" && (goalkeepers?.count ?? 0) >= 2) return { error: "The goalkeeper preference is full for this match.", status: 409 } as const;
     if (!canReserveSeat(match.bookedCount, match.capacity)) return { error: "This match is full. Join the waitlist instead.", status: 409 } as const;
     const token = randomBytes(32).toString("base64url");
@@ -158,6 +160,7 @@ router.delete("/matches/:id/registrations/me", requireAuth, async (req, res): Pr
     if (!match) return { error: "Match not found.", status: 404 } as const;
     const [registration] = await tx.select().from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.userId, userId))).limit(1);
     if (!registration || registration.status === "cancelled") return { error: "You do not have an active place.", status: 404 } as const;
+    if (registration.status === "checked_in") return { error: "A checked-in player cannot cancel their place.", status: 409 } as const;
     if (registration.paymentStatus === "paid") return { error: "A refund provider must be configured before a paid booking can be cancelled here.", status: 503 } as const;
     const occupied = ["joined", "checked_in", "offered"].includes(registration.status);
     await tx.update(registrationsTable).set({ status: "cancelled", checkinTokenHash: null, offerExpiresAt: null, updatedAt: new Date() }).where(eq(registrationsTable.id, registration.id));
