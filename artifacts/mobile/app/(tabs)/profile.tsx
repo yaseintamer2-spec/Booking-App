@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useAuth, useUser } from '@clerk/expo';
@@ -27,10 +27,12 @@ export default function ProfileScreen() {
     setImageError(null);
     setImageSaved(false);
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setImageError('Photo access was not granted. Allow access in your device settings to choose a photo.');
-        return;
+      if (Platform.OS !== 'web') {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          setImageError('Photo access was not granted. Allow access in your device settings to choose a photo.');
+          return;
+        }
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -46,12 +48,17 @@ export default function ProfileScreen() {
         throw new Error('The selected image could not be read.');
       }
 
-      await clerkUser.setProfileImage({ file: image.uri });
+      const file = Platform.OS === 'web' ? image.file : image.uri;
+      if (!file) {
+        throw new Error('The selected image could not be uploaded. Please choose another photo.');
+      }
+
+      await clerkUser.setProfileImage({ file });
       await clerkUser.reload();
       setImageSaved(true);
     } catch (error) {
       console.error('Failed to update profile picture:', error);
-      setImageError('Could not update your profile picture. Please try again.');
+      setImageError(error instanceof Error ? error.message : 'Could not update your profile picture. Please try again.');
     } finally {
       setUploadingImage(false);
     }
@@ -72,7 +79,7 @@ export default function ProfileScreen() {
           accessibilityState={{ disabled: !clerkUser || uploadingImage, busy: uploadingImage }}
           disabled={!clerkUser || uploadingImage}
           onPress={chooseProfileImage}
-          style={[styles.avatar, { backgroundColor: colors.accent, opacity: uploadingImage ? 0.7 : 1 }]}
+          style={[styles.avatar, { backgroundColor: colors.accent, borderColor: colors.primary, opacity: uploadingImage ? 0.7 : 1 }]}
           testID="profile-picture-picker"
         >
           {profileImageUrl ? (
@@ -127,9 +134,9 @@ const styles = StyleSheet.create({
   kicker: { fontSize: 10, letterSpacing: 1.8, fontWeight: '700', marginTop: 18 },
   title: { fontSize: 35, fontFamily: 'Georgia', marginTop: 8 },
   profileCard: { borderWidth: 1, borderRadius: 18, padding: 20, alignItems: 'center', marginTop: 21 },
-  avatar: { width: 66, height: 66, borderRadius: 23, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  avatarImage: { width: '100%', height: '100%' },
-  cameraBadge: { position: 'absolute', right: 0, bottom: 0, width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#0A100E' },
+  avatar: { width: 50, height: 50, borderRadius: 25, borderWidth: 3, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 25 },
+  cameraBadge: { position: 'absolute', right: 0, bottom: 0, width: 21, height: 21, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#0A100E' },
   initial: { fontSize: 25, fontWeight: '700' },
   photoAction: { paddingVertical: 8, paddingHorizontal: 10 },
   photoActionText: { fontSize: 12, fontWeight: '700' },
