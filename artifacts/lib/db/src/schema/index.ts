@@ -22,6 +22,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgTable,
   uniqueIndex,
   text,
@@ -50,6 +51,7 @@ export const matchesTable = pgTable(
     refereeIncluded: boolean("referee_included").notNull().default(true),
     waterIncluded: boolean("water_included").notNull().default(true),
     imageUrl: text("image_url").notNull().default("match-card"),
+    imageUrls: jsonb("image_urls").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     isDemo: boolean("is_demo").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -131,4 +133,3 @@ export const pushTokensTable = pgTable(
     check("player_push_tokens_platform_check", sql`${table.platform} IN ('ios', 'android')`),
   ],
 );
-
