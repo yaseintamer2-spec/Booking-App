@@ -23,6 +23,7 @@ export type RegistrationMatch = {
   startsAt: string;
   pitchName: string;
   area: string;
+  address?: string;
   pricePerPlayer: number;
   durationHours: number;
   maxGoalkeepers: number;
@@ -47,6 +48,7 @@ export const matchRegistrationMock: {
     startsAt: '2026-11-26T18:00:00.000Z',
     pitchName: 'Al Malqa Arena',
     area: 'Al Malqa, Riyadh',
+    address: 'King Abdulaziz Road, Al Malqa, Riyadh',
     pricePerPlayer: 30,
     durationHours: 2,
     maxGoalkeepers: 2,
