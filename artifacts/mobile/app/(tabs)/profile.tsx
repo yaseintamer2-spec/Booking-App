@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { useUser } from '@clerk/expo';
+import { useAuth, useUser } from '@clerk/expo';
 import * as ImagePicker from 'expo-image-picker';
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
 import { BrandHeader, EmptyState, Screen } from '@/components/KickoffUI';
@@ -12,10 +12,13 @@ export default function ProfileScreen() {
   const colors = useColors();
   const router = useRouter();
   const { user: clerkUser } = useUser();
+  const { getToken } = useAuth();
+  const [isMatchStaff, setIsMatchStaff] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [imageSaved, setImageSaved] = useState(false);
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
+  useEffect(() => { let active = true; (async () => { try { const token = await getToken(); const base = process.env.EXPO_PUBLIC_DOMAIN ? `https://${process.env.EXPO_PUBLIC_DOMAIN}` : ''; const response = await fetch(`${base}/api/me/match-staff`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active) setIsMatchStaff(response.ok && result.isStaff === true); } catch { if (active) setIsMatchStaff(false); } })(); return () => { active = false; }; }, [getToken]);
   const chooseProfileImage = async () => {
     if (!clerkUser || uploadingImage) return;
 
@@ -109,6 +112,7 @@ export default function ProfileScreen() {
           <Text style={[styles.email, { color: colors.mutedForeground }]}>7v7 player</Text>
         </View>
       </View>
+      {isMatchStaff ? <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as Href)} style={[styles.settingsRow, { borderColor: colors.border }]}><Feather name="camera" size={17} color={colors.primary} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Staff check-in scanner</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable> : null}
       <Pressable onPress={() => router.push('/settings')} style={[styles.settingsRow, { borderColor: colors.border }]}>
         <Feather name="settings" size={17} color={colors.mutedForeground} />
         <Text style={[styles.settingsText, { color: colors.foreground }]}>Account settings</Text>
@@ -136,3 +140,4 @@ const styles = StyleSheet.create({
   settingsRow: { borderBottomWidth: 1, height: 56, flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 10 },
   settingsText: { flex: 1, fontSize: 13, fontWeight: '600' },
 });
+
