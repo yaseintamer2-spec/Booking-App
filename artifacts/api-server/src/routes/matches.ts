@@ -367,7 +367,7 @@ router.post(
 
     const [row] = await db
       .insert(matchesTable)
-      .values({ ...parsed.data, imageUrls, imageUrl: imageUrls[0] ?? parsed.data.imageUrl })
+      .values({ ...parsed.data, imageUrls, imageUrl: parsed.data.imageUrls?.length ? "match-card" : parsed.data.imageUrl })
       .returning();
 
     res
@@ -426,7 +426,7 @@ router.patch(
       .update(matchesTable)
       .set({
         ...parsed.data,
-        ...(parsed.data.imageUrls !== undefined ? { imageUrls, imageUrl: imageUrls[0] ?? "match-card" } : parsed.data.imageUrl ? { imageUrls: [parsed.data.imageUrl] } : {}),
+        ...(parsed.data.imageUrls !== undefined ? { imageUrls, imageUrl: "match-card" } : parsed.data.imageUrl ? { imageUrls: [] } : {}),
         updatedAt: new Date(),
       })
       .where(eq(matchesTable.id, params.data.id))
