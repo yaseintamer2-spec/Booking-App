@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
+import { useRouter, type Href } from 'expo-router';
 import { getGetCurrentUserQueryKey, getListAdminMatchesQueryKey, getListMatchesQueryKey, useCreateAdminMatch, useDeleteAdminMatch, useGetCurrentUser, useListAdminMatches, useUpdateAdminMatch } from '@workspace/api-client-react';
 import type { Match } from '@workspace/api-client-react';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -20,7 +21,7 @@ function fromMatch(match: Match): FormState {
 }
 
 export default function AdminScreen() {
-  const colors = useColors(); const insets = useSafeAreaInsets(); const qc = useQueryClient();
+  const colors = useColors(); const insets = useSafeAreaInsets(); const qc = useQueryClient(); const router = useRouter();
   const me = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const isAdmin = !!me.data?.isAdmin;
   const list = useListAdminMatches({ query: { queryKey: getListAdminMatchesQueryKey(), enabled: isAdmin } });
@@ -49,6 +50,7 @@ export default function AdminScreen() {
     <Screen><BrandHeader back user={me.data} subtitle="KICKOFF OPERATIONS" />
       <View style={styles.headingRow}><View><Text style={[styles.kicker, { color: colors.primary }]}>RIYADH / MATCH MANAGEMENT</Text><Text style={[styles.title, { color: colors.foreground }]}>Admin console.</Text></View><Pressable onPress={openCreate} style={[styles.addButton, { backgroundColor: colors.primary }]} testID="create-match"><Feather name="plus" size={19} color={colors.primaryForeground} /></Pressable></View>
       <View style={[styles.adminNote, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="shield" size={15} color={colors.primary} /><Text style={[styles.noteText, { color: colors.mutedForeground }]}>Match changes are checked by the API. Admin access in this interface is only for navigation.</Text></View>
+      <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as Href)} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: 14, marginBottom: 15 }}><Feather name="camera" size={16} color={colors.primaryForeground} /><Text style={{ color: colors.primaryForeground, fontSize: 12, fontWeight: '800' }}>Staff check-in scanner</Text></Pressable>
        {list.isLoading ? <LoadingState /> : list.isError ? <EmptyState icon="alert-circle" title="Admin data unavailable." body="Check your connection and admin permissions, then return to the console." action="Retry" onAction={() => list.refetch()} /> : list.data?.length ? list.data.map(match => <View key={match.id} style={[styles.adminCard, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={styles.cardHeader}><View style={{ flex: 1 }}><Text style={[styles.venue, { color: colors.foreground }]}>{match.venueName}</Text><Text style={[styles.meta, { color: colors.mutedForeground }]}>{match.neighborhood} · {formatRiyadhDateTime(match.startsAt)} Riyadh</Text></View><View style={[styles.status, { backgroundColor: match.status === 'published' ? colors.accent : colors.secondary }]}><Text style={[styles.statusText, { color: match.status === 'published' ? colors.primary : colors.mutedForeground }]}>{match.status.toUpperCase()}</Text></View></View><View style={styles.cardFooter}><Text style={[styles.meta, { color: colors.mutedForeground }]}>{match.bookedCount}/{match.capacity} booked · {formatSar(match.priceHalalas)}</Text><View style={{ flexDirection: 'row', gap: 8 }}><Pressable accessibilityRole="button" accessibilityLabel={`Edit ${match.venueName}`} onPress={() => openEdit(match)} style={[styles.iconAction, { borderColor: colors.border }]}><Feather name="edit-2" size={15} color={colors.foreground} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${match.venueName}`} onPress={() => deleteMatch(match)} style={[styles.iconAction, { borderColor: colors.border }]}><Feather name="trash-2" size={15} color={colors.destructive} /></Pressable></View></View></View>) : <EmptyState icon="calendar" title="No matches in the console." body="Create the first match when the next Riyadh pitch is ready." />}
     </Screen>
     <Modal visible={formOpen} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setFormOpen(false)}>
@@ -109,3 +111,4 @@ const styles = StyleSheet.create({
   toggleDot: { width: 16, height: 16, borderRadius: 8 },
   error: { fontSize: 12, lineHeight: 18, marginVertical: 12 },
 });
+
