@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@clerk/expo';
@@ -48,6 +48,7 @@ export default function MatchesScreen() {
   const [matchAlertsLoading, setMatchAlertsLoading] = useState(true);
   const [matchAlertsBusy, setMatchAlertsBusy] = useState(false);
   const [matchAlertsMessage, setMatchAlertsMessage] = useState('');
+  const [pushPromptOpen, setPushPromptOpen] = useState(false);
 
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey() } });
@@ -102,18 +103,12 @@ export default function MatchesScreen() {
       let message = 'In-app alerts are on. We’ll notify you when a new match is published.';
       if (Platform.OS === 'ios' || Platform.OS === 'android') {
         try {
-          if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync('match-updates', { name: 'Match updates', importance: Notifications.AndroidImportance.HIGH, vibrationPattern: [0, 250, 250, 250] });
-          let permission = await Notifications.getPermissionsAsync();
-          if (!permission.granted) permission = await Notifications.requestPermissionsAsync();
-          const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID || Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
-          if (permission.granted && projectId) {
-            const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-            await request('/me/push-token', { method: 'POST', body: JSON.stringify({ token, platform: Platform.OS }) });
-            message = 'Push and in-app alerts are on. We’ll let you know when a new match is published.';
-          } else if (!permission.granted) {
-            message = 'In-app alerts are on. Push alerts stay off unless you allow notifications in your device settings.';
+          const permission = await Notifications.getPermissionsAsync();
+          if (!permission.granted) {
+            setPushPromptOpen(true);
+            message = 'In-app alerts are on. Turn on notifications for kickoff reminders and new match updates.';
           } else {
-            message = 'In-app alerts are on. Push alerts need a configured app build.';
+            message = await registerForMatchPush();
           }
         } catch {
           message = 'In-app alerts are on. Push alert setup did not finish; you can still see new matches in Notifications.';
@@ -124,6 +119,30 @@ export default function MatchesScreen() {
       setMatchAlertsMessage(error instanceof Error ? error.message : 'Could not update match alerts. Try again.');
     } finally {
       setMatchAlertsBusy(false);
+    }
+  };
+  const registerForMatchPush = async () => {
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') return 'In-app alerts are on. New matches will appear in Notifications.';
+    if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync('match-updates', { name: 'Match updates', importance: Notifications.AndroidImportance.HIGH, vibrationPattern: [0, 250, 250, 250] });
+    const permission = await Notifications.requestPermissionsAsync();
+    if (!permission.granted) return 'In-app alerts are on. Push notifications are optional; allow notifications anytime in device settings.';
+    const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID || Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
+    if (!projectId) return 'In-app alerts are on. Push notifications need a configured app build.';
+    const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    await request('/me/push-token', { method: 'POST', body: JSON.stringify({ token, platform: Platform.OS }) });
+    return 'Notifications are on. We’ll remind you before kickoff and let you know when new matches are posted.';
+  };
+  const allowMatchPush = async () => {
+    if (matchAlertsBusy) return;
+    setMatchAlertsBusy(true);
+    setMatchAlertsMessage('');
+    try {
+      setMatchAlertsMessage(await registerForMatchPush());
+    } catch {
+      setMatchAlertsMessage('In-app alerts are on. Push setup did not finish; you can still see updates in Notifications.');
+    } finally {
+      setMatchAlertsBusy(false);
+      setPushPromptOpen(false);
     }
   };
   const neighborhoods = useMemo(() => ['All games', ...Array.from(new Set((matches.data || []).map(match => match.neighborhood)))], [matches.data]);
@@ -186,7 +205,7 @@ export default function MatchesScreen() {
       <View style={[styles.alertIcon, { backgroundColor: colors.secondary }]}><Feather name="bell" size={16} color={colors.primary} /></View>
       <View style={styles.alertCopy}>
         <Text style={[styles.alertTitle, { color: colors.foreground }]}>New match alerts</Text>
-        <Text numberOfLines={2} style={[styles.alertDescription, { color: colors.mutedForeground }]}>{matchAlertsMessage || (matchAlertsEnabled ? 'You’ll get an in-app alert when a match is published.' : 'Get notified when a new game is posted.')}</Text>
+        <Text numberOfLines={2} style={[styles.alertDescription, { color: colors.mutedForeground }]}>{matchAlertsMessage || (matchAlertsEnabled ? 'Get reminders before kickoff and an alert when a new game is posted.' : 'Get reminders before kickoff and an alert when a new game is posted.')}</Text>
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel={matchAlertsEnabled ? 'Turn off new match alerts' : 'Alert me when a new match is available'} accessibilityState={{ disabled: matchAlertsLoading || matchAlertsBusy, selected: matchAlertsEnabled, busy: matchAlertsBusy }} disabled={matchAlertsLoading || matchAlertsBusy} onPress={() => void toggleMatchAlerts()} style={[styles.alertButton, { backgroundColor: matchAlertsEnabled ? colors.secondary : colors.primary, borderColor: matchAlertsEnabled ? colors.border : colors.primary, opacity: matchAlertsLoading || matchAlertsBusy ? 0.6 : 1 }]}>
         <Text style={[styles.alertButtonText, { color: matchAlertsEnabled ? colors.foreground : colors.primaryForeground }]}>{matchAlertsLoading ? 'Loading…' : matchAlertsBusy ? 'Saving…' : matchAlertsEnabled ? 'Alerts on' : 'Alert me'}</Text>
@@ -231,6 +250,21 @@ export default function MatchesScreen() {
 
     {!matches.isLoading && !matches.isError ? <Text style={[styles.resultCount, { color: colors.mutedForeground }]}>{visible.length} {visible.length === 1 ? 'match' : 'matches'}</Text> : null}
     {matches.isLoading ? <LoadingState /> : matches.isError ? <EmptyState title="Matches are out of reach" body="We couldn't load the schedule. Try again in a moment." icon="wifi-off" action="Retry" onAction={() => matches.refetch()} /> : visible.length ? visible.map(match => <MatchCard key={match.id} match={match} onPress={() => router.push({ pathname: '/match-registration', params: { id: match.id } })} />) : <EmptyState icon="map-pin" title={hasActiveFilters ? 'No games match those filters.' : 'No matches scheduled yet.'} body={hasActiveFilters ? 'Try widening the date, area, price, or spots left filters.' : 'New games will appear here as soon as they are published.'} action={hasActiveFilters ? 'Clear filters' : undefined} onAction={hasActiveFilters ? clearFilters : undefined} />}
+    <Modal transparent visible={pushPromptOpen} animationType="fade" onRequestClose={() => setPushPromptOpen(false)}>
+      <View style={styles.pushBackdrop}>
+        <View style={[styles.pushCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.pushIcon, { backgroundColor: colors.secondary }]}><Feather name="bell" size={22} color={colors.primary} /></View>
+          <Text style={[styles.pushTitle, { color: colors.foreground }]}>Never miss kickoff.</Text>
+          <Text style={[styles.pushDescription, { color: colors.mutedForeground }]}>Allow notifications for a heads-up before your match and when new games are ready to join. You can change this anytime.</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Allow notifications" accessibilityState={{ busy: matchAlertsBusy }} disabled={matchAlertsBusy} onPress={() => void allowMatchPush()} style={[styles.pushAllow, { backgroundColor: colors.primary, opacity: matchAlertsBusy ? .65 : 1 }]}>
+            <Text style={[styles.pushAllowText, { color: colors.primaryForeground }]}>{matchAlertsBusy ? 'Setting up…' : 'Allow notifications'}</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Not now; keep in-app reminders" disabled={matchAlertsBusy} onPress={() => { setPushPromptOpen(false); setMatchAlertsMessage('In-app alerts are on. Push notifications are optional—you can allow them anytime.'); }} style={styles.pushLater}>
+            <Text style={[styles.pushLaterText, { color: colors.mutedForeground }]}>Not now</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
   </Screen>;
 }
 
@@ -258,6 +292,15 @@ const styles = StyleSheet.create({
   alertButton: { minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   alertButtonText: { fontSize: 11, fontWeight: '800' },
   alertStatus: { fontSize: 11, lineHeight: 16, marginTop: 6, marginHorizontal: 4 },
+  pushBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,.72)', justifyContent: 'center', alignItems: 'center', padding: 22 },
+  pushCard: { width: '100%', maxWidth: 390, borderWidth: 1, borderRadius: 24, padding: 22, alignItems: 'center' },
+  pushIcon: { width: 54, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  pushTitle: { fontSize: 24, lineHeight: 30, fontFamily: 'Georgia', fontWeight: '700', textAlign: 'center' },
+  pushDescription: { fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 9, marginBottom: 18 },
+  pushAllow: { minHeight: 50, width: '100%', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  pushAllowText: { fontSize: 13, fontWeight: '800' },
+  pushLater: { minHeight: 48, width: '100%', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  pushLaterText: { fontSize: 12, fontWeight: '700' },
   controlHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
   filterLabel: { fontSize: 9, letterSpacing: 1.4, fontWeight: '700' },
   filterToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, borderWidth: 1, borderRadius: 13 },
@@ -270,4 +313,5 @@ const styles = StyleSheet.create({
   clearText: { fontSize: 12, fontWeight: '700' },
   resultCount: { fontSize: 11, fontWeight: '600', marginTop: 4, marginBottom: 8 },
 });
+
 
