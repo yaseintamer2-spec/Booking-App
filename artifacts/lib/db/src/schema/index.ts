@@ -52,6 +52,7 @@ export const matchesTable = pgTable(
     refereeUserId: text("referee_user_id"),
     refereeName: text("referee_name"),
     refereeAvatarUrl: text("referee_avatar_url"),
+    refereeAssignmentStatus: text("referee_assignment_status"),
     liveStatus: text("live_status").notNull().default("scheduled"),
     liveStartedAt: timestamp("live_started_at", { withTimezone: true }),
     livePhaseStartedAt: timestamp("live_phase_started_at", { withTimezone: true }),
@@ -183,6 +184,25 @@ export const notificationsTable = pgTable(
   (table) => [
     index("player_notifications_user_created_idx").on(table.userId, table.createdAt),
     uniqueIndex("player_notifications_match_reminder_unique").on(table.userId, table.matchId).where(sql`${table.kind} = 'match_reminder' AND ${table.matchId} IS NOT NULL`),
+    uniqueIndex("player_notifications_referee_24h_unique").on(table.userId, table.matchId).where(sql`${table.kind} = 'referee_match_reminder_24h' AND ${table.matchId} IS NOT NULL`),
+    uniqueIndex("player_notifications_referee_1h_unique").on(table.userId, table.matchId).where(sql`${table.kind} = 'referee_match_reminder_1h' AND ${table.matchId} IS NOT NULL`),
+  ],
+);
+
+export const refereeMatchApplicationsTable = pgTable(
+  "referee_match_applications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    matchId: uuid("match_id").notNull().references(() => matchesTable.id, { onDelete: "cascade" }),
+    refereeUserId: text("referee_user_id").notNull(),
+    status: text("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("referee_match_applications_match_user_unique").on(table.matchId, table.refereeUserId),
+    index("referee_match_applications_status_created_idx").on(table.status, table.createdAt),
+    check("referee_match_applications_status_check", sql`${table.status} IN ('pending', 'invited', 'confirmed', 'declined', 'rejected')`),
   ],
 );
 
@@ -239,3 +259,58 @@ export const adminAccessTable = pgTable(
   },
 );
 
+/** Referee roles managed by admins using verified sign-in emails. */
+export const refereeAccessTable = pgTable("referee_access", {
+  email: text("email").primaryKey(),
+  grantedByUserId: text("granted_by_user_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const pitchOwnerAccessTable = pgTable(
+  "pitch_owner_access",
+  {
+    email: text("email").primaryKey(),
+    venueName: text("venue_name").notNull(),
+    neighborhood: text("neighborhood").notNull(),
+    address: text("address").notNull(),
+    grantedByUserId: text("granted_by_user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
+export const pitchMatchSubmissionsTable = pgTable(
+  "pitch_match_submissions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ownerUserId: text("owner_user_id").notNull(),
+    ownerEmail: text("owner_email").notNull(),
+    venueName: text("venue_name").notNull(),
+    neighborhood: text("neighborhood").notNull(),
+    address: text("address").notNull(),
+    contactPhone: text("contact_phone").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    durationMinutes: integer("duration_minutes").notNull().default(120),
+    capacity: integer("capacity").notNull().default(14),
+    priceHalalas: integer("price_halalas").notNull(),
+    compareAtPriceHalalas: integer("compare_at_price_halalas").notNull(),
+    refereeIncluded: boolean("referee_included").notNull().default(true),
+    waterIncluded: boolean("water_included").notNull().default(true),
+    imageUrls: jsonb("image_urls").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    status: text("status").notNull().default("pending"),
+    reviewNote: text("review_note"),
+    reviewedByUserId: text("reviewed_by_user_id"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    matchId: uuid("match_id").references(() => matchesTable.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("pitch_match_submissions_owner_created_idx").on(table.ownerUserId, table.createdAt),
+    index("pitch_match_submissions_status_starts_idx").on(table.status, table.startsAt),
+    check("pitch_match_submissions_status_check", sql`${table.status} IN ('pending', 'approved', 'rejected')`),
+    check("pitch_match_submissions_contact_phone_check", sql`length(trim(${table.contactPhone})) >= 8`),
+    check("pitch_match_submissions_capacity_check", sql`${table.capacity} BETWEEN 2 AND 30`),
+    check("pitch_match_submissions_duration_check", sql`${table.durationMinutes} BETWEEN 30 AND 240`),
+    check("pitch_match_submissions_price_check", sql`${table.priceHalalas} >= 0 AND ${table.compareAtPriceHalalas} >= ${table.priceHalalas}`),
+  ],
+);

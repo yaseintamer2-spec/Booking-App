@@ -314,4 +314,3 @@ const styles = StyleSheet.create({
   resultCount: { fontSize: 11, fontWeight: '600', marginTop: 4, marginBottom: 8 },
 });
 
-

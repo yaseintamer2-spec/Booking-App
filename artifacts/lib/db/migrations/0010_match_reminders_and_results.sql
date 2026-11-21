@@ -48,4 +48,3 @@ FROM totals
 WHERE career.user_id = totals.user_id;
 
 COMMIT;
-

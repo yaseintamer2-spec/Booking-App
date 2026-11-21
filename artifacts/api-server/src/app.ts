@@ -5,7 +5,7 @@ import { publishableKeyFromHost } from "@clerk/shared/keys";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
-import { sendDueMatchReminders } from "./lib/match-reminders";
+import { sendDueMatchReminders, sendDueRefereeMatchReminders } from "./lib/match-reminders";
 import {
   CLERK_PROXY_PATH,
   clerkProxyMiddleware,
@@ -15,10 +15,10 @@ import {
 const app: Express = express();
 
 const matchReminderScheduler = setInterval(() => {
-  void sendDueMatchReminders().catch((error) => logger.error({ error }, "Could not schedule match reminders"));
+  void Promise.all([sendDueMatchReminders(), sendDueRefereeMatchReminders()]).catch((error) => logger.error({ error }, "Could not schedule match reminders"));
 }, 60_000);
 matchReminderScheduler.unref();
-void sendDueMatchReminders().catch((error) => logger.error({ error }, "Could not schedule match reminders"));
+void Promise.all([sendDueMatchReminders(), sendDueRefereeMatchReminders()]).catch((error) => logger.error({ error }, "Could not schedule match reminders"));
 
 app.use(
   pinoHttp({
@@ -55,4 +55,3 @@ app.use(
 app.use("/api", router);
 
 export default app;
-

@@ -16,6 +16,17 @@ import { apiBaseUrl } from '@/lib/apiBaseUrl';
 type Referee = { id: string; name: string; avatarUrl: string | null };
 type AdminGrant = { email: string; createdAt: string };
 
+function confirmAdminAction(title: string, message: string, confirmLabel: string, destructive: boolean, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.confirm(`${title}\n\n${message}`)) onConfirm();
+    return;
+  }
+  Alert.alert(title, message, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: confirmLabel, style: destructive ? 'destructive' : 'default', onPress: onConfirm },
+  ]);
+}
+
 type FormState = {
   venueName: string; neighborhood: string; address: string; startsAt: string;
   durationMinutes: string; capacity: string; price: string; compareAt: string;
@@ -41,6 +52,13 @@ export default function AdminScreen() {
   const [adminEmail, setAdminEmail] = useState('');
   const [adminAccessBusy, setAdminAccessBusy] = useState(false);
   const [adminAccessError, setAdminAccessError] = useState('');
+  const loadReferees = useCallback(async () => {
+    const token = await getToken();
+    const response = await fetch(`${apiBaseUrl}/api/admin/referees`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!response.ok) throw new Error('Could not load approved referee accounts.');
+    setReferees(await response.json() as Referee[]);
+    setRefereeLoadError('');
+  }, [getToken]);
   const adminAccessRequest = useCallback(async (path: string, init: RequestInit = {}) => {
     const token = await getToken();
     const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
@@ -63,17 +81,9 @@ export default function AdminScreen() {
   useEffect(() => {
     if (!isAdmin) return;
     let active = true;
-    void (async () => {
-      try {
-        const token = await getToken();
-        const response = await fetch(`${apiBaseUrl}/api/admin/referees`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        if (!response.ok) throw new Error('Could not load approved referee accounts.');
-        const result = await response.json() as Referee[];
-        if (active) { setReferees(result); setRefereeLoadError(''); }
-      } catch { if (active) setRefereeLoadError('Approved referees could not be loaded.'); }
-    })();
+    void loadReferees().catch(() => { if (active) setRefereeLoadError('Approved referees could not be loaded.'); });
     return () => { active = false; };
-  }, [getToken, isAdmin]);
+  }, [loadReferees, isAdmin]);
   const [formOpen, setFormOpen] = useState(false); const [editing, setEditing] = useState<Match | null>(null); const [form, setForm] = useState<FormState>(freshForm); const [formError, setFormError] = useState('');
   const busy = create.isPending || update.isPending;
   const refresh = async () => { await Promise.all([qc.invalidateQueries({ queryKey: getListAdminMatchesQueryKey() }), qc.invalidateQueries({ queryKey: getListMatchesQueryKey() })]); };
@@ -133,6 +143,10 @@ export default function AdminScreen() {
         {adminAccessError ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.destructive }]}>{adminAccessError}</Text> : null}
         {adminGrants.length ? adminGrants.map(grant => <View key={grant.email} style={[styles.adminGrantRow, { borderTopColor: colors.border }]}><View style={{ flex: 1 }}><Text numberOfLines={1} style={[styles.grantEmail, { color: colors.foreground }]}>{grant.email}</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 3 }]}>Admin access</Text></View><Pressable accessibilityRole="button" accessibilityLabel={`Revoke admin access for ${grant.email}`} disabled={adminAccessBusy} onPress={() => revokeAdminAccess(grant.email)} style={[styles.revokeButton, { borderColor: colors.destructive, opacity: adminAccessBusy ? .5 : 1 }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>Revoke</Text></Pressable></View>) : <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 12 }]}>No additional admins yet.</Text>}
       </View> : null}
+      <PitchSubmissionReview visible={isAdmin} />
+      <RefereeAssignmentReview visible={isAdmin} />
+      <PitchOwnerManagement visible={isOwner} />
+      <RefereeAccessManagement visible={isAdmin} onChanged={loadReferees} />
       <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as Href)} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: 14, marginBottom: 15 }}><Feather name="camera" size={16} color={colors.primaryForeground} /><Text style={{ color: colors.primaryForeground, fontSize: 12, fontWeight: '800' }}>Staff check-in scanner</Text></Pressable>
        {list.isLoading ? <LoadingState /> : list.isError ? <EmptyState icon="alert-circle" title="Admin data unavailable." body="Check your connection and admin permissions, then return to the console." action="Retry" onAction={() => list.refetch()} /> : list.data?.length ? list.data.map(match => <View key={match.id} style={[styles.adminCard, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={styles.cardHeader}><View style={{ flex: 1 }}><Text style={[styles.venue, { color: colors.foreground }]}>{match.venueName}</Text><Text style={[styles.meta, { color: colors.mutedForeground }]}>{match.neighborhood} · {formatRiyadhDateTime(match.startsAt)} Riyadh</Text></View><View style={[styles.status, { backgroundColor: match.status === 'published' ? colors.accent : colors.secondary }]}><Text style={[styles.statusText, { color: match.status === 'published' ? colors.primary : colors.mutedForeground }]}>{match.status.toUpperCase()}</Text></View></View><View style={styles.cardFooter}><Text style={[styles.meta, { color: colors.mutedForeground }]}>{match.bookedCount}/{match.capacity} booked · {formatSar(match.priceHalalas)}</Text><View style={{ flexDirection: 'row', gap: 8 }}><Pressable accessibilityRole="button" accessibilityLabel={`Edit ${match.venueName}`} onPress={() => openEdit(match)} style={[styles.iconAction, { borderColor: colors.border }]}><Feather name="edit-2" size={15} color={colors.foreground} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${match.venueName}`} onPress={() => deleteMatch(match)} style={[styles.iconAction, { borderColor: colors.border }]}><Feather name="trash-2" size={15} color={colors.destructive} /></Pressable></View></View></View>) : <EmptyState icon="calendar" title="No matches in the console." body="Create the first match when the next Riyadh pitch is ready." />}
     </Screen>
@@ -178,6 +192,149 @@ function ToggleRow({ label, value, onPress }: { label: string; value: boolean; o
   return <Pressable onPress={onPress} style={[styles.toggleRow, { borderColor: colors.border }]}><Text style={[styles.toggleLabel, { color: colors.foreground }]}>{label}</Text><View style={[styles.toggle, { backgroundColor: value ? colors.primary : colors.secondary }]}><View style={[styles.toggleDot, { backgroundColor: value ? colors.primaryForeground : colors.mutedForeground, alignSelf: value ? 'flex-end' : 'flex-start' }]} /></View></Pressable>;
 }
 
+type PitchOwnerGrant = { email: string; venueName: string; neighborhood: string; address: string };
+type RefereeGrant = { email: string; createdAt: string };
+type PitchSubmission = { id: string; ownerEmail: string; venueName: string; neighborhood: string; address: string; contactPhone: string; startsAt: string; durationMinutes: number; capacity: number; priceHalalas: number; compareAtPriceHalalas: number; refereeIncluded: boolean; waterIncluded: boolean; imageUrls: string[] };
+
+function PitchOwnerManagement({ visible }: { visible: boolean }) {
+  const colors = useColors(); const { getToken } = useAuth();
+  const [owners, setOwners] = useState<PitchOwnerGrant[]>([]); const [email, setEmail] = useState(''); const [venueName, setVenueName] = useState(''); const [neighborhood, setNeighborhood] = useState(''); const [address, setAddress] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const request = useCallback(async (path: string, init: RequestInit = {}) => {
+    const token = await getToken();
+    const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
+    const body = response.status === 204 ? null : await response.json();
+    if (!response.ok) throw new Error(body?.error || 'Could not update pitch-owner access.');
+    return body;
+  }, [getToken]);
+  const load = useCallback(async () => { if (!visible) return; try { setOwners(await request('/admin/pitch-owners') as PitchOwnerGrant[]); setError(''); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load pitch owners.'); } }, [request, visible]);
+  useEffect(() => { void load(); }, [load]);
+  const save = () => {
+    if (!email.trim() || !venueName.trim() || !neighborhood.trim() || !address.trim()) { setError('Add the verified email and the pitch details.'); return; }
+    confirmAdminAction('Grant pitch-owner access?', `${email.trim()} can submit match times for ${venueName.trim()}. Every match request still needs admin approval.`, 'Grant access', false, () => { void (async () => { setBusy(true); setError(''); try { await request('/admin/pitch-owners', { method: 'POST', body: JSON.stringify({ email, venueName, neighborhood, address }) }); setEmail(''); setVenueName(''); setNeighborhood(''); setAddress(''); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not grant pitch-owner access.'); } finally { setBusy(false); } })(); });
+  };
+  const revoke = (owner: PitchOwnerGrant) => confirmAdminAction('Remove pitch-owner access?', `${owner.email} will no longer be able to submit match requests for ${owner.venueName}.`, 'Remove access', true, () => { void (async () => { setBusy(true); try { await request(`/admin/pitch-owners/${encodeURIComponent(owner.email)}`, { method: 'DELETE' }); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not remove pitch-owner access.'); } finally { setBusy(false); } })(); });
+  if (!visible) return null;
+  return <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <Text style={[styles.formGroupTitle, { color: colors.primary, marginTop: 0 }]}>PITCH OWNER ACCESS</Text>
+    <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: -7, marginBottom: 12 }]}>Assign a verified account to one pitch. Their submitted dates remain private until an admin approves them.</Text>
+    <TextInput accessibilityLabel="Pitch owner verified email" autoCapitalize="none" keyboardType="email-address" placeholder="Verified account email" placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} style={[styles.ownerInput, { borderColor: colors.border, color: colors.foreground }]} />
+    <TextInput accessibilityLabel="Pitch name" placeholder="Pitch name" placeholderTextColor={colors.mutedForeground} value={venueName} onChangeText={setVenueName} style={[styles.ownerInput, { borderColor: colors.border, color: colors.foreground }]} />
+    <TextInput accessibilityLabel="Pitch area or neighborhood" placeholder="Area or neighborhood" placeholderTextColor={colors.mutedForeground} value={neighborhood} onChangeText={setNeighborhood} style={[styles.ownerInput, { borderColor: colors.border, color: colors.foreground }]} />
+    <TextInput accessibilityLabel="Full pitch address" multiline placeholder="Full pitch address" placeholderTextColor={colors.mutedForeground} value={address} onChangeText={setAddress} style={[styles.ownerInput, styles.ownerAddressInput, { borderColor: colors.border, color: colors.foreground }]} />
+    <Pressable accessibilityRole="button" disabled={busy} onPress={save} style={[styles.ownerGrantButton, { backgroundColor: colors.primary, opacity: busy ? .6 : 1 }]}><Feather name="user-plus" size={15} color={colors.primaryForeground} /><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{busy ? 'Saving…' : 'Add pitch owner'}</Text></Pressable>
+    {error ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
+    {owners.map(owner => <View key={owner.email} style={[styles.adminGrantRow, { borderTopColor: colors.border }]}><View style={{ flex: 1 }}><Text numberOfLines={1} style={[styles.grantEmail, { color: colors.foreground }]}>{owner.email}</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 3 }]}>{owner.venueName} · {owner.neighborhood}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={`Remove pitch-owner access for ${owner.email}`} disabled={busy} onPress={() => revoke(owner)} style={[styles.revokeButton, { borderColor: colors.destructive }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>Remove</Text></Pressable></View>)}
+  </View>;
+}
+
+function PitchSubmissionReview({ visible }: { visible: boolean }) {
+  const colors = useColors(); const { getToken } = useAuth(); const qc = useQueryClient();
+  const [submissions, setSubmissions] = useState<PitchSubmission[]>([]); const [busyId, setBusyId] = useState(''); const [error, setError] = useState('');
+  const request = useCallback(async (path: string, init: RequestInit = {}) => {
+    const token = await getToken();
+    const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
+    const body = response.status === 204 ? null : await response.json();
+    if (!response.ok) throw new Error(body?.error || 'Could not review this match request.');
+    return body;
+  }, [getToken]);
+  const load = useCallback(async () => { if (!visible) return; try { setSubmissions(await request('/admin/pitch-match-submissions') as PitchSubmission[]); setError(''); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load pitch requests.'); } }, [request, visible]);
+  useEffect(() => { void load(); }, [load]);
+  const review = (submission: PitchSubmission, action: 'approve' | 'reject') => {
+    const isApprove = action === 'approve';
+    confirmAdminAction(isApprove ? 'Approve and publish this match?' : 'Reject this match request?', isApprove ? `${submission.venueName} · ${formatRiyadhDateTime(submission.startsAt)} Riyadh. It will immediately appear in Discover using the existing match card.` : `${submission.venueName} · ${formatRiyadhDateTime(submission.startsAt)} Riyadh. It will stay out of Discover.`, isApprove ? 'Approve & publish' : 'Reject request', !isApprove, () => { void (async () => { setBusyId(submission.id); setError(''); try { await request(`/admin/pitch-match-submissions/${submission.id}`, { method: 'PATCH', body: JSON.stringify({ action }) }); await load(); if (isApprove) await Promise.all([qc.invalidateQueries({ queryKey: getListAdminMatchesQueryKey() }), qc.invalidateQueries({ queryKey: getListMatchesQueryKey() })]); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not review this request.'); } finally { setBusyId(''); } })(); });
+  };
+  if (!visible) return null;
+  return <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={styles.accessHeading}><View style={{ flex: 1 }}><Text style={[styles.formGroupTitle, { color: colors.primary, marginTop: 0, marginBottom: 4 }]}>PITCH MATCH REQUESTS</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 0 }]}>Approve to publish in Discover. Requests stay private until approved.</Text></View><View style={[styles.requestCount, { backgroundColor: colors.accent }]}><Text style={[styles.ownerBadgeText, { color: colors.primary }]}>{submissions.length} PENDING</Text></View></View>
+    {error ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
+    {submissions.length ? submissions.map(submission => <View key={submission.id} style={[styles.requestCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+      <Text style={[styles.venue, { color: colors.foreground }]}>{submission.venueName}</Text>
+      <Text style={[styles.meta, { color: colors.mutedForeground }]}>{submission.neighborhood} · {formatRiyadhDateTime(submission.startsAt)} · {submission.durationMinutes} min</Text>
+      <Text style={[styles.meta, { color: colors.mutedForeground }]}>Owner: {submission.ownerEmail} · Contact: {submission.contactPhone}</Text>
+      <Text style={[styles.meta, { color: colors.mutedForeground }]}>{submission.capacity} players · {formatSar(submission.priceHalalas)} each · {submission.address}</Text>
+      <View style={styles.requestPhotos}>{submission.imageUrls.slice(0, 3).map((uri, index) => <Image key={`${submission.id}-${index}`} source={{ uri }} style={[styles.requestPhoto, { borderColor: colors.border }]} accessibilityLabel={`Submitted pitch photo ${index + 1}`} />)}</View>
+      <View style={styles.reviewActions}>
+        <Pressable accessibilityRole="button" disabled={!!busyId} onPress={() => review(submission, 'reject')} style={[styles.rejectButton, { borderColor: colors.destructive, opacity: busyId ? .5 : 1 }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>{busyId === submission.id ? 'Saving…' : 'Reject'}</Text></Pressable>
+        <Pressable accessibilityRole="button" disabled={!!busyId} onPress={() => review(submission, 'approve')} style={[styles.approveButton, { backgroundColor: colors.primary, opacity: busyId ? .5 : 1 }]}><Feather name="check" size={14} color={colors.primaryForeground} /><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{busyId === submission.id ? 'Saving…' : 'Approve & publish'}</Text></Pressable>
+      </View>
+    </View>) : <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 12 }]}>No match requests waiting for review.</Text>}
+  </View>;
+}
+
+function RefereeAccessManagement({ visible, onChanged }: { visible: boolean; onChanged: () => Promise<void> }) {
+  const colors = useColors(); const { getToken } = useAuth();
+  const [grants, setGrants] = useState<RefereeGrant[]>([]); const [email, setEmail] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const request = useCallback(async (path: string, init: RequestInit = {}) => {
+    const token = await getToken();
+    const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
+    const body = response.status === 204 ? null : await response.json();
+    if (!response.ok) throw new Error(body?.error || 'Could not update referee access.');
+    return body;
+  }, [getToken]);
+  const load = useCallback(async () => { if (!visible) return; try { setGrants(await request('/admin/referee-access') as RefereeGrant[]); setError(''); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load referee access.'); } }, [request, visible]);
+  useEffect(() => { void load(); }, [load]);
+  const grant = () => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) { setError('Enter the verified email used by this referee to sign in.'); return; }
+    confirmAdminAction('Approve this referee?', `${cleanEmail} can be assigned to matches. They must accept each match invitation before using its controls.`, 'Approve referee', false, () => { void (async () => { setBusy(true); setError(''); try { await request('/admin/referee-access', { method: 'POST', body: JSON.stringify({ email: cleanEmail }) }); setEmail(''); await Promise.all([load(), onChanged()]); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not approve referee.'); } finally { setBusy(false); } })(); });
+  };
+  const revoke = (grantItem: RefereeGrant) => confirmAdminAction('Remove referee access?', `${grantItem.email} can no longer accept assignments or control matches.`, 'Remove access', true, () => { void (async () => { setBusy(true); setError(''); try { await request(`/admin/referee-access/${encodeURIComponent(grantItem.email)}`, { method: 'DELETE' }); await Promise.all([load(), onChanged()]); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not remove referee access.'); } finally { setBusy(false); } })(); });
+  if (!visible) return null;
+  return <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <Text style={[styles.formGroupTitle, { color: colors.primary, marginTop: 0 }]}>REFEREE ACCESS</Text>
+    <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: -7, marginBottom: 12 }]}>Approve a verified account here, then assign them to a match. Match invitations require a manual response.</Text>
+    <View style={[styles.addAdminRow, { borderColor: colors.border }]}><TextInput accessibilityLabel="Verified referee email" autoCapitalize="none" autoComplete="email" autoCorrect={false} keyboardType="email-address" placeholder="Verified account email" placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} editable={!busy} style={[styles.adminEmailInput, { color: colors.foreground }]} /><Pressable accessibilityRole="button" disabled={busy || !email.trim()} onPress={grant} style={[styles.grantButton, { backgroundColor: colors.primary, opacity: busy || !email.trim() ? .55 : 1 }]}><Feather name="user-plus" size={15} color={colors.primaryForeground} /><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{busy ? 'Saving…' : 'Approve'}</Text></Pressable></View>
+    {error ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
+    {grants.length ? grants.map(item => <View key={item.email} style={[styles.adminGrantRow, { borderTopColor: colors.border }]}><View style={{ flex: 1 }}><Text numberOfLines={1} style={[styles.grantEmail, { color: colors.foreground }]}>{item.email}</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 3 }]}>Approved referee</Text></View><Pressable accessibilityRole="button" accessibilityLabel={`Remove referee access for ${item.email}`} disabled={busy} onPress={() => revoke(item)} style={[styles.revokeButton, { borderColor: colors.destructive, opacity: busy ? .5 : 1 }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>Remove</Text></Pressable></View>) : <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 12 }]}>No referee accounts have been added here.</Text>}
+  </View>;
+}
+
+type RefereeApplicationItem = { id: string; matchId: string; refereeUserId: string; refereeName: string; refereeEmail: string; venueName: string; neighborhood: string; startsAt: string; status: string };
+type RefereeAssignmentItem = { matchId: string; venueName: string; neighborhood: string; startsAt: string; refereeUserId: string | null; refereeName: string | null; assignmentStatus: string | null };
+function RefereeAssignmentReview({ visible }: { visible: boolean }) {
+  const colors = useColors(); const { getToken } = useAuth();
+  const [applications, setApplications] = useState<RefereeApplicationItem[]>([]); const [assignments, setAssignments] = useState<RefereeAssignmentItem[]>([]);
+  const [busyId, setBusyId] = useState(''); const [error, setError] = useState('');
+  const request = useCallback(async (path: string, init: RequestInit = {}) => {
+    const token = await getToken();
+    const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
+    const body = response.status === 204 ? null : await response.json();
+    if (!response.ok) throw new Error(body?.error || 'Could not update referee assignment.');
+    return body;
+  }, [getToken]);
+  const load = useCallback(async () => {
+    if (!visible) return;
+    try { const result = await request('/admin/referee-applications') as { applications: RefereeApplicationItem[]; assignments: RefereeAssignmentItem[] }; setApplications(result.applications); setAssignments(result.assignments); setError(''); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load referee applications.'); }
+  }, [request, visible]);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (!visible) return; const timer = setInterval(() => { void load(); }, 30_000); return () => clearInterval(timer); }, [load, visible]);
+  const reviewApplication = (application: RefereeApplicationItem, action: 'invite' | 'reject') => {
+    const inviting = action === 'invite';
+    confirmAdminAction(inviting ? 'Approve and request referee?' : 'Decline referee application?', inviting ? `Approve ${application.refereeName} for ${application.venueName}? After sending the request, contact them at ${application.refereeEmail || 'their account'} to coordinate. The assignment is still not final until they confirm and you confirm it here.` : `Decline ${application.refereeName}'s request for ${application.venueName}?`, inviting ? 'Approve & request' : 'Decline application', !inviting, () => { void (async () => { setBusyId(application.id); try { const result = await request(`/admin/referee-applications/${application.id}`, { method: 'PATCH', body: JSON.stringify({ action }) }) as { message?: string }; if (inviting && result.message) Alert.alert('Request sent', result.message); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not review this application.'); } finally { setBusyId(''); } })(); });
+  };
+  const finalize = (assignment: RefereeAssignmentItem) => confirmAdminAction('Confirm referee assignment?', `${assignment.refereeName || 'This referee'} confirmed availability for ${assignment.venueName}. Finalize the assignment and enable match controls?`, 'Confirm assignment', false, () => { void (async () => { setBusyId(assignment.matchId); try { await request(`/admin/matches/${assignment.matchId}/referee-assignment`, { method: 'PATCH', body: JSON.stringify({ action: 'confirm' }) }); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not confirm the assignment.'); } finally { setBusyId(''); } })(); });
+  if (!visible) return null;
+  const awaitingResponse = assignments.filter(item => item.assignmentStatus === 'pending');
+  const awaitingFinal = assignments.filter(item => item.assignmentStatus === 'referee_confirmed');
+  const confirmed = assignments.filter(item => item.assignmentStatus === 'accepted');
+  return <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={styles.accessHeading}><View style={{ flex: 1 }}><Text style={[styles.formGroupTitle, { color: colors.primary, marginTop: 0, marginBottom: 4 }]}>REFEREE ASSIGNMENTS</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 0 }]}>Review applications, then wait for the referee and admin to confirm. Contact applicants yourself after approving their request.</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Refresh referee requests" onPress={() => void load()} style={[styles.iconAction, { borderColor: colors.border }]}><Feather name="refresh-cw" size={14} color={colors.primary} /></Pressable></View>
+    {error ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
+    <Text style={[styles.refereeSubhead, { color: colors.foreground }]}>APPLICATIONS · {applications.length}</Text>
+    {applications.length ? applications.map(application => <View key={application.id} style={[styles.requestCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+      <Text style={[styles.venue, { color: colors.foreground }]}>{application.refereeName}</Text><Text style={[styles.meta, { color: colors.mutedForeground }]}>{application.refereeEmail || 'No verified email'} · {application.venueName}</Text><Text style={[styles.meta, { color: colors.mutedForeground }]}>{application.neighborhood} · {formatRiyadhDateTime(application.startsAt)} Riyadh</Text>
+      <View style={styles.reviewActions}><Pressable accessibilityRole="button" disabled={!!busyId} onPress={() => reviewApplication(application, 'reject')} style={[styles.rejectButton, { borderColor: colors.destructive, opacity: busyId ? .5 : 1 }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>Decline</Text></Pressable><Pressable accessibilityRole="button" disabled={!!busyId} onPress={() => reviewApplication(application, 'invite')} style={[styles.approveButton, { backgroundColor: colors.primary, opacity: busyId ? .5 : 1 }]}><Feather name="send" size={14} color={colors.primaryForeground} /><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{busyId === application.id ? 'Sending…' : 'Approve & request'}</Text></Pressable></View>
+    </View>) : <Text style={[styles.meta, { color: colors.mutedForeground }]}>No applications waiting for review.</Text>}
+    <Text style={[styles.refereeSubhead, { color: colors.foreground }]}>WAITING FOR REFEREE · {awaitingResponse.length}</Text>
+    {awaitingResponse.map(item => <Text key={item.matchId} style={[styles.assignmentLine, { color: colors.mutedForeground }]}>{item.venueName} · {item.refereeName || 'Referee'} · Request sent, waiting for response</Text>)}
+    <Text style={[styles.refereeSubhead, { color: colors.foreground }]}>YOUR CONFIRMATION NEEDED · {awaitingFinal.length}</Text>
+    {awaitingFinal.map(item => <View key={item.matchId} style={[styles.assignmentRow, { borderTopColor: colors.border }]}><View style={{ flex: 1 }}><Text style={[styles.venue, { color: colors.foreground }]}>{item.venueName}</Text><Text style={[styles.meta, { color: colors.mutedForeground }]}>{item.refereeName || 'Referee'} · {formatRiyadhDateTime(item.startsAt)} Riyadh</Text></View><Pressable accessibilityRole="button" disabled={!!busyId} onPress={() => finalize(item)} style={[styles.finalizeButton, { backgroundColor: colors.primary, opacity: busyId ? .55 : 1 }]}><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{busyId === item.matchId ? 'Saving…' : 'Confirm'}</Text></Pressable></View>)}
+    <Text style={[styles.refereeSubhead, { color: colors.foreground }]}>CONFIRMED · {confirmed.length}</Text>
+    {confirmed.slice(0, 5).map(item => <Text key={item.matchId} style={[styles.assignmentLine, { color: colors.mutedForeground }]}>{item.venueName} · {item.refereeName || 'Referee'} · {formatRiyadhDateTime(item.startsAt)} Riyadh</Text>)}
+  </View>;
+}
+
 const styles = StyleSheet.create({
   headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 16 },
   kicker: { fontSize: 9, letterSpacing: 1.3, fontWeight: '800' },
@@ -186,6 +343,20 @@ const styles = StyleSheet.create({
   adminNote: { borderWidth: 1, borderRadius: 14, padding: 13, flexDirection: 'row', gap: 9, marginBottom: 15 },
   noteText: { flex: 1, fontSize: 10, lineHeight: 15 },
   accessCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 15 },
+  ownerInput: { minHeight: 46, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 12, marginBottom: 8 },
+  ownerAddressInput: { minHeight: 70, textAlignVertical: 'top' },
+  ownerGrantButton: { minHeight: 46, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  requestCount: { minHeight: 28, borderRadius: 14, paddingHorizontal: 9, alignItems: 'center', justifyContent: 'center' },
+  requestCard: { borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 12 },
+  requestPhotos: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  requestPhoto: { width: 72, height: 62, borderWidth: 1, borderRadius: 9 },
+  refereeSubhead: { fontSize: 9, fontWeight: '900', letterSpacing: .8, marginTop: 16, marginBottom: 8 },
+  assignmentLine: { fontSize: 10, lineHeight: 16, marginBottom: 5 },
+  assignmentRow: { minHeight: 58, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: 8, alignItems: 'center', paddingTop: 8 },
+  finalizeButton: { minWidth: 78, minHeight: 42, borderRadius: 11, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  reviewActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  rejectButton: { minHeight: 44, borderWidth: 1, borderRadius: 11, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
+  approveButton: { minHeight: 44, flex: 1, borderRadius: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   accessHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   ownerBadge: { minHeight: 28, borderRadius: 14, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', gap: 5 },
   ownerBadgeText: { fontSize: 8, fontWeight: '900', letterSpacing: .8 },
@@ -230,4 +401,3 @@ const styles = StyleSheet.create({
   toggleDot: { width: 16, height: 16, borderRadius: 8 },
   error: { fontSize: 12, lineHeight: 18, marginVertical: 12 },
 });
-

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { clerkClient } from "@clerk/express";
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, desc, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import {
   CreateAdminMatchBody,
   CreateAdminMatchResponse,
@@ -15,8 +15,8 @@ import {
   UpdateAdminMatchParams,
   UpdateAdminMatchResponse,
 } from "@workspace/api-zod";
-import { adminAccessTable, db, matchAlertSubscriptionsTable, matchEventsTable, matchRatingsTable, matchesTable, notificationsTable, playerCareerStatsTable, pushTokensTable, registrationsTable } from "@workspace/db";
-import { isAdminUser, isMatchStaffUser, isOwnerUser, OWNER_EMAIL, requireAdmin, requireAuth, requireMatchStaff, requireOwner } from "../middlewares/auth";
+import { adminAccessTable, db, matchAlertSubscriptionsTable, matchEventsTable, matchRatingsTable, matchesTable, notificationsTable, pitchMatchSubmissionsTable, pitchOwnerAccessTable, playerCareerStatsTable, pushTokensTable, refereeAccessTable, refereeMatchApplicationsTable, registrationsTable } from "@workspace/db";
+import { isAdminUser, isMatchStaffUser, isOwnerUser, isPitchOwnerUser, OWNER_EMAIL, requireAdmin, requireAuth, requireOwner, requirePitchOwner } from "../middlewares/auth";
 import { getMatchEndAt, WAITLIST_OFFER_TTL_MS, canConfirmPaidRegistration, canReserveSeat, isCheckInTokenValid, isOfferExpired, isValidMatchImageList } from "../lib/registration-rules";
 const MATCH_ARCHIVE_HOURS = 12;
 
@@ -24,6 +24,14 @@ const router: IRouter = Router();
 
 function paramId(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+async function getPitchOwnerAccess(userId: string) {
+  const user = await clerkClient.users.getUser(userId);
+  const emails = user.emailAddresses.filter((address) => address.verification?.status === "verified").map((address) => address.emailAddress.trim().toLowerCase());
+  if (!emails.length) return null;
+  const [access] = await db.select().from(pitchOwnerAccessTable).where(inArray(pitchOwnerAccessTable.email, emails)).limit(1);
+  return access ?? null;
 }
 
 function toMatch(row: typeof matchesTable.$inferSelect) {
@@ -59,14 +67,15 @@ async function addPitchRatings<T extends typeof matchesTable.$inferSelect>(rows:
 }
 
 async function getRefereeAssignment(userId: string | null | undefined) {
-  if (!userId) return { refereeUserId: null, refereeName: null, refereeAvatarUrl: null };
+  if (!userId) return { refereeUserId: null, refereeName: null, refereeAvatarUrl: null, refereeAssignmentStatus: null };
   if (!(await isMatchStaffUser(userId))) throw new Error("Choose an account approved for match staff.");
   const user = await clerkClient.users.getUser(userId);
-  return { refereeUserId: user.id, refereeName: user.fullName ?? user.firstName ?? "Match referee", refereeAvatarUrl: user.imageUrl || null };
+  return { refereeUserId: user.id, refereeName: user.fullName ?? user.firstName ?? "Match referee", refereeAvatarUrl: user.imageUrl || null, refereeAssignmentStatus: "pending" as const };
 }
 
-async function canControlLiveMatch(userId: string, refereeUserId: string | null): Promise<boolean> {
-  return refereeUserId === userId || await isAdminUser(userId);
+async function canControlLiveMatch(userId: string, refereeUserId: string | null, refereeAssignmentStatus: string | null): Promise<boolean> {
+  if (await isAdminUser(userId)) return true;
+  return refereeUserId === userId && refereeAssignmentStatus === "accepted" && await isMatchStaffUser(userId);
 }
 
 function teamForRegistration(player: { pitchSlot: number | null }, index: number, players: Array<{ pitchSlot: number | null }>, capacity: number): "red" | "blue" {
@@ -180,6 +189,47 @@ function getNewMatchMessage(match: { venueName: string; neighborhood: string; st
   return `New match at ${match.venueName}, ${match.neighborhood} · ${time} Riyadh · ${price} per player.`;
 }
 
+function refereeMatchMessage(venueName: string, startsAt: Date): string {
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Riyadh", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(startsAt);
+  return `Referee request for ${venueName} · ${time} Riyadh. Open Live match controls to respond.`;
+}
+
+async function notifyAdminsOfRefereeApplication(matchId: string, venueName: string, refereeName: string): Promise<void> {
+  const grants = await db.select({ email: adminAccessTable.email }).from(adminAccessTable);
+  const emails = [...new Set([OWNER_EMAIL, ...grants.map((grant) => grant.email)])];
+  const accounts = await Promise.all(emails.map(async (email) => {
+    const result = await clerkClient.users.getUserList({ emailAddress: [email], limit: 10 });
+    return result.data.find((user) => user.emailAddresses.some((address) => address.verification?.status === "verified" && address.emailAddress.trim().toLowerCase() === email))?.id;
+  }));
+  const userIds = [...new Set(accounts.filter((id): id is string => Boolean(id)))];
+  const message = `${refereeName} applied to referee ${venueName}. Review the request in the admin console.`;
+  for (let offset = 0; offset < userIds.length; offset += 100) {
+    await db.insert(notificationsTable).values(userIds.slice(offset, offset + 100).map((userId) => ({ userId, matchId, kind: "referee_application", message })));
+  }
+  void sendPushToUsers(userIds, "Referee application received", message, { matchId, screen: "admin" }).catch(() => undefined);
+}
+
+async function notifyRefereeOfAssignment(userId: string, match: { id: string; venueName: string; startsAt: Date }): Promise<void> {
+  const message = refereeMatchMessage(match.venueName, match.startsAt);
+  await db.insert(notificationsTable).values({ userId, matchId: match.id, kind: "referee_assignment", message });
+  void sendPushToUser(userId, "Referee request", message, { matchId: match.id, screen: "referee-matches" }).catch(() => undefined);
+}
+
+async function notifyAdminsRefereeConfirmed(matchId: string, venueName: string, refereeName: string): Promise<void> {
+  const grants = await db.select({ email: adminAccessTable.email }).from(adminAccessTable);
+  const emails = [...new Set([OWNER_EMAIL, ...grants.map((grant) => grant.email)])];
+  const accounts = await Promise.all(emails.map(async (email) => {
+    const result = await clerkClient.users.getUserList({ emailAddress: [email], limit: 10 });
+    return result.data.find((user) => user.emailAddresses.some((address) => address.verification?.status === "verified" && address.emailAddress.trim().toLowerCase() === email))?.id;
+  }));
+  const userIds = [...new Set(accounts.filter((id): id is string => Boolean(id)))];
+  const message = `${refereeName} confirmed availability for ${venueName}. Confirm the referee assignment in the admin console.`;
+  for (let offset = 0; offset < userIds.length; offset += 100) {
+    await db.insert(notificationsTable).values(userIds.slice(offset, offset + 100).map((userId) => ({ userId, matchId, kind: "referee_confirmation", message })));
+  }
+  void sendPushToUsers(userIds, "Referee confirmed availability", message, { matchId, screen: "admin" }).catch(() => undefined);
+}
+
 async function expireWaitlistOffers(): Promise<void> {
   const now = new Date();
   const expired = await db.select().from(registrationsTable).where(and(eq(registrationsTable.status, "offered"), lt(registrationsTable.offerExpiresAt, now)));
@@ -218,6 +268,7 @@ router.get("/me", requireAuth, async (_req, res): Promise<void> => {
       name: user.fullName ?? user.firstName ?? email,
       isAdmin: await isAdminUser(userId),
       isOwner: await isOwnerUser(userId),
+      isPitchOwner: await isPitchOwnerUser(userId),
     }),
   );
 });
@@ -304,15 +355,125 @@ router.get("/matches/:id/participants", async (req, res): Promise<void> => {
   res.json(rows);
 });
 
-router.get("/me/referee-matches", requireMatchStaff, async (_req, res): Promise<void> => {
+router.get("/me/referee-matches", requireAuth, async (_req, res): Promise<void> => {
   const userId = res.locals.userId as string;
   const admin = await isAdminUser(userId);
+  if (!admin && !(await isMatchStaffUser(userId))) { res.json([]); return; }
   const now = Date.now();
   const rows = await db.select().from(matchesTable)
     .where(and(eq(matchesTable.status, "published"), gt(matchesTable.startsAt, new Date(now - 8 * 60 * 60_000))))
     .orderBy(asc(matchesTable.startsAt));
-  res.json(rows.filter((match) => (admin || match.refereeUserId === userId) && match.liveStatus !== "full_time")
-    .map((match) => ({ id: match.id, venueName: match.venueName, neighborhood: match.neighborhood, startsAt: match.startsAt, durationMinutes: match.durationMinutes, liveStatus: match.liveStatus, refereeName: match.refereeName })));
+  const applications = await db.select({ matchId: refereeMatchApplicationsTable.matchId, status: refereeMatchApplicationsTable.status })
+    .from(refereeMatchApplicationsTable).where(eq(refereeMatchApplicationsTable.refereeUserId, userId));
+  const applicationStatusByMatch = new Map(applications.map((application) => [application.matchId, application.status]));
+  const assignedMatches = rows.filter((match) => match.refereeUserId === userId && match.liveStatus !== "full_time")
+    .map((match) => ({ id: match.id, venueName: match.venueName, neighborhood: match.neighborhood, startsAt: match.startsAt, durationMinutes: match.durationMinutes, liveStatus: match.liveStatus, refereeName: match.refereeName, assignmentStatus: match.refereeAssignmentStatus ?? "accepted", canRespond: match.refereeAssignmentStatus === "pending", canApply: false, applicationStatus: applicationStatusByMatch.get(match.id) ?? null, kind: "assignment" }));
+  const adminMatches = admin ? rows.filter((match) => match.refereeUserId && match.refereeUserId !== userId && match.liveStatus !== "full_time")
+    .map((match) => ({ id: match.id, venueName: match.venueName, neighborhood: match.neighborhood, startsAt: match.startsAt, durationMinutes: match.durationMinutes, liveStatus: match.liveStatus, refereeName: match.refereeName, assignmentStatus: match.refereeAssignmentStatus ?? "accepted", canRespond: false, canApply: false, applicationStatus: null, kind: "assignment" })) : [];
+  const openMatches = rows.filter((match) => match.status === "published" && match.refereeIncluded && !match.refereeUserId && match.startsAt > new Date() && match.liveStatus === "scheduled")
+    .map((match) => ({ id: match.id, venueName: match.venueName, neighborhood: match.neighborhood, startsAt: match.startsAt, durationMinutes: match.durationMinutes, liveStatus: match.liveStatus, refereeName: null, assignmentStatus: null, canRespond: false, canApply: applicationStatusByMatch.get(match.id) !== "pending" && applicationStatusByMatch.get(match.id) !== "invited" && applicationStatusByMatch.get(match.id) !== "confirmed", applicationStatus: applicationStatusByMatch.get(match.id) ?? null, kind: "available" }));
+  res.json([...assignedMatches, ...adminMatches, ...openMatches].sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()));
+});
+
+router.post("/me/referee-applications", requireAuth, async (req, res): Promise<void> => {
+  const userId = res.locals.userId as string;
+  const params = GetMatchParams.safeParse({ id: req.body?.matchId });
+  if (!params.success) { res.status(400).json({ error: "Choose a valid match to apply for." }); return; }
+  if (!(await isMatchStaffUser(userId))) { res.status(403).json({ error: "An approved referee account is required to apply." }); return; }
+  const [match] = await db.select().from(matchesTable).where(and(eq(matchesTable.id, params.data.id), eq(matchesTable.status, "published"), eq(matchesTable.refereeIncluded, true), isNull(matchesTable.refereeUserId), gt(matchesTable.startsAt, new Date()))).limit(1);
+  if (!match) { res.status(409).json({ error: "This match is no longer open for referee applications." }); return; }
+  const [existing] = await db.select().from(refereeMatchApplicationsTable).where(and(eq(refereeMatchApplicationsTable.matchId, match.id), eq(refereeMatchApplicationsTable.refereeUserId, userId))).limit(1);
+  if (existing && ["pending", "invited", "confirmed"].includes(existing.status)) { res.status(200).json({ id: existing.id, status: existing.status }); return; }
+  const now = new Date();
+  const [application] = existing
+    ? await db.update(refereeMatchApplicationsTable).set({ status: "pending", updatedAt: now }).where(eq(refereeMatchApplicationsTable.id, existing.id)).returning()
+    : await db.insert(refereeMatchApplicationsTable).values({ matchId: match.id, refereeUserId: userId, status: "pending" }).returning();
+  const referee = await clerkClient.users.getUser(userId);
+  void notifyAdminsOfRefereeApplication(match.id, match.venueName, referee.fullName ?? referee.firstName ?? "A referee").catch(() => undefined);
+  res.status(201).json({ id: application.id, status: application.status });
+});
+
+router.patch("/me/referee-matches/:id/decision", requireAuth, async (req, res): Promise<void> => {
+  const params = GetMatchParams.safeParse(req.params);
+  const userId = res.locals.userId as string;
+  const decision = req.body?.decision;
+  if (!params.success || !["accept", "decline"].includes(decision)) { res.status(400).json({ error: "Choose accept or decline for a valid referee assignment." }); return; }
+  if (!(await isMatchStaffUser(userId))) { res.status(403).json({ error: "This account is not approved to referee matches." }); return; }
+  const [match] = await db.select({ id: matchesTable.id, venueName: matchesTable.venueName, startsAt: matchesTable.startsAt, refereeUserId: matchesTable.refereeUserId, refereeName: matchesTable.refereeName, assignmentStatus: matchesTable.refereeAssignmentStatus })
+    .from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
+  if (!match || match.refereeUserId !== userId) { res.status(404).json({ error: "This referee assignment is unavailable." }); return; }
+  if (match.assignmentStatus !== "pending") { res.status(409).json({ error: "This referee assignment has already been answered." }); return; }
+  const [updated] = await db.update(matchesTable).set(decision === "accept"
+    ? { refereeAssignmentStatus: "referee_confirmed", updatedAt: new Date() }
+    : { refereeUserId: null, refereeName: null, refereeAvatarUrl: null, refereeAssignmentStatus: "declined", updatedAt: new Date() })
+    .where(and(eq(matchesTable.id, match.id), eq(matchesTable.refereeUserId, userId), eq(matchesTable.refereeAssignmentStatus, "pending"))).returning({ id: matchesTable.id });
+  if (!updated) { res.status(409).json({ error: "This referee assignment has already changed." }); return; }
+  if (decision === "accept") {
+    await db.update(refereeMatchApplicationsTable).set({ status: "confirmed", updatedAt: new Date() }).where(and(eq(refereeMatchApplicationsTable.matchId, match.id), eq(refereeMatchApplicationsTable.refereeUserId, userId), eq(refereeMatchApplicationsTable.status, "invited")));
+    void notifyAdminsRefereeConfirmed(match.id, match.venueName, match.refereeName ?? "The referee").catch(() => undefined);
+  } else {
+    await db.update(refereeMatchApplicationsTable).set({ status: "declined", updatedAt: new Date() }).where(and(eq(refereeMatchApplicationsTable.matchId, match.id), eq(refereeMatchApplicationsTable.refereeUserId, userId), eq(refereeMatchApplicationsTable.status, "invited")));
+  }
+  res.json({ id: updated.id, assignmentStatus: decision === "accept" ? "referee_confirmed" : "declined" });
+});
+
+router.patch("/admin/matches/:id/referee-assignment", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const params = GetMatchParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "Choose a valid match." }); return; }
+  if (req.body?.action !== "confirm") { res.status(400).json({ error: "Choose confirm to finalize the referee assignment." }); return; }
+  const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
+  if (!match || !match.refereeUserId || match.refereeAssignmentStatus !== "referee_confirmed") { res.status(409).json({ error: "The referee must first confirm availability before you can finalize the assignment." }); return; }
+  const [updated] = await db.update(matchesTable).set({ refereeAssignmentStatus: "accepted", updatedAt: new Date() })
+    .where(and(eq(matchesTable.id, match.id), eq(matchesTable.refereeUserId, match.refereeUserId), eq(matchesTable.refereeAssignmentStatus, "referee_confirmed"))).returning({ id: matchesTable.id });
+  if (!updated) { res.status(409).json({ error: "This referee assignment has already changed." }); return; }
+  await db.update(refereeMatchApplicationsTable).set({ status: "confirmed", updatedAt: new Date() })
+    .where(and(eq(refereeMatchApplicationsTable.matchId, match.id), eq(refereeMatchApplicationsTable.refereeUserId, match.refereeUserId), eq(refereeMatchApplicationsTable.status, "confirmed")));
+  const message = `Your referee assignment for ${match.venueName} is confirmed. We'll remind you before kickoff.`;
+  await db.insert(notificationsTable).values({ userId: match.refereeUserId, matchId: match.id, kind: "referee_assignment_confirmed", message });
+  void sendPushToUser(match.refereeUserId, "Referee assignment confirmed", message, { matchId: match.id, screen: "referee-matches" }).catch(() => undefined);
+  res.json({ id: updated.id, assignmentStatus: "accepted" });
+});
+
+router.get("/admin/referee-applications", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+  const applications = await db.select({ application: refereeMatchApplicationsTable, match: matchesTable })
+    .from(refereeMatchApplicationsTable).innerJoin(matchesTable, eq(refereeMatchApplicationsTable.matchId, matchesTable.id))
+    .where(eq(refereeMatchApplicationsTable.status, "pending")).orderBy(asc(refereeMatchApplicationsTable.createdAt)).limit(100);
+  const applicationItems = await Promise.all(applications.map(async ({ application, match }) => {
+    let userName = "Match referee"; let avatarUrl: string | null = null; let email = "";
+    try { const user = await clerkClient.users.getUser(application.refereeUserId); userName = user.fullName ?? user.firstName ?? userName; avatarUrl = user.imageUrl || null; email = user.emailAddresses.find((entry) => entry.verification?.status === "verified")?.emailAddress ?? ""; } catch { /* keep the safe fallback */ }
+    return { id: application.id, matchId: match.id, refereeUserId: application.refereeUserId, refereeName: userName, refereeEmail: email, refereeAvatarUrl: avatarUrl, venueName: match.venueName, neighborhood: match.neighborhood, startsAt: match.startsAt, status: application.status };
+  }));
+  const assignments = await db.select().from(matchesTable).where(and(isNotNull(matchesTable.refereeUserId), gt(matchesTable.startsAt, new Date(Date.now() - 8 * 60 * 60_000)), or(eq(matchesTable.refereeAssignmentStatus, "pending"), eq(matchesTable.refereeAssignmentStatus, "referee_confirmed"), eq(matchesTable.refereeAssignmentStatus, "accepted"))))
+    .orderBy(asc(matchesTable.startsAt)).limit(100);
+  res.json({ applications: applicationItems, assignments: assignments.map((match) => ({ matchId: match.id, venueName: match.venueName, neighborhood: match.neighborhood, startsAt: match.startsAt, refereeUserId: match.refereeUserId, refereeName: match.refereeName, assignmentStatus: match.refereeAssignmentStatus })) });
+});
+
+router.patch("/admin/referee-applications/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const id = paramId(req.params.id);
+  const action = req.body?.action;
+  if (!GetMatchParams.safeParse({ id }).success || !["invite", "reject"].includes(action)) { res.status(400).json({ error: "Choose a valid referee application and review action." }); return; }
+  const [application] = await db.select().from(refereeMatchApplicationsTable).where(eq(refereeMatchApplicationsTable.id, id)).limit(1);
+  if (!application || application.status !== "pending") { res.status(409).json({ error: "This referee application is no longer pending." }); return; }
+  const [match] = await db.select().from(matchesTable).where(and(eq(matchesTable.id, application.matchId), eq(matchesTable.status, "published"), eq(matchesTable.refereeIncluded, true), isNull(matchesTable.refereeUserId), gt(matchesTable.startsAt, new Date()))).limit(1);
+  if (!match) { res.status(409).json({ error: "This match already has a referee or is no longer available." }); return; }
+  if (action === "reject") {
+    await db.update(refereeMatchApplicationsTable).set({ status: "rejected", updatedAt: new Date() }).where(and(eq(refereeMatchApplicationsTable.id, application.id), eq(refereeMatchApplicationsTable.status, "pending")));
+    res.json({ status: "rejected" }); return;
+  }
+  let referee;
+  try { referee = await getRefereeAssignment(application.refereeUserId); }
+  catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "This referee account is no longer approved." }); return; }
+  const result = await db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(matchesTable).where(eq(matchesTable.id, match.id)).for("update").limit(1);
+    const [pendingApplication] = await tx.select().from(refereeMatchApplicationsTable).where(eq(refereeMatchApplicationsTable.id, application.id)).for("update").limit(1);
+    if (!locked || locked.refereeUserId || !pendingApplication || pendingApplication.status !== "pending") return null;
+    const [updatedMatch] = await tx.update(matchesTable).set({ ...referee, updatedAt: new Date() }).where(and(eq(matchesTable.id, match.id), isNull(matchesTable.refereeUserId))).returning();
+    const [updatedApplication] = await tx.update(refereeMatchApplicationsTable).set({ status: "invited", updatedAt: new Date() }).where(and(eq(refereeMatchApplicationsTable.id, application.id), eq(refereeMatchApplicationsTable.status, "pending"))).returning();
+    return updatedMatch && updatedApplication ? updatedMatch : null;
+  });
+  if (!result) { res.status(409).json({ error: "This application or match has changed. Refresh and try again." }); return; }
+  await notifyRefereeOfAssignment(application.refereeUserId, result);
+  res.json({ status: "invited", message: "Application approved. Contact the referee to coordinate; the assignment becomes final only after they confirm and you confirm it here." });
 });
 
 router.get("/matches/:id/live", async (req, res): Promise<void> => {
@@ -416,13 +577,13 @@ router.get("/players/:userId/profile", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/matches/:id/live/state", requireMatchStaff, async (req, res): Promise<void> => {
+router.post("/matches/:id/live/state", requireAuth, async (req, res): Promise<void> => {
   const params = GetMatchParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: "A valid match ID is required." }); return; }
   const userId = res.locals.userId as string;
   const [current] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
   if (!current) { res.status(404).json({ error: "Match not found." }); return; }
-  if (!(await canControlLiveMatch(userId, current.refereeUserId))) { res.status(403).json({ error: "Only the assigned referee or an admin can control this match." }); return; }
+  if (!(await canControlLiveMatch(userId, current.refereeUserId, current.refereeAssignmentStatus))) { res.status(403).json({ error: "Only the assigned referee after accepting the assignment, or an admin, can control this match." }); return; }
   const action = req.body?.action;
   const now = new Date();
   const updated = await db.transaction(async (tx) => {
@@ -482,7 +643,7 @@ router.post("/matches/:id/live/state", requireMatchStaff, async (req, res): Prom
   res.json(await getLiveMatchSnapshot(updated.id));
 });
 
-router.post("/matches/:id/live/events", requireMatchStaff, async (req, res): Promise<void> => {
+router.post("/matches/:id/live/events", requireAuth, async (req, res): Promise<void> => {
   const params = GetMatchParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: "A valid match ID is required." }); return; }
   const userId = res.locals.userId as string;
@@ -494,7 +655,7 @@ router.post("/matches/:id/live/events", requireMatchStaff, async (req, res): Pro
   const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
   if (!match) { res.status(404).json({ error: "Match not found." }); return; }
   if (match.status !== "published") { res.status(404).json({ error: "This match is not published." }); return; }
-  if (!(await canControlLiveMatch(userId, match.refereeUserId))) { res.status(403).json({ error: "Only the assigned referee or an admin can record match events." }); return; }
+  if (!(await canControlLiveMatch(userId, match.refereeUserId, match.refereeAssignmentStatus))) { res.status(403).json({ error: "Only the assigned referee after accepting the assignment, or an admin, can record match events." }); return; }
   const [duplicate] = await db.select({ id: matchEventsTable.id }).from(matchEventsTable).where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.clientEventId, clientEventId))).limit(1);
   if (duplicate) { res.json(await getLiveMatchSnapshot(match.id)); return; }
   const occurredAt = typeof req.body?.occurredAt === "string" ? new Date(req.body.occurredAt) : new Date();
@@ -576,14 +737,14 @@ router.post("/matches/:id/live/events", requireMatchStaff, async (req, res): Pro
   res.status(201).json(await getLiveMatchSnapshot(match.id));
 });
 
-router.delete("/matches/:id/live/events/:eventId", requireMatchStaff, async (req, res): Promise<void> => {
+router.delete("/matches/:id/live/events/:eventId", requireAuth, async (req, res): Promise<void> => {
   const params = GetMatchParams.safeParse(req.params);
   const eventId = paramId(req.params.eventId);
   if (!params.success) { res.status(400).json({ error: "A valid match ID is required." }); return; }
   const userId = res.locals.userId as string;
   const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
   if (!match) { res.status(404).json({ error: "Match not found." }); return; }
-  if (!(await canControlLiveMatch(userId, match.refereeUserId))) { res.status(403).json({ error: "Only the assigned referee or an admin can correct match events." }); return; }
+  if (!(await canControlLiveMatch(userId, match.refereeUserId, match.refereeAssignmentStatus))) { res.status(403).json({ error: "Only the assigned referee after accepting the assignment, or an admin, can correct match events." }); return; }
   const voidedAt = new Date();
   const event = await db.transaction(async (tx) => {
     const [lockedMatch] = await tx.select({ liveStatus: matchesTable.liveStatus }).from(matchesTable)
@@ -892,7 +1053,15 @@ router.get("/matches/:id/check-in-token", requireAuth, async (req, res): Promise
   res.json({ token, firstName: entry.firstName, expiresAt: expiresAt.toISOString() });
 });
 
-router.post("/admin/matches/:id/check-in", requireMatchStaff, async (req, res): Promise<void> => {
+router.post("/admin/matches/:id/check-in", requireAuth, async (req, res): Promise<void> => {
+  const matchId = paramId(req.params.id);
+  if (!GetMatchParams.safeParse({ id: matchId }).success) { res.status(400).json({ error: "Choose a valid match." }); return; }
+  const userId = res.locals.userId as string;
+  const [assignedMatch] = await db.select({ refereeUserId: matchesTable.refereeUserId, refereeAssignmentStatus: matchesTable.refereeAssignmentStatus })
+    .from(matchesTable).where(eq(matchesTable.id, matchId)).limit(1);
+  if (!assignedMatch || !(await canControlLiveMatch(userId, assignedMatch.refereeUserId, assignedMatch.refereeAssignmentStatus))) {
+    res.status(403).json({ error: "Only the assigned referee after accepting the assignment, or an admin, can check players in." }); return;
+  }
   const token = req.body?.token;
   if (typeof token !== "string" || token.length < 32) { res.status(400).json({ error: "Scan a valid player check-in QR code." }); return; }
   const hash = createHash("sha256").update(token).digest("hex");
@@ -900,7 +1069,7 @@ router.post("/admin/matches/:id/check-in", requireMatchStaff, async (req, res): 
   const row = await db.transaction(async (tx) => {
     const [entry] = await tx.select({ id: registrationsTable.id, firstName: registrationsTable.firstName, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, matchStatus: matchesTable.status })
       .from(registrationsTable).innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id))
-      .where(and(eq(registrationsTable.matchId, paramId(req.params.id)), eq(registrationsTable.checkinTokenHash, hash), eq(registrationsTable.status, "joined"))).for("update").limit(1);
+      .where(and(eq(registrationsTable.matchId, matchId), eq(registrationsTable.checkinTokenHash, hash), eq(registrationsTable.status, "joined"))).for("update").limit(1);
     if (!entry || entry.matchStatus !== "published" || !isCheckInTokenValid(getMatchEndAt(entry.startsAt, entry.durationMinutes), now)) return null;
     const [checkedIn] = await tx.update(registrationsTable).set({ status: "checked_in", checkedInAt: now, checkinTokenHash: null, checkinExpiresAt: null, updatedAt: now })
       .where(and(eq(registrationsTable.id, entry.id), eq(registrationsTable.status, "joined"), eq(registrationsTable.checkinTokenHash, hash)))
@@ -1039,6 +1208,137 @@ router.delete("/admin/admins/:email", requireAuth, requireOwner, async (req, res
   res.json({ removed: true, email: removed.email });
 });
 
+router.get("/admin/referee-access", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+  res.json(await db.select({ email: refereeAccessTable.email, createdAt: refereeAccessTable.createdAt }).from(refereeAccessTable).orderBy(asc(refereeAccessTable.email)));
+});
+
+router.post("/admin/referee-access", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { res.status(400).json({ error: "Enter a valid email address." }); return; }
+  const users = await clerkClient.users.getUserList({ emailAddress: [email], limit: 10 });
+  const account = users.data.find((user) => user.emailAddresses.some((address) => address.verification?.status === "verified" && address.emailAddress.trim().toLowerCase() === email));
+  if (!account) { res.status(404).json({ error: "No account with that verified email was found. Ask them to sign up and verify it first." }); return; }
+  const [grant] = await db.insert(refereeAccessTable).values({ email, grantedByUserId: res.locals.userId as string }).onConflictDoNothing({ target: refereeAccessTable.email }).returning({ email: refereeAccessTable.email, createdAt: refereeAccessTable.createdAt });
+  const [saved] = grant ? [grant] : await db.select({ email: refereeAccessTable.email, createdAt: refereeAccessTable.createdAt }).from(refereeAccessTable).where(eq(refereeAccessTable.email, email)).limit(1);
+  res.status(grant ? 201 : 200).json(saved);
+});
+
+router.delete("/admin/referee-access/:email", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const email = paramId(req.params.email).trim().toLowerCase();
+  const [removed] = await db.delete(refereeAccessTable).where(eq(refereeAccessTable.email, email)).returning({ email: refereeAccessTable.email });
+  if (!removed) { res.status(404).json({ error: "Referee access was not found." }); return; }
+  const users = await clerkClient.users.getUserList({ emailAddress: [email], limit: 10 });
+  const account = users.data.find((user) => user.emailAddresses.some((address) => address.verification?.status === "verified" && address.emailAddress.trim().toLowerCase() === email));
+  if (account) await db.update(matchesTable).set({ refereeAssignmentStatus: "pending", updatedAt: new Date() }).where(eq(matchesTable.refereeUserId, account.id));
+  res.json({ removed: true, email: removed.email });
+});
+
+router.get("/me/pitch-owner", requireAuth, async (_req, res): Promise<void> => {
+  const access = await getPitchOwnerAccess(res.locals.userId as string);
+  if (!access) { res.status(403).json({ error: "Pitch owner access is required." }); return; }
+  res.json({ venueName: access.venueName, neighborhood: access.neighborhood, address: access.address, email: access.email });
+});
+
+router.get("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (_req, res): Promise<void> => {
+  const rows = await db.select().from(pitchMatchSubmissionsTable)
+    .where(eq(pitchMatchSubmissionsTable.ownerUserId, res.locals.userId as string))
+    .orderBy(desc(pitchMatchSubmissionsTable.createdAt)).limit(50);
+  res.json(rows);
+});
+
+router.post("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (req, res): Promise<void> => {
+  const userId = res.locals.userId as string;
+  const access = await getPitchOwnerAccess(userId);
+  if (!access) { res.status(403).json({ error: "Pitch owner access is required." }); return; }
+  const contactPhone = typeof req.body?.contactPhone === "string" ? req.body.contactPhone.trim() : "";
+  const startsAt = new Date(req.body?.startsAt);
+  const durationMinutes = Number(req.body?.durationMinutes);
+  const capacity = Number(req.body?.capacity);
+  const priceHalalas = Number(req.body?.priceHalalas);
+  const compareAtPriceHalalas = Number(req.body?.compareAtPriceHalalas);
+  const imageUrls = req.body?.imageUrls ?? [];
+  if (!/^\+?[0-9][0-9 ()-]{7,18}$/.test(contactPhone)) { res.status(400).json({ error: "Add a valid contact phone number so we can reach you about the pitch." }); return; }
+  if (!Number.isFinite(startsAt.getTime()) || startsAt <= new Date()) { res.status(400).json({ error: "Choose a future match date and time." }); return; }
+  if (!Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > 240 || !Number.isInteger(capacity) || capacity < 2 || capacity > 30) { res.status(400).json({ error: "Use a duration from 30 to 240 minutes and capacity from 2 to 30 players." }); return; }
+  if (!Number.isInteger(priceHalalas) || !Number.isInteger(compareAtPriceHalalas) || priceHalalas < 0 || compareAtPriceHalalas < priceHalalas) { res.status(400).json({ error: "Set a valid player price and a comparison price at least as high." }); return; }
+  if (!isValidMatchImageList(imageUrls)) { res.status(400).json({ error: "Add up to 3 pitch photos. Each photo must be under 1.45 MB." }); return; }
+  const [submission] = await db.insert(pitchMatchSubmissionsTable).values({
+      ownerUserId: userId, ownerEmail: access.email, venueName: access.venueName, neighborhood: access.neighborhood,
+      address: access.address, contactPhone, startsAt, durationMinutes, capacity, priceHalalas, compareAtPriceHalalas,
+      refereeIncluded: req.body?.refereeIncluded !== false, waterIncluded: req.body?.waterIncluded !== false,
+      imageUrls, status: "pending",
+  }).returning();
+  res.status(201).json(submission);
+});
+
+router.get("/admin/pitch-owners", requireAuth, requireOwner, async (_req, res): Promise<void> => {
+  res.json(await db.select().from(pitchOwnerAccessTable).orderBy(asc(pitchOwnerAccessTable.email)));
+});
+
+router.post("/admin/pitch-owners", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+  const venueName = typeof req.body?.venueName === "string" ? req.body.venueName.trim() : "";
+  const neighborhood = typeof req.body?.neighborhood === "string" ? req.body.neighborhood.trim() : "";
+  const address = typeof req.body?.address === "string" ? req.body.address.trim() : "";
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !venueName || venueName.length > 120 || !neighborhood || neighborhood.length > 120 || address.length < 5 || address.length > 500) {
+    res.status(400).json({ error: "Add a valid verified email, pitch name, area, and full address." }); return;
+  }
+  const users = await clerkClient.users.getUserList({ emailAddress: [email], limit: 10 });
+  const account = users.data.find((user) => user.emailAddresses.some((item) => item.verification?.status === "verified" && item.emailAddress.trim().toLowerCase() === email));
+  if (!account) { res.status(404).json({ error: "No account with that verified email was found. Ask them to sign up and verify it first." }); return; }
+  const [access] = await db.insert(pitchOwnerAccessTable).values({ email, venueName, neighborhood, address, grantedByUserId: res.locals.userId as string })
+    .onConflictDoUpdate({ target: pitchOwnerAccessTable.email, set: { venueName, neighborhood, address, grantedByUserId: res.locals.userId as string } }).returning();
+  res.status(200).json(access);
+});
+
+router.delete("/admin/pitch-owners/:email", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const email = paramId(req.params.email).trim().toLowerCase();
+  const [removed] = await db.delete(pitchOwnerAccessTable).where(eq(pitchOwnerAccessTable.email, email)).returning({ email: pitchOwnerAccessTable.email });
+  if (!removed) { res.status(404).json({ error: "Pitch owner access was not found." }); return; }
+  res.json({ removed: true, email: removed.email });
+});
+
+router.get("/admin/pitch-match-submissions", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+  const rows = await db.select().from(pitchMatchSubmissionsTable)
+    .where(eq(pitchMatchSubmissionsTable.status, "pending"))
+    .orderBy(asc(pitchMatchSubmissionsTable.startsAt)).limit(100);
+  res.json(rows);
+});
+
+router.patch("/admin/pitch-match-submissions/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const id = paramId(req.params.id);
+  const action = req.body?.action;
+  const reviewNote = typeof req.body?.reviewNote === "string" ? req.body.reviewNote.trim().slice(0, 300) : null;
+  if (!/^[0-9a-f-]{36}$/i.test(id) || (action !== "approve" && action !== "reject")) { res.status(400).json({ error: "Choose a valid match request and review action." }); return; }
+  const userId = res.locals.userId as string;
+  const recipients = action === "approve" ? await getMatchAlertRecipientIds() : [];
+  const result = await db.transaction(async (tx) => {
+    const [submission] = await tx.select().from(pitchMatchSubmissionsTable).where(eq(pitchMatchSubmissionsTable.id, id)).for("update").limit(1);
+    if (!submission || submission.status !== "pending") return { error: "This request is no longer pending." } as const;
+    const reviewedAt = new Date();
+    if (action === "reject") {
+      const [updated] = await tx.update(pitchMatchSubmissionsTable).set({ status: "rejected", reviewNote, reviewedByUserId: userId, reviewedAt, updatedAt: reviewedAt }).where(eq(pitchMatchSubmissionsTable.id, id)).returning();
+      return { submission: updated, match: null } as const;
+    }
+    const [match] = await tx.insert(matchesTable).values({
+      venueName: submission.venueName, neighborhood: submission.neighborhood, address: submission.address,
+      startsAt: submission.startsAt, durationMinutes: submission.durationMinutes, capacity: submission.capacity,
+      priceHalalas: submission.priceHalalas, compareAtPriceHalalas: submission.compareAtPriceHalalas,
+      status: "published", refereeIncluded: submission.refereeIncluded, waterIncluded: submission.waterIncluded,
+      imageUrls: submission.imageUrls, imageUrl: "match-card",
+    }).returning();
+    const [updated] = await tx.update(pitchMatchSubmissionsTable).set({ status: "approved", reviewNote: null, reviewedByUserId: userId, reviewedAt, matchId: match.id, updatedAt: reviewedAt }).where(eq(pitchMatchSubmissionsTable.id, id)).returning();
+    const message = getNewMatchMessage(match);
+    for (let offset = 0; offset < recipients.length; offset += 100) {
+      await tx.insert(notificationsTable).values(recipients.slice(offset, offset + 100).map((recipientId) => ({ userId: recipientId, matchId: match.id, kind: "new_match", message })));
+    }
+    return { submission: updated, match } as const;
+  });
+  if ("error" in result && typeof result.error === "string") { res.status(400).json({ error: result.error }); return; }
+  if (result.match && recipients.length) void sendPushToUsers(recipients, "A new match is available", getNewMatchMessage(result.match), { matchId: result.match.id, screen: "matches" }).catch(() => undefined);
+  res.json({ submission: result.submission, match: result.match ? await addPitchRatings([result.match]).then((items) => items[0]) : null });
+});
+
 router.get("/admin/referees", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
   const users = [];
   let offset = 0;
@@ -1049,10 +1349,12 @@ router.get("/admin/referees", requireAuth, requireAdmin, async (_req, res): Prom
     offset += page.data.length;
   }
   const adminGrants = await db.select({ email: adminAccessTable.email }).from(adminAccessTable);
+  const refereeGrants = await db.select({ email: refereeAccessTable.email }).from(refereeAccessTable);
   const approvedEmails = new Set([
     ...`${process.env.MATCH_STAFF_EMAILS ?? ""}`.split(",").map((email) => email.trim().toLowerCase()).filter(Boolean),
     OWNER_EMAIL,
     ...adminGrants.map((grant) => grant.email),
+    ...refereeGrants.map((grant) => grant.email),
   ]);
   const referees = users.filter((user) => user.emailAddresses.some((email) => email.verification?.status === "verified" && approvedEmails.has(email.emailAddress.trim().toLowerCase())))
     .map((user) => ({ id: user.id, name: user.fullName ?? user.firstName ?? "Match referee", avatarUrl: user.imageUrl || null }));
@@ -1119,6 +1421,7 @@ router.post(
     });
 
     if (recipients.length) void sendPushToUsers(recipients, "A new match is available", getNewMatchMessage(row), { matchId: row.id, screen: "matches" }).catch(() => undefined);
+    if (row.status === "published" && row.refereeUserId) void notifyRefereeOfAssignment(row.refereeUserId, row).catch(() => undefined);
 
     res
       .status(201)
@@ -1176,7 +1479,12 @@ router.patch(
     const recipients = shouldAnnounce ? await getMatchAlertRecipientIds() : [];
     let refereeAssignment = {};
     if (parsed.data.refereeUserId !== undefined) {
-      try { refereeAssignment = await getRefereeAssignment(parsed.data.refereeUserId); }
+      try {
+        refereeAssignment = await getRefereeAssignment(parsed.data.refereeUserId);
+        if (parsed.data.refereeUserId && parsed.data.refereeUserId === existing.refereeUserId) {
+          refereeAssignment = { ...refereeAssignment, refereeAssignmentStatus: existing.refereeAssignmentStatus === "accepted" || existing.refereeAssignmentStatus === "referee_confirmed" ? existing.refereeAssignmentStatus : "pending" };
+        }
+      }
       catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "Invalid referee." }); return; }
     }
     const [row] = await db.transaction(async (tx) => {
@@ -1205,6 +1513,8 @@ router.patch(
     });
 
     if (shouldAnnounce && recipients.length) void sendPushToUsers(recipients, "A new match is available", getNewMatchMessage(row), { matchId: row.id, screen: "matches" }).catch(() => undefined);
+    const refereeWasAssigned = row.refereeUserId && row.status === "published" && (existing.status !== "published" || existing.refereeUserId !== row.refereeUserId);
+    if (refereeWasAssigned) void notifyRefereeOfAssignment(row.refereeUserId!, row).catch(() => undefined);
 
     res.json(UpdateAdminMatchResponse.parse((await addPitchRatings([row]))[0]));
   },
@@ -1236,4 +1546,3 @@ router.delete(
 );
 
 export default router;
-

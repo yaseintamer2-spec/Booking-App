@@ -179,4 +179,3 @@ const styles = StyleSheet.create({
   matchInfo: { fontSize: 10, lineHeight: 15, marginTop: 7 },
   unreadDot: { width: 7, height: 7, borderRadius: 4, marginTop: 4 },
 });
-

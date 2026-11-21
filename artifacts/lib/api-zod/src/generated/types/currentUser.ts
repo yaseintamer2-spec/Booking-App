@@ -12,5 +12,5 @@ export interface CurrentUser {
   name: string;
   isAdmin: boolean;
   isOwner: boolean;
+  isPitchOwner: boolean;
 }
-

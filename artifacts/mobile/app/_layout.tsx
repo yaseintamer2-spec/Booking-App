@@ -46,11 +46,13 @@ function RootLayoutNav() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const openMatch = (response: Notifications.NotificationResponse | null) => {
-      const data = response?.notification.request.content.data as { matchId?: unknown } | undefined;
+      const data = response?.notification.request.content.data as { matchId?: unknown; screen?: unknown } | undefined;
       const responseId = response?.notification.request.identifier;
       if (typeof data?.matchId !== 'string' || !responseId || lastNotificationResponse.current === responseId) return;
       lastNotificationResponse.current = responseId;
-      router.push({ pathname: '/match-registration', params: { id: data.matchId } });
+      if (data.screen === 'referee-matches') router.push('/referee-matches');
+      else if (data.screen === 'admin') router.push('/admin');
+      else router.push({ pathname: '/match-registration', params: { id: data.matchId } });
       void Notifications.clearLastNotificationResponseAsync();
     };
     const subscription = Notifications.addNotificationResponseReceivedListener(openMatch);
@@ -76,6 +78,7 @@ function RootLayoutNav() {
       <Stack.Screen name="wallet" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="admin" />
+      <Stack.Screen name="pitch-owner" />
       <Stack.Screen name="staff-check-in" />
       <Stack.Screen name="referee-matches" />
       <Stack.Screen name="referee-match/[id]" />
@@ -163,5 +166,4 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 });
-
 

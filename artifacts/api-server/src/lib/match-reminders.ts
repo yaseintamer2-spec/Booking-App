@@ -53,4 +53,51 @@ export async function sendDueMatchReminders(now = new Date()): Promise<void> {
   }
 }
 
+/** Sends idempotent in-app and push reminders to referees after both sides finalize an assignment. */
+export async function sendDueRefereeMatchReminders(now = new Date()): Promise<void> {
+  const reminders = [
+    { kind: "referee_match_reminder_24h", title: "Referee assignment tomorrow", leadStart: 23 * 60 * 60_000, leadEnd: 24 * 60 * 60_000, body: "Your confirmed referee assignment is tomorrow." },
+    { kind: "referee_match_reminder_1h", title: "Referee assignment in about an hour", leadStart: 0, leadEnd: REMINDER_LEAD_MS, body: "Your confirmed referee assignment starts in about an hour." },
+  ] as const;
+
+  for (const reminder of reminders) {
+    const matches = await db.select({ id: matchesTable.id, venueName: matchesTable.venueName, startsAt: matchesTable.startsAt, refereeUserId: matchesTable.refereeUserId })
+      .from(matchesTable)
+      .where(and(
+        eq(matchesTable.status, "published"),
+        eq(matchesTable.refereeAssignmentStatus, "accepted"),
+        gt(matchesTable.startsAt, new Date(now.getTime() + reminder.leadStart)),
+        lt(matchesTable.startsAt, new Date(now.getTime() + reminder.leadEnd)),
+      ));
+
+    for (const match of matches) {
+      if (!match.refereeUserId) continue;
+      const kickoff = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Riyadh", weekday: "short", hour: "numeric", minute: "2-digit" }).format(match.startsAt);
+      const message = `${reminder.body} ${match.venueName} · ${kickoff} Riyadh.`;
+      const [notification] = await db.insert(notificationsTable).values({ userId: match.refereeUserId, matchId: match.id, kind: reminder.kind, message })
+        .onConflictDoNothing()
+        .returning({ id: notificationsTable.id });
+      if (!notification) continue;
+
+      const tokens = await db.select().from(pushTokensTable).where(eq(pushTokensTable.userId, match.refereeUserId));
+      if (!tokens.length) continue;
+      try {
+        const response = await fetch("https://exp.host/--/api/v2/push/send", {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json", ...(process.env.EXPO_ACCESS_TOKEN ? { Authorization: `Bearer ${process.env.EXPO_ACCESS_TOKEN}` } : {}) },
+          body: JSON.stringify(tokens.map(({ expoPushToken }) => ({ to: expoPushToken, title: reminder.title, body: message, data: { type: reminder.kind, matchId: match.id, screen: "referee-matches" }, sound: "default", channelId: "match-updates" }))),
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!response.ok) continue;
+        const result = await response.json() as { data?: Array<{ status?: string; details?: { error?: string } }> };
+        const successful = result.data?.some(ticket => ticket.status === "ok") ?? false;
+        const staleTokens = tokens.filter((_, index) => result.data?.[index]?.details?.error === "DeviceNotRegistered");
+        for (const stale of staleTokens) await db.delete(pushTokensTable).where(eq(pushTokensTable.expoPushToken, stale.expoPushToken));
+        if (successful) await db.update(notificationsTable).set({ pushSentAt: new Date() }).where(eq(notificationsTable.id, notification.id));
+      } catch {
+        // The in-app reminder is saved even when push delivery is temporarily unavailable.
+      }
+    }
+  }
+}
 

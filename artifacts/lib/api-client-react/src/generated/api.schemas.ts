@@ -19,6 +19,7 @@ export interface CurrentUser {
   name: string;
   isAdmin: boolean;
   isOwner: boolean;
+  isPitchOwner: boolean;
 }
 
 export type MatchFormat = typeof MatchFormat[keyof typeof MatchFormat];
@@ -161,5 +162,4 @@ export type ForbiddenResponse = Error;
  * Resource not found
  */
 export type NotFoundResponse = Error;
-
 

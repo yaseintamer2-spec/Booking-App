@@ -25,7 +25,8 @@ export const GetCurrentUserResponse = zod.object({
   "email": zod.string().email(),
   "name": zod.string(),
   "isAdmin": zod.boolean(),
-  "isOwner": zod.boolean()
+  "isOwner": zod.boolean(),
+  "isPitchOwner": zod.boolean()
 })
 
 
@@ -296,6 +297,5 @@ export const DeleteAdminMatchParams = zod.object({
 })
 
 export const DeleteAdminMatchResponse = zod.void()
-
 
 

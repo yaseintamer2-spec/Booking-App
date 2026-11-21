@@ -1146,4 +1146,3 @@ const styles = StyleSheet.create({
   profileFootnote: { fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 13 },
   profileError: { fontSize: 11, textAlign: 'center', marginTop: 12 },
 });
-
