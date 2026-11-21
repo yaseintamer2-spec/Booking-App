@@ -1,3 +1,5 @@
+import type { Match } from '@workspace/api-client-react';
+
 export type PositionPreference =
   | 'anywhere'
   | 'goalkeeper'
@@ -76,6 +78,35 @@ export const matchRegistrationMock: {
     { userId: 'u9', firstName: 'Daniel', avatarUrl: 'https://i.pravatar.cc/120?img=14', positionPreference: 'attacker' },
   ],
   currentUser: { userId: 'me', firstName: 'Yasein', avatarUrl: null },
+};
+
+/** Local sample listing shown in Home and Discover so the registration preview stays reachable without a running API. */
+export const sampleMatchListing: Match = {
+  id: matchRegistrationMock.match.id,
+  venueName: matchRegistrationMock.match.pitchName,
+  neighborhood: matchRegistrationMock.match.area,
+  address: matchRegistrationMock.match.address || matchRegistrationMock.match.area,
+  startsAt: matchRegistrationMock.match.startsAt,
+  durationMinutes: matchRegistrationMock.match.durationHours * 60,
+  format: '7v7',
+  capacity: matchRegistrationMock.match.maxPlayers,
+  ageGroup: matchRegistrationMock.match.ageGroup,
+  bookedCount: matchRegistrationMock.participants.length,
+  spotsRemaining: Math.max(0, matchRegistrationMock.match.maxPlayers - matchRegistrationMock.participants.length),
+  priceHalalas: Math.round(matchRegistrationMock.match.pricePerPlayer * 100),
+  compareAtPriceHalalas: Math.round(matchRegistrationMock.match.pricePerPlayer * 100),
+  status: 'published',
+  refereeIncluded: true,
+  refereeUserId: null,
+  refereeName: null,
+  refereeAvatarUrl: null,
+  pitchRatingAverage: null,
+  pitchRatingCount: 0,
+  waterIncluded: true,
+  imageUrl: matchRegistrationMock.match.imageUrl || '',
+  imageUrls: matchRegistrationMock.match.imageUrls || [],
+  isDemo: true,
+  createdAt: matchRegistrationMock.match.startsAt,
 };
 
 /** Local-only stand-in; replace with the app's join/payment action later. */
