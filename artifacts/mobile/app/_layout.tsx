@@ -41,6 +41,14 @@ if (apiBaseUrl) setBaseUrl(apiBaseUrl);
 
 function RootLayoutNav() {
   const colors = useColors();
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const style = document.createElement('style');
+    style.dataset.kickoffInputFocus = 'true';
+    style.textContent = 'input:focus, textarea:focus { outline: none !important; box-shadow: none !important; }';
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
   return (
     <Stack screenOptions={{ headerBackTitle: 'Back', headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
       <Stack.Screen name="index" />

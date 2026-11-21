@@ -15,7 +15,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { getGetCurrentUserQueryKey, getGetMatchQueryKey, useGetCurrentUser, useGetMatch } from '@workspace/api-client-react';
-import { useAuth } from '@clerk/expo';
+import { useAuth, useUser } from '@clerk/expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { NotificationsButton } from '@/components/NotificationsButton';
@@ -100,6 +100,7 @@ export default function MatchRegistrationScreen() {
   const { id: routeId } = useLocalSearchParams<{ id?: string }>();
   const liveMatchId = Array.isArray(routeId) ? routeId[0] : routeId;
   const { getToken } = useAuth();
+  const { user: clerkUser } = useUser();
   const remoteMatch = useGetMatch(liveMatchId || '', { query: { queryKey: getGetMatchQueryKey(liveMatchId || ''), enabled: !!liveMatchId } });
   const account = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: !!liveMatchId, retry: false } });
   const match = remoteMatch.data ? {
@@ -117,7 +118,7 @@ export default function MatchRegistrationScreen() {
   const currentUser = account.data ? {
     userId: account.data.id,
     firstName: account.data.name.split(' ')[0],
-    avatarUrl: null,
+    avatarUrl: clerkUser?.imageUrl ?? null,
   } : matchRegistrationMock.currentUser;
   const [noticeVisible, setNoticeVisible] = useState(SHOW_PREVIEW_NOTICE);
   const [participants, setParticipants] = useState(
@@ -156,6 +157,11 @@ export default function MatchRegistrationScreen() {
       .catch(() => { if (active) setJoinError('Could not load the live player list. Please try again.'); });
     return () => { active = false; };
   }, [liveMatchId, currentUser.userId]));
+  useEffect(() => {
+    setParticipants((current) => current.map((participant) => participant.userId === currentUser.userId
+      ? { ...participant, avatarUrl: currentUser.avatarUrl }
+      : participant));
+  }, [currentUser.avatarUrl, currentUser.userId]);
   const joinedCount = participants.length;
   const isFull = joinedCount >= match.maxPlayers || match.status === 'full';
   const isCancelled = match.status === 'cancelled';
@@ -534,7 +540,7 @@ export default function MatchRegistrationScreen() {
               {confirmationTickets.map((ticket) => (
                 <View key={ticket.id} style={[styles.ticketCard, { borderColor: colors.border }]}>
                   <Text style={[styles.ticketName, { color: colors.foreground }]}>{ticket.firstName} · Spot {ticket.pitchSlot + 1}</Text>
-                  <QRCode value={ticket.value} size={190} color="#07120A" backgroundColor="#FFFFFF" />
+                  <View style={{ padding: 9, borderWidth: 5, borderColor: colors.primary, borderRadius: 19, backgroundColor: '#FFFFFF' }}><View style={{ padding: 8, backgroundColor: '#FFFFFF' }}><QRCode value={ticket.value} size={190} color="#07120A" backgroundColor="#FFFFFF" /></View></View>
                   <Text style={[styles.ticketExpiry, { color: colors.mutedForeground }]}>Valid until {new Date(ticket.expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</Text>
                 </View>
               ))}
