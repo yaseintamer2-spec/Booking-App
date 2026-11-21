@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
+import { hasVerifiedOwnerEmail } from '@/lib/roles';
 
 type Props = { visible: boolean; onClose: () => void };
 
@@ -15,6 +16,7 @@ export function AccountMenu({ visible, onClose }: Props) {
   const router = useRouter();
   const { user } = useUser();
   const access = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: visible, retry: false } });
+  const isAdmin = access.data?.isAdmin === true || hasVerifiedOwnerEmail(user?.emailAddresses);
   const { signOut } = useClerk();
   const [confirming, setConfirming] = useState(false);
   const [working, setWorking] = useState(false);
@@ -56,8 +58,8 @@ export function AccountMenu({ visible, onClose }: Props) {
           </View>
           <MenuAction label="My profile" icon="user" color={colors.foreground} onPress={() => navigate('/(tabs)/profile')} />
           <MenuAction label="My matches" icon="calendar" color={colors.foreground} onPress={() => navigate('/(tabs)/my-matches')} />
-          {access.data?.isAdmin ? <MenuAction label="Owner & admin console" icon="shield" color={colors.primary} onPress={() => navigate('/admin')} /> : null}
-          {access.data?.isAdmin ? <MenuAction label="Referee match desk" icon="activity" color={colors.foreground} onPress={() => navigate('/referee-matches')} /> : null}
+          {isAdmin ? <MenuAction label="Owner & admin console" icon="shield" color={colors.primary} onPress={() => navigate('/admin')} /> : null}
+          {isAdmin ? <MenuAction label="Referee match desk" icon="activity" color={colors.foreground} onPress={() => navigate('/referee-matches')} /> : null}
           {access.data?.isPitchOwner ? <MenuAction label="Pitch owner desk" icon="flag" color={colors.primary} onPress={() => navigate('/pitch-owner')} /> : null}
           <MenuAction label="Settings" icon="settings" color={colors.foreground} onPress={() => navigate('/settings')} />
           <MenuAction label="Sign out" icon="log-out" color={colors.destructive} onPress={() => setConfirming(true)} />

@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useQueryClient } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
-import { useAuth } from '@clerk/expo';
+import { useAuth, useUser } from '@clerk/expo';
 import { getGetCurrentUserQueryKey, getListAdminMatchesQueryKey, getListMatchesQueryKey, useCreateAdminMatch, useDeleteAdminMatch, useGetCurrentUser, useListAdminMatches, useUpdateAdminMatch } from '@workspace/api-client-react';
 import type { Match } from '@workspace/api-client-react';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -15,6 +15,7 @@ import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { uploadMatchImages } from '@/lib/matchImageUpload';
 import { MatchAgeGroupPicker } from '@/components/MatchAgeGroupPicker';
 import type { MatchAgeGroup } from '@/lib/matchAge';
+import { hasVerifiedOwnerEmail, OWNER_EMAIL } from '@/lib/roles';
 
 type Referee = { id: string; name: string; avatarUrl: string | null };
 type AdminGrant = { email: string; createdAt: string };
@@ -43,16 +44,17 @@ function fromMatch(match: Match): FormState {
 }
 
 export default function AdminScreen() {
-  const colors = useColors(); const insets = useSafeAreaInsets(); const qc = useQueryClient(); const router = useRouter(); const { getToken } = useAuth();
+  const colors = useColors(); const insets = useSafeAreaInsets(); const qc = useQueryClient(); const router = useRouter(); const { getToken } = useAuth(); const { user } = useUser();
   const me = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
-  const isAdmin = !!me.data?.isAdmin;
-  const isOwner = !!me.data?.isOwner;
+  const ownerFromVerifiedEmail = hasVerifiedOwnerEmail(user?.emailAddresses);
+  const isAdmin = !!me.data?.isAdmin || ownerFromVerifiedEmail;
+  const isOwner = !!me.data?.isOwner || ownerFromVerifiedEmail;
   const list = useListAdminMatches({ query: { queryKey: getListAdminMatchesQueryKey(), enabled: isAdmin } });
   const create = useCreateAdminMatch(); const update = useUpdateAdminMatch(); const remove = useDeleteAdminMatch();
   const [referees, setReferees] = useState<Referee[]>([]);
   const [refereeLoadError, setRefereeLoadError] = useState('');
   const [adminGrants, setAdminGrants] = useState<AdminGrant[]>([]);
-  const [ownerEmail, setOwnerEmail] = useState('yaseintamer2@gmail.com');
+  const [ownerEmail, setOwnerEmail] = useState(OWNER_EMAIL);
   const [adminEmail, setAdminEmail] = useState('');
   const [adminAccessBusy, setAdminAccessBusy] = useState(false);
   const [adminAccessError, setAdminAccessError] = useState('');
@@ -149,9 +151,9 @@ export default function AdminScreen() {
     setFormError('');
   };
   const removePhoto = (index: number) => setForm(old => { const imageUrls = old.imageUrls.filter((_, photoIndex) => photoIndex !== index); return { ...old, imageUrls, imageUrl: imageUrls[0] || '' }; });
-  if (me.isLoading) return <Screen><BrandHeader back user={me.data} subtitle="KICKOFF OPERATIONS" /><LoadingState /></Screen>;
+  if (me.isLoading && !ownerFromVerifiedEmail) return <Screen><BrandHeader back user={me.data} subtitle="KICKOFF OPERATIONS" /><LoadingState /></Screen>;
   if (me.data && !isAdmin) return <Screen><BrandHeader back user={me.data} /><EmptyState icon="shield" title="Admin access only." body="Your account is not allowlisted for the KICKOFF admin console." /></Screen>;
-  if (me.error || !me.data) return <Screen><BrandHeader back subtitle="KICKOFF OPERATIONS" /><EmptyState icon="alert-circle" title="Admin data unavailable." body="Sign in with an administrator account to use the match console." /></Screen>;
+  if ((me.error || !me.data) && !ownerFromVerifiedEmail) return <Screen><BrandHeader back subtitle="KICKOFF OPERATIONS" /><EmptyState icon="alert-circle" title="Admin data unavailable." body="Sign in with an administrator account to use the match console." /></Screen>;
   return <>
     <Screen><BrandHeader back user={me.data} subtitle="KICKOFF OPERATIONS" />
       <View style={styles.headingRow}><View><Text style={[styles.kicker, { color: colors.primary }]}>RIYADH / MATCH MANAGEMENT</Text><Text style={[styles.title, { color: colors.foreground }]}>Admin console.</Text></View><Pressable onPress={openCreate} style={[styles.addButton, { backgroundColor: colors.primary }]} testID="create-match"><Feather name="plus" size={19} color={colors.primaryForeground} /></Pressable></View>
