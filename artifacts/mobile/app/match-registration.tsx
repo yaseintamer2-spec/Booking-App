@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   Image,
+  ImageBackground,
   Linking,
   Modal,
   Pressable,
@@ -13,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { getGetCurrentUserQueryKey, getGetMatchQueryKey, useGetCurrentUser, useGetMatch } from '@workspace/api-client-react';
 import { useAuth, useUser } from '@clerk/expo';
@@ -360,28 +362,44 @@ export default function MatchRegistrationScreen() {
               onDismiss={() => setNoticeVisible(false)}
             />
           ) : null}
-          <Text style={[styles.matchKicker, { color: colors.primary }]}>
-            {`7x7 · ${match.durationHours} HOURS · REFEREE INCLUDED`}
-          </Text>
-          <Text style={[styles.matchTitle, { color: colors.foreground }]}>
-            {dateTitle}
-          </Text>
-          <Text style={[styles.matchSubtitle, { color: colors.mutedForeground }]}>
-            {match.pitchName} · {match.area}
-          </Text>
-          <Pressable
-            accessibilityRole="link"
-            accessibilityLabel={`Open ${match.pitchName} in Google Maps`}
-            onPress={() => {
-              const query = `${match.pitchName}, ${match.address || match.area}, Riyadh`;
-              void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
-            }}
-            style={styles.mapsLink}
+          <ImageBackground
+            source={require('../assets/images/riyadh-pitch-hero.jpg')}
+            resizeMode="cover"
+            imageStyle={styles.registrationHeroImage}
+            style={styles.registrationHero}
+            accessibilityLabel="Football pitch under the Riyadh skyline at night"
           >
-            <Feather name="map-pin" size={14} color={colors.primary} />
-            <Text style={[styles.mapsLinkText, { color: colors.primary }]}>View pitch location in Google Maps</Text>
-            <Feather name="arrow-up-right" size={13} color={colors.primary} />
-          </Pressable>
+            <LinearGradient
+              pointerEvents="none"
+              colors={['rgba(5,17,26,0.04)', 'rgba(5,17,26,0.35)', 'rgba(5,17,26,0.94)']}
+              locations={[0, 0.42, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.registrationHeroCopy}>
+              <Text style={[styles.matchKicker, { color: colors.primary }]}>
+                {`7x7 · ${match.durationHours} HOURS · REFEREE INCLUDED`}
+              </Text>
+              <Text style={[styles.matchTitle, { color: colors.foreground }]}>
+                {dateTitle}
+              </Text>
+              <Text style={[styles.matchSubtitle, { color: colors.foreground }]}>
+                {match.pitchName} · {match.area}
+              </Text>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={`Open ${match.pitchName} in Google Maps`}
+                onPress={() => {
+                  const query = `${match.pitchName}, ${match.address || match.area}, Riyadh`;
+                  void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
+                }}
+                style={styles.mapsLink}
+              >
+                <Feather name="map-pin" size={14} color={colors.primary} />
+                <Text style={[styles.mapsLinkText, { color: colors.primary }]}>View pitch location in Google Maps</Text>
+                <Feather name="arrow-up-right" size={13} color={colors.primary} />
+              </Pressable>
+            </View>
+          </ImageBackground>
           <View accessibilityRole="alert" style={[styles.agePolicy, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="shield" size={16} color={colors.primary} /><Text style={[styles.agePolicyText, { color: colors.mutedForeground }]}>Age group: <Text style={{ color: colors.foreground, fontWeight: '800' }}>{match.ageGroup.replace('-', '–')}</Text>. The referee checks age at the venue and may refuse entry if you do not meet this group, even if you have paid.</Text></View>
           <View style={[styles.matchTrust, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={[styles.trustRating, { backgroundColor: colors.secondary }]}><Feather name="star" size={15} color={colors.amber} /><View><Text accessibilityLabel={match.pitchRatingAverage == null ? 'Pitch rating: no reviews yet' : `Pitch rating ${match.pitchRatingAverage.toFixed(1)} out of 5 from ${match.pitchRatingCount || 0} reviews`} style={[styles.trustValue, { color: colors.foreground }]}>{match.pitchRatingAverage == null ? 'New pitch' : `${match.pitchRatingAverage.toFixed(1)} / 5`}</Text><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>{match.pitchRatingCount ? `${match.pitchRatingCount} player ratings` : 'No player ratings yet'}</Text></View></View>
@@ -1072,6 +1090,9 @@ const styles = StyleSheet.create({
   matchKicker: { fontSize: 12, letterSpacing: 1.3, fontWeight: '700', marginTop: 6 },
   matchTitle: { fontSize: 34, lineHeight: 40, fontWeight: '800', marginTop: 8 },
   matchSubtitle: { fontSize: 14, marginTop: 3 },
+  registrationHero: { height: 248, marginTop: 4, marginBottom: 14, borderRadius: 22, overflow: 'hidden', justifyContent: 'flex-end', backgroundColor: SCREEN_COLORS.card },
+  registrationHeroImage: { borderRadius: 22 },
+  registrationHeroCopy: { paddingHorizontal: 18, paddingBottom: 8 },
   mapsLink: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 8, paddingRight: 8, marginTop: 2, marginBottom: 5 },
   mapsLinkText: { fontSize: 11, fontWeight: '700', textDecorationLine: 'underline' },
   agePolicy: { flexDirection: 'row', gap: 9, alignItems: 'flex-start', borderWidth: 1, borderRadius: 13, padding: 11, marginBottom: 8 },

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useAuth, useSignUp } from '@clerk/expo';
 import { Feather } from '@expo/vector-icons';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
-import { BrandHeader, Button, Field, GoogleSignInButton } from '@/components/KickoffUI';
+import { BrandHeader, Button, Field, GoogleSignInButton, heroImage } from '@/components/KickoffUI';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,7 +39,9 @@ export default function SignUpScreen() {
     }
   };
   const errorsText = errors.fields.emailAddress?.message || errors.fields.password?.message || errors.fields.code?.message;
-  return <View style={{ flex: 1, backgroundColor: colors.background }}><BrandHeader back hideMenu />
+  return <ImageBackground source={heroImage} resizeMode="cover" style={styles.background}>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop]} />
+    <BrandHeader back hideMenu />
     <KeyboardAwareScrollViewCompat bottomOffset={72} contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 28 }]}>
       <Text style={[styles.eyebrow, { color: colors.primary }]}>{verifyStep ? 'ONE LAST STEP' : 'MAKE ROOM FOR GAME NIGHT'}</Text>
       <Text style={[styles.title, { color: colors.foreground }]}>{verifyStep ? 'Check your inbox.' : 'Join the\nline-up.'}</Text>
@@ -52,7 +54,7 @@ export default function SignUpScreen() {
       <View style={styles.footer}><Text style={[styles.copy, { color: colors.mutedForeground }]}>Already a member? </Text><Link href="/(auth)/sign-in" style={{ color: colors.primary, fontWeight: '700' }}>Sign in</Link></View>
       <View style={[styles.security, { borderColor: colors.border }]}><Feather name="lock" size={14} color={colors.primary} /><Text style={[styles.helper, { color: colors.mutedForeground }]}>Your account is secured by Clerk. Email verification happens once during sign-up.</Text></View>
     </KeyboardAwareScrollViewCompat>
-  </View>;
+  </ImageBackground>;
 }
 function LegalConsentRow({ checked, onPress, colors, router }: { checked: boolean; onPress: () => void; colors: ReturnType<typeof useColors>; router: ReturnType<typeof useRouter> }) {
   return <View style={styles.legalRow}>
@@ -61,4 +63,4 @@ function LegalConsentRow({ checked, onPress, colors, router }: { checked: boolea
   </View>;
 }
 
-const styles = StyleSheet.create({ container: { paddingHorizontal: 24, paddingTop: 19 }, eyebrow: { fontSize: 10, letterSpacing: 1.7, fontWeight: '700' }, title: { fontSize: 36, lineHeight: 41, fontFamily: 'Georgia', marginTop: 10 }, copy: { fontSize: 13, lineHeight: 20, marginTop: 9 }, helper: { fontSize: 11, lineHeight: 17, marginBottom: 17 }, error: { fontSize: 12, marginTop: 14 }, footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 27 }, resend: { alignSelf: 'center', padding: 15 }, resendText: { fontSize: 12, fontWeight: '700' }, security: { borderTopWidth: 1, marginTop: 25, paddingTop: 16, flexDirection: 'row', gap: 10 }, divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 22 }, rule: { height: 1, flex: 1 }, or: { fontSize: 9, letterSpacing: 1.3 }, legalRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 15 }, legalCheck: { width: 22, height: 22, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center' }, legalText: { flex: 1, fontSize: 11, lineHeight: 17 }, legalHint: { textAlign: 'center', fontSize: 10, marginTop: 8 } });
+const styles = StyleSheet.create({ background: { flex: 1, width: '100%', height: '100%' }, backdrop: { backgroundColor: 'rgba(5,17,26,0.74)' }, container: { paddingHorizontal: 24, paddingTop: 19 }, eyebrow: { fontSize: 10, letterSpacing: 1.7, fontWeight: '700' }, title: { fontSize: 36, lineHeight: 41, fontFamily: 'Georgia', marginTop: 10 }, copy: { fontSize: 13, lineHeight: 20, marginTop: 9 }, helper: { fontSize: 11, lineHeight: 17, marginBottom: 17 }, error: { fontSize: 12, marginTop: 14 }, footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 27 }, resend: { alignSelf: 'center', padding: 15 }, resendText: { fontSize: 12, fontWeight: '700' }, security: { borderTopWidth: 1, marginTop: 25, paddingTop: 16, flexDirection: 'row', gap: 10 }, divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 22 }, rule: { height: 1, flex: 1 }, or: { fontSize: 9, letterSpacing: 1.3 }, legalRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 15 }, legalCheck: { width: 22, height: 22, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center' }, legalText: { flex: 1, fontSize: 11, lineHeight: 17 }, legalHint: { textAlign: 'center', fontSize: 10, marginTop: 8 } });

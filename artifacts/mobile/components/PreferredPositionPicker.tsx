@@ -1,13 +1,13 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 
 export const PLAYER_POSITIONS = [
-  { value: 'striker', label: 'Striker', short: 'ST', icon: 'target', detail: 'Lead the attack' },
-  { value: 'defender', label: 'Defender', short: 'DF', icon: 'shield', detail: 'Hold the back line' },
-  { value: 'midfielder', label: 'Midfielder', short: 'MF', icon: 'activity', detail: 'Link up the play' },
-  { value: 'winger', label: 'Winger', short: 'WG', icon: 'wind', detail: 'Bring pace out wide' },
+  { value: 'striker', label: 'Striker', short: 'ST', icon: 'soccer', detail: 'Lead the attack' },
+  { value: 'defender', label: 'Defender', short: 'DF', icon: 'shield-check', detail: 'Hold the back line' },
+  { value: 'midfielder', label: 'Midfielder', short: 'MF', icon: 'transfer', detail: 'Link up the play' },
+  { value: 'winger', label: 'Winger', short: 'WG', icon: 'run-fast', detail: 'Bring pace out wide' },
 ] as const;
 
 export type PlayerPosition = typeof PLAYER_POSITIONS[number]['value'];
@@ -27,7 +27,7 @@ export function PreferredPositionPicker({ selected, onSelect }: { selected: Play
         onPress={() => onSelect(position.value)}
         style={({ pressed }) => [styles.option, { backgroundColor: active ? colors.accent : colors.card, borderColor: active ? colors.primary : colors.border, opacity: pressed ? .78 : 1 }]}
       >
-        <View style={[styles.optionIcon, { backgroundColor: active ? colors.primary : colors.secondary }]}><Feather name={position.icon} size={17} color={active ? colors.primaryForeground : colors.primary} /></View>
+        <View style={[styles.optionIcon, { backgroundColor: active ? colors.primary : colors.secondary }]}><MaterialCommunityIcons name={position.icon} size={22} color={active ? colors.primaryForeground : colors.primary} /></View>
         <View style={styles.optionCopy}><Text style={[styles.optionTitle, { color: colors.foreground }]}>{position.label}</Text><Text style={[styles.optionDetail, { color: colors.mutedForeground }]}>{position.detail}</Text></View>
         {active ? <Feather name="check-circle" size={17} color={colors.primary} /> : null}
       </Pressable>;
