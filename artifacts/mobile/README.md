@@ -33,3 +33,9 @@ New matches default to 7v7, 14 spots, a 120-minute booking, SAR 30 per player, a
 ## Payments
 
 The app does not currently take payments, collect card details, or create paid bookings. The checkout screen is prepared for a later integration, and the API contains a provider boundary for checkout creation, webhook verification, and refunds. Connect a Saudi-compatible provider and configure its server-side credentials before enabling any payment action.
+
+## Legal pages and refund readiness
+
+Sign-up links to the Terms of Service and Privacy Notice and requires acceptance; sign-in flows also require current terms acceptance before opening the main tabs. Acceptance is versioned in `legal_acceptances`; apply migration `0016_legal_acceptances.sql` before deploying this API. Privacy, Terms, Cancellations & Refunds, and Community Standards appear under **Settings → Legal & Privacy**. These are app-specific review drafts and visibly contain placeholders for the registered operator, licence/CR, address, support/privacy contacts, processor locations, and data-retention schedule. Complete them and obtain Saudi legal review before public launch.
+
+Paid bookings remain disabled. A **Request refund** action is shown only for a paid booking; the existing API intentionally rejects paid cancellations until the selected payment provider, transaction references, replacement-seat handling, and refund processing are connected. The draft refund policy is full refund at least 24 hours before kickoff; within 24 hours, the place is released and a 50% refund is due only after a replacement player successfully books and pays before kickoff. If no replacement takes the place, the draft policy provides no late refund, subject to mandatory consumer rights. Do not enable paid checkout until this whole workflow and the final policy are verified.

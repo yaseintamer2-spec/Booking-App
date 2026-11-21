@@ -42,6 +42,9 @@ export default function SettingsScreen() {
       </Pressable>
       {locationMessage ? <Text accessibilityLiveRegion="polite" style={[styles.settingCopy, { color: locationMessage.startsWith('Location is enabled') ? colors.primary : colors.destructive }]}>{locationMessage}</Text> : null}
     </View>
+    <View style={[styles.section, { borderColor: colors.border }]}><Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>LEGAL & PRIVACY</Text>
+      {[['Privacy Notice', 'privacy'], ['Terms of Service', 'terms'], ['Cancellations & Refunds', 'refunds'], ['Community Standards', 'community']].map(([label, path]) => <Pressable key={path} accessibilityRole="link" onPress={() => router.push(`/legal/${path}` as never)} style={styles.setting}><Feather name="file-text" size={16} color={colors.primary} /><Text style={[styles.settingTitle, { color: colors.foreground, flex: 1 }]}>{label}</Text><Feather name="chevron-right" size={16} color={colors.mutedForeground} /></Pressable>)}
+    </View>
     <Pressable disabled={working} onPress={logout} style={[styles.signOut, { borderColor: colors.border }]}><Feather name="log-out" size={17} color={colors.destructive} /><Text style={[styles.signOutText, { color: colors.destructive }]}>{working ? 'Signing out…' : 'Sign out'}</Text></Pressable>
   </Screen>;
 }

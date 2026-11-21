@@ -327,3 +327,11 @@ export const playerProfilesTable = pgTable(
     check("player_profiles_preferred_position_check", sql`${table.preferredPosition} IN ('striker', 'defender', 'midfielder', 'winger')`),
   ],
 );
+
+/** Versioned record that the signed-in player accepted the current legal terms. */
+export const legalAcceptancesTable = pgTable("legal_acceptances", {
+  userId: text("user_id").primaryKey(),
+  termsVersion: text("terms_version").notNull(),
+  privacyVersion: text("privacy_version").notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
+});

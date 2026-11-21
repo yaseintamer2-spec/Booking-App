@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Image, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -9,15 +9,37 @@ import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PositionBadge } from '@/components/PreferredPositionPicker';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
+import { useRouter } from 'expo-router';
 
 export default function TabsLayout() {
   const colors = useColors();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useUser();
   const { getToken } = useAuth();
   const [accountMenuVisible, setAccountMenuVisible] = useState(false);
   const [preferredPosition, setPreferredPosition] = useState<string | null>(null);
+  const [legalStatus, setLegalStatus] = useState<'checking' | 'accepted' | 'required' | 'error'>('checking');
+  const [legalAttempt, setLegalAttempt] = useState(0);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const token = await getToken();
+        const response = await fetch(`${apiBaseUrl}/api/legal/acceptance`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        const result = await response.json();
+        if (!response.ok) throw new Error('Could not verify the current terms.');
+        if (!active) return;
+        if (result.accepted) setLegalStatus('accepted');
+        else { setLegalStatus('required'); router.replace('/legal/accept'); }
+      } catch { if (active) setLegalStatus('error'); }
+    })();
+    return () => { active = false; };
+  }, [getToken, legalAttempt, router]);
   useEffect(() => { let active = true; (async () => { try { const token = await getToken(); const response = await fetch(`${apiBaseUrl}/api/me/preferred-position`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active && response.ok && typeof result.preferredPosition === 'string') setPreferredPosition(result.preferredPosition); } catch { /* The profile screen can refresh the badge later. */ } })(); return () => { active = false; }; }, [getToken]);
+  if (legalStatus !== 'accepted') return <View style={[styles.legalGate, { backgroundColor: colors.background }]}>
+    {legalStatus === 'error' ? <><Text style={[styles.legalGateTitle, { color: colors.foreground }]}>Can’t verify your terms yet.</Text><Text style={[styles.legalGateCopy, { color: colors.mutedForeground }]}>Check your connection, then try again.</Text><Pressable accessibilityRole="button" onPress={() => { setLegalStatus('checking'); setLegalAttempt((value) => value + 1); }} style={[styles.legalGateButton, { backgroundColor: colors.primary }]}><Text style={{ color: colors.primaryForeground, fontWeight: '800' }}>Try again</Text></Pressable></> : null}
+  </View>;
   return <><Tabs screenOptions={{
     headerShown: false,
     tabBarActiveTintColor: colors.primary,
@@ -34,5 +56,5 @@ export default function TabsLayout() {
   </Tabs><AccountMenu visible={accountMenuVisible} onClose={() => setAccountMenuVisible(false)} /></>;
 }
 
-const styles = StyleSheet.create({ profileAvatarWrap: { position: 'relative', width: 35, height: 34 }, profilePositionBadge: { position: 'absolute', right: -4, bottom: 0 } });
+const styles = StyleSheet.create({ profileAvatarWrap: { position: 'relative', width: 35, height: 34 }, profilePositionBadge: { position: 'absolute', right: -4, bottom: 0 }, legalGate: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 26 }, legalGateTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center' }, legalGateCopy: { fontSize: 13, textAlign: 'center', marginTop: 8 }, legalGateButton: { minHeight: 48, minWidth: 130, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginTop: 18 } });
 

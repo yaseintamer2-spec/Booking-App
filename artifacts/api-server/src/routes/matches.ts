@@ -1012,7 +1012,7 @@ router.delete("/matches/:id/registrations/me", requireAuth, async (req, res): Pr
     const [registration] = await tx.select().from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), registrationAccess)).limit(1);
     if (!registration || registration.status === "cancelled") return { error: "You do not have an active place.", status: 404 } as const;
     if (registration.status === "checked_in") return { error: "A checked-in player cannot cancel their place.", status: 409 } as const;
-    if (registration.paymentStatus === "paid") return { error: "A refund provider must be configured before a paid booking can be cancelled here.", status: 503 } as const;
+    if (registration.paymentStatus === "paid") return { error: "Refund processing is not active yet. Your booking and payment are unchanged.", status: 503 } as const;
     const occupied = ["joined", "checked_in", "offered"].includes(registration.status);
     await tx.update(registrationsTable).set({ status: "cancelled", checkinTokenHash: null, offerExpiresAt: null, updatedAt: new Date() }).where(eq(registrationsTable.id, registration.id));
     if (!occupied) return { promotedUser: null } as const;

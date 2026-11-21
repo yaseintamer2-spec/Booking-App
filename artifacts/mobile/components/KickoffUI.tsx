@@ -81,7 +81,7 @@ function useWarmUpBrowser() {
   }, []);
 }
 
-export function GoogleSignInButton() {
+export function GoogleSignInButton({ disabled = false, legalConsent = false }: { disabled?: boolean; legalConsent?: boolean }) {
   const colors = useColors();
   const router = useRouter();
   const { startSSOFlow } = useSSO();
@@ -109,7 +109,7 @@ export function GoogleSignInButton() {
             setError('Finish the required account step, then return to KICKOFF.');
             return;
           }
-          router.replace(decorateUrl('/(auth)/preferred-position') as never);
+          router.replace(decorateUrl(legalConsent ? '/legal/accept?consent=1' : '/(auth)/preferred-position') as never);
         },
       });
     } catch {
@@ -125,8 +125,8 @@ export function GoogleSignInButton() {
       accessibilityLabel="Continue with Google"
       testID="continue-with-google"
       onPress={continueWithGoogle}
-      disabled={busy}
-      style={({ pressed }) => [styles.googleButton, { opacity: busy ? 0.55 : pressed ? 0.82 : 1 }]}
+      disabled={busy || disabled}
+      style={({ pressed }) => [styles.googleButton, { opacity: busy || disabled ? 0.55 : pressed ? 0.82 : 1 }]}
     >
       <GoogleLogo />
       <Text style={styles.googleText}>{busy ? 'Connecting…' : 'Continue with Google'}</Text>
