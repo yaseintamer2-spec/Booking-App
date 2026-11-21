@@ -116,18 +116,17 @@ export default function MatchRegistrationScreen() {
     refereeAvatarUrl: remoteMatch.data.refereeAvatarUrl,
     status: remoteMatch.data.status === 'cancelled' ? 'cancelled' as const : remoteMatch.data.bookedCount >= remoteMatch.data.capacity ? 'full' as const : 'open' as const,
   } : matchRegistrationMock.match;
-  const matchPhotoList = match.imageUrls?.filter((url) => typeof url === 'string' && url.length > 0).slice(0, 3) || [];
+  const matchPhotoList = match.imageUrls?.filter((url) => typeof url === 'number' || (typeof url === 'string' && url.length > 0)).slice(0, 3) || [];
   const uploadedPitchPhotos = matchPhotoList.length
     ? matchPhotoList
     : match.imageUrl && (/^https:\/\//i.test(match.imageUrl) || /^data:image\//i.test(match.imageUrl)) ? [match.imageUrl] : [];
-  const pitchPhotos: (string | null)[] = uploadedPitchPhotos.length ? uploadedPitchPhotos : [null];
+  const pitchPhotos: (string | number | null)[] = uploadedPitchPhotos.length ? uploadedPitchPhotos : [null];
   const currentUser = account.data ? {
     userId: account.data.id,
     firstName: account.data.name.split(' ')[0],
     avatarUrl: clerkUser?.imageUrl ?? null,
   } : matchRegistrationMock.currentUser;
   const [noticeVisible, setNoticeVisible] = useState(SHOW_PREVIEW_NOTICE);
-  const [pitchPhotosExpanded, setPitchPhotosExpanded] = useState(false);
   const [activePitchPhoto, setActivePitchPhoto] = useState(0);
   const [pitchPhotoWidth, setPitchPhotoWidth] = useState(320);
   const pitchPhotoScroll = useRef<ScrollViewInstance | null>(null);
@@ -144,11 +143,6 @@ export default function MatchRegistrationScreen() {
     }), 5000);
     return () => clearInterval(timer);
   }, [pitchPhotos.length, pitchPhotoWidth]);
-  useEffect(() => {
-    if (pitchPhotosExpanded) {
-      pitchPhotoScroll.current?.scrollTo({ x: activePitchPhoto * pitchPhotoWidth, animated: false });
-    }
-  }, [pitchPhotosExpanded, activePitchPhoto, pitchPhotoWidth]);
   const [participants, setParticipants] = useState(
     matchRegistrationMock.participants,
   );
@@ -383,7 +377,7 @@ export default function MatchRegistrationScreen() {
           ) : null}
           <View style={[styles.registrationLocationCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
             <ImageBackground
-              source={pitchPhotos[activePitchPhoto] ? { uri: pitchPhotos[activePitchPhoto]! } : require('../assets/images/football-match-card.jpg')}
+              source={typeof pitchPhotos[activePitchPhoto] === 'number' ? pitchPhotos[activePitchPhoto] : pitchPhotos[activePitchPhoto] ? { uri: pitchPhotos[activePitchPhoto] as string } : require('../assets/images/football-match-card.jpg')}
               resizeMode="cover"
               imageStyle={styles.registrationHeroImage}
               style={[styles.registrationHero, { backgroundColor: colors.card }]}
@@ -421,38 +415,27 @@ export default function MatchRegistrationScreen() {
                   <Feather name="arrow-up-right" size={13} color={colors.primary} />
                 </Pressable>
               </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={pitchPhotosExpanded ? 'Hide pitch photos' : `Show ${pitchPhotos.length} pitch photos`}
-                accessibilityState={{ expanded: pitchPhotosExpanded }}
-                onPress={() => setPitchPhotosExpanded((expanded) => !expanded)}
-                style={[styles.expandPitchPhotos, { borderColor: colors.border, backgroundColor: colors.secondary }]}
-              >
-                <Feather name={pitchPhotosExpanded ? 'chevron-up' : 'chevron-down'} size={19} color={colors.primary} />
-              </Pressable>
             </View>
-            {pitchPhotosExpanded ? (
-              <View style={styles.expandedPitchGallery} onLayout={(event) => setPitchPhotoWidth(event.nativeEvent.layout.width)}>
-                <ScrollView
-                  ref={pitchPhotoScroll}
-                  horizontal
-                  pagingEnabled
-                  nestedScrollEnabled
-                  showsHorizontalScrollIndicator={false}
-                  onMomentumScrollEnd={(event) => setActivePitchPhoto(Math.min(pitchPhotos.length - 1, Math.round(event.nativeEvent.contentOffset.x / pitchPhotoWidth)))}
-                >
-                  {pitchPhotos.map((photo, index) => (
-                    <ImageBackground
-                      key={`${match.id}-pitch-photo-${index}`}
-                      source={photo ? { uri: photo } : require('../assets/images/football-match-card.jpg')}
-                      resizeMode="cover"
-                      style={[styles.expandedPitchPhoto, { width: pitchPhotoWidth }]}
-                      accessibilityLabel={`${match.pitchName} pitch photo ${index + 1} of ${pitchPhotos.length}`}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            ) : null}
+            <View style={styles.expandedPitchGallery} onLayout={(event) => setPitchPhotoWidth(event.nativeEvent.layout.width)}>
+              <ScrollView
+                ref={pitchPhotoScroll}
+                horizontal
+                pagingEnabled
+                nestedScrollEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(event) => setActivePitchPhoto(Math.min(pitchPhotos.length - 1, Math.round(event.nativeEvent.contentOffset.x / pitchPhotoWidth)))}
+              >
+                {pitchPhotos.map((photo, index) => (
+                  <ImageBackground
+                    key={`${match.id}-pitch-photo-${index}`}
+                    source={typeof photo === 'number' ? photo : photo ? { uri: photo } : require('../assets/images/football-match-card.jpg')}
+                    resizeMode="cover"
+                    style={[styles.expandedPitchPhoto, { width: pitchPhotoWidth }]}
+                    accessibilityLabel={`${match.pitchName} pitch photo ${index + 1} of ${pitchPhotos.length}`}
+                  />
+                ))}
+              </ScrollView>
+            </View>
           </View>
           <View accessibilityRole="alert" style={[styles.agePolicy, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="shield" size={16} color={colors.primary} /><Text style={[styles.agePolicyText, { color: colors.mutedForeground }]}>Age group: <Text style={{ color: colors.foreground, fontWeight: '800' }}>{match.ageGroup.replace('-', '–')}</Text>. The referee checks age at the venue and may refuse entry if you do not meet this group, even if you have paid.</Text></View>
           <View style={[styles.matchTrust, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -853,15 +836,10 @@ function PlayerSlot({
         style={({ pressed }) => [
           styles.playerSlot,
           styles.openPlayerSlot,
-          {
-            opacity: pressed ? 0.7 : 1,
-            borderRadius: 26,
-            borderWidth: focused || selected ? 2 : 0,
-            borderColor: selected ? colors.primary : focused ? colors.foreground : 'transparent',
-          },
+          { opacity: pressed ? 0.7 : 1 },
         ]}
       >
-        <View style={[styles.openSpot, selected && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+        <View style={[styles.openSpot, selected && { backgroundColor: colors.primary, borderColor: colors.amber, borderStyle: 'solid', borderWidth: 3 }, !selected && focused && { borderColor: colors.foreground, borderStyle: 'solid' }]}>
           <Feather name={selected ? 'check' : 'plus'} size={18} color={selected ? colors.primaryForeground : colors.secondaryForeground} />
         </View>
         <View style={styles.nameChip}>

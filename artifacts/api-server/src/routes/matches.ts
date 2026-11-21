@@ -352,7 +352,8 @@ router.patch("/me/age", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.get("/me/match-staff", requireAuth, async (_req, res): Promise<void> => {
-  res.json({ isStaff: await isMatchStaffUser(res.locals.userId as string) });
+  const userId = res.locals.userId as string;
+  res.json({ isStaff: (await isMatchStaffUser(userId)) || (await isPitchOwnerUser(userId)) });
 });
 
 router.post("/me/push-token", requireAuth, async (req, res): Promise<void> => {
@@ -1135,10 +1136,14 @@ router.post("/admin/matches/:id/check-in", requireAuth, async (req, res): Promis
   const matchId = paramId(req.params.id);
   if (!GetMatchParams.safeParse({ id: matchId }).success) { res.status(400).json({ error: "Choose a valid match." }); return; }
   const userId = res.locals.userId as string;
-  const [assignedMatch] = await db.select({ refereeUserId: matchesTable.refereeUserId, refereeAssignmentStatus: matchesTable.refereeAssignmentStatus })
+  const [assignedMatch] = await db.select({ venueName: matchesTable.venueName, refereeUserId: matchesTable.refereeUserId, refereeAssignmentStatus: matchesTable.refereeAssignmentStatus })
     .from(matchesTable).where(eq(matchesTable.id, matchId)).limit(1);
-  if (!assignedMatch || !(await canControlLiveMatch(userId, assignedMatch.refereeUserId, assignedMatch.refereeAssignmentStatus))) {
-    res.status(403).json({ error: "Only the assigned referee after accepting the assignment, or an admin, can check players in." }); return;
+  const canCheckInAsReferee = assignedMatch && await canControlLiveMatch(userId, assignedMatch.refereeUserId, assignedMatch.refereeAssignmentStatus);
+  const pitchOwnerAccess = await getPitchOwnerAccess(userId);
+  const canCheckInAsPitchOwner = !!assignedMatch && !!pitchOwnerAccess
+    && pitchOwnerAccess.venueName.trim().toLowerCase() === assignedMatch.venueName.trim().toLowerCase();
+  if (!assignedMatch || (!canCheckInAsReferee && !canCheckInAsPitchOwner)) {
+    res.status(403).json({ error: "An assigned referee, pitch owner, or admin is required to check players in." }); return;
   }
   const token = req.body?.token;
   if (req.body?.ageChecked !== true) { res.status(400).json({ error: "Confirm that you checked the player's age against this match's age group before check-in." }); return; }

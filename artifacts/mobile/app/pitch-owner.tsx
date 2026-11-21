@@ -71,6 +71,7 @@ export default function PitchOwnerScreen() {
     <Text style={[styles.kicker, { color: colors.primary }]}>YOUR PITCH</Text>
     <Text style={[styles.title, { color: colors.foreground }]}>{pitch.venueName}</Text>
     <Text style={[styles.meta, { color: colors.mutedForeground }]}>{pitch.neighborhood} · {pitch.address}</Text>
+    <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as never)} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: 14, marginTop: 14 }}><Feather name="camera" size={16} color={colors.primaryForeground} /><Text style={{ color: colors.primaryForeground, fontSize: 12, fontWeight: '800' }}>Scan match check-in QR</Text></Pressable>
     <View style={[styles.reviewNotice, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={[styles.noticeIcon, { backgroundColor: colors.secondary }]}><Feather name="clock" size={16} color={colors.primary} /></View><Text style={[styles.noticeCopy, { color: colors.mutedForeground }]}>Choose a match time for this pitch and send us your contact number. Your request stays private until an admin reviews it.</Text></View>
     <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Propose a match</Text>

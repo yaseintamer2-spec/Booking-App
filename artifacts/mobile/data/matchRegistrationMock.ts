@@ -28,7 +28,7 @@ export type RegistrationMatch = {
   area: string;
   address?: string;
   imageUrl?: string;
-  imageUrls?: string[];
+  imageUrls?: (string | number)[];
   pricePerPlayer: number;
   durationHours: number;
   maxGoalkeepers: number;
@@ -59,6 +59,11 @@ export const matchRegistrationMock: {
     pitchName: 'Al Malqa Arena',
     area: 'Al Malqa, Riyadh',
     address: 'King Abdulaziz Road, Al Malqa, Riyadh',
+    imageUrls: [
+      require('../assets/images/football-match-card.jpg'),
+      require('../assets/images/home-pitch-hero.jpg'),
+      require('../assets/images/home-stadium-sunset.png'),
+    ],
     pricePerPlayer: 30,
     durationHours: 2,
     maxGoalkeepers: 2,
@@ -104,7 +109,7 @@ export const sampleMatchListing: Match = {
   pitchRatingCount: 0,
   waterIncluded: true,
   imageUrl: matchRegistrationMock.match.imageUrl || '',
-  imageUrls: matchRegistrationMock.match.imageUrls || [],
+  imageUrls: ['local:football-match-card', 'local:home-pitch-hero', 'local:home-stadium-sunset'],
   isDemo: true,
   createdAt: matchRegistrationMock.match.startsAt,
 };

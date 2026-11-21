@@ -13,38 +13,26 @@ import { getRecommendedMatchAgeGroup } from '@/lib/matchAge';
 import { sampleMatchListing } from '@/data/matchRegistrationMock';
 
 type DayFilter = 'Any day' | 'Today' | 'Tomorrow' | 'This week';
-type SortOption = 'soonest' | 'lowest-price' | 'highest-price' | 'most-spots';
-type PriceFilter = 'any' | 'under-30' | '30-50' | '50-plus';
-type SpotFilter = 0 | 3 | 6;
+type SortOption = 'soonest' | 'most-spots';
+type SpotFilter = 0 | 5 | 8;
 
 const SORT_OPTIONS: { label: string; value: SortOption }[] = [
   { label: 'Soonest', value: 'soonest' },
-  { label: 'Lowest price', value: 'lowest-price' },
-  { label: 'Highest price', value: 'highest-price' },
   { label: 'Most spots', value: 'most-spots' },
 ];
-const PRICE_OPTIONS: { label: string; value: PriceFilter }[] = [
-  { label: 'Any price', value: 'any' },
-  { label: 'Under SAR 30', value: 'under-30' },
-  { label: 'SAR 30–50', value: '30-50' },
-  { label: 'SAR 50+', value: '50-plus' },
-];
 const SPOT_OPTIONS: { label: string; value: SpotFilter }[] = [
-  { label: 'Any availability', value: 0 },
-  { label: '3+ spots', value: 3 },
-  { label: '6+ spots', value: 6 },
+  { label: 'Any', value: 0 },
+  { label: '5 or more spots', value: 5 },
+  { label: '8 or more spots', value: 8 },
 ];
 
 export default function MatchesScreen() {
   const colors = useColors();
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [areaFilter, setAreaFilter] = useState('All games');
   const [dayFilter, setDayFilter] = useState<DayFilter>('Any day');
   const [sortBy, setSortBy] = useState<SortOption>('soonest');
-  const [priceFilter, setPriceFilter] = useState<PriceFilter>('any');
   const [spotFilter, setSpotFilter] = useState<SpotFilter>(0);
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const { getToken, isSignedIn } = useAuth();
   const [matchAlertsEnabled, setMatchAlertsEnabled] = useState(false);
   const [matchAlertsLoading, setMatchAlertsLoading] = useState(true);
@@ -150,7 +138,6 @@ export default function MatchesScreen() {
       setPushPromptOpen(false);
     }
   };
-  const neighborhoods = useMemo(() => ['All games', ...Array.from(new Set((matches.data || []).map(match => match.neighborhood)))], [matches.data]);
   const visible = useMemo(() => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -168,29 +155,20 @@ export default function MatchesScreen() {
         || (dayFilter === 'Today' && startsAt >= today && startsAt < tomorrow)
         || (dayFilter === 'Tomorrow' && startsAt >= tomorrow && startsAt < dayAfter)
         || (dayFilter === 'This week' && startsAt >= today && startsAt < weekEnd);
-      const areaMatches = areaFilter === 'All games' || match.neighborhood === areaFilter;
       const searchMatches = `${match.venueName} ${match.neighborhood} ${match.address}`.toLowerCase().includes(needle);
-      const priceMatches = priceFilter === 'any'
-        || (priceFilter === 'under-30' && match.priceHalalas < 3000)
-        || (priceFilter === '30-50' && match.priceHalalas >= 3000 && match.priceHalalas < 5000)
-        || (priceFilter === '50-plus' && match.priceHalalas >= 5000);
       const spotsMatch = match.spotsRemaining >= spotFilter;
-      return dateMatches && areaMatches && searchMatches && priceMatches && spotsMatch;
+      return dateMatches && searchMatches && spotsMatch;
     }).sort((a, b) => {
-      if (sortBy === 'lowest-price') return a.priceHalalas - b.priceHalalas || Date.parse(a.startsAt) - Date.parse(b.startsAt);
-      if (sortBy === 'highest-price') return b.priceHalalas - a.priceHalalas || Date.parse(a.startsAt) - Date.parse(b.startsAt);
       if (sortBy === 'most-spots') return b.spotsRemaining - a.spotsRemaining || Date.parse(a.startsAt) - Date.parse(b.startsAt);
       return Date.parse(a.startsAt) - Date.parse(b.startsAt);
     });
-  }, [matches.data, areaFilter, query, dayFilter, priceFilter, spotFilter, sortBy]);
+  }, [matches.data, query, dayFilter, spotFilter, sortBy]);
 
-  const activeFilterCount = Number(areaFilter !== 'All games') + Number(dayFilter !== 'Any day') + Number(priceFilter !== 'any') + Number(spotFilter !== 0);
+  const activeFilterCount = Number(dayFilter !== 'Any day') + Number(spotFilter !== 0);
   const hasActiveFilters = activeFilterCount > 0 || query.trim().length > 0;
   const clearFilters = () => {
     setQuery('');
-    setAreaFilter('All games');
     setDayFilter('Any day');
-    setPriceFilter('any');
     setSpotFilter(0);
     setSortBy('soonest');
   };
@@ -219,43 +197,18 @@ export default function MatchesScreen() {
     </View>
     {matchAlertsMessage ? <Text accessibilityRole="status" style={[styles.alertStatus, { color: matchAlertsEnabled ? colors.primary : colors.mutedForeground }]}>{matchAlertsMessage}</Text> : null}
 
-    <View style={styles.controlHeader}>
+    <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>WHEN</Text>
+    <View style={styles.filters}>{(['Any day', 'Today', 'Tomorrow', 'This week'] as DayFilter[]).map(item => <FilterChip key={item} label={item} selected={dayFilter === item} onPress={() => setDayFilter(item)} colors={colors} />)}</View>
+    <Text style={[styles.filterLabel, { color: colors.mutedForeground, marginTop: 12 }]}>SPOTS AVAILABLE</Text>
+    <View style={styles.filters}>{SPOT_OPTIONS.map(option => <FilterChip key={option.value} label={option.label} selected={spotFilter === option.value} onPress={() => setSpotFilter(option.value)} colors={colors} />)}</View>
+    <View style={[styles.controlHeader, { marginTop: 12 }]}>
       <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>SORT BY</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={filtersOpen ? 'Hide match filters' : 'Show match filters'} accessibilityState={{ expanded: filtersOpen }} onPress={() => setFiltersOpen(open => !open)} style={[styles.filterToggle, { borderColor: colors.border, backgroundColor: colors.card }]}>
-        <Feather name="sliders" size={14} color={colors.primary} />
-        <Text style={[styles.filterToggleText, { color: colors.foreground }]}>Filters{activeFilterCount ? ` · ${activeFilterCount}` : ''}</Text>
-        <Feather name={filtersOpen ? 'chevron-up' : 'chevron-down'} size={14} color={colors.mutedForeground} />
-      </Pressable>
+      <View style={styles.filters}>{SORT_OPTIONS.map(option => <FilterChip key={option.value} label={option.label} selected={sortBy === option.value} onPress={() => setSortBy(option.value)} colors={colors} />)}</View>
     </View>
-    <View style={styles.filters}>
-      {SORT_OPTIONS.map(option => <Pressable key={option.value} accessibilityRole="button" accessibilityState={{ selected: sortBy === option.value }} onPress={() => setSortBy(option.value)} style={[styles.filter, { backgroundColor: sortBy === option.value ? colors.primary : colors.card, borderColor: sortBy === option.value ? colors.primary : colors.border }]}>
-        <Text style={{ color: sortBy === option.value ? colors.primaryForeground : colors.mutedForeground, fontSize: 11, fontWeight: '700' }}>{option.label}</Text>
-      </Pressable>)}
-    </View>
-
-    {filtersOpen ? <View style={[styles.filterPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <FilterGroup label="WHEN" color={colors.mutedForeground}>
-        {(['Any day', 'Today', 'Tomorrow', 'This week'] as DayFilter[]).map(item => <FilterChip key={item} label={item} selected={dayFilter === item} onPress={() => setDayFilter(item)} colors={colors} />)}
-      </FilterGroup>
-      <FilterGroup label="AREA" color={colors.mutedForeground}>
-        {neighborhoods.map(item => <FilterChip key={item} label={item} selected={areaFilter === item} onPress={() => setAreaFilter(item)} colors={colors} />)}
-      </FilterGroup>
-      <FilterGroup label="PRICE PER PLAYER" color={colors.mutedForeground}>
-        {PRICE_OPTIONS.map(option => <FilterChip key={option.value} label={option.label} selected={priceFilter === option.value} onPress={() => setPriceFilter(option.value)} colors={colors} />)}
-      </FilterGroup>
-      <FilterGroup label="SPOTS LEFT" color={colors.mutedForeground}>
-        {SPOT_OPTIONS.map(option => <FilterChip key={option.value} label={option.label} selected={spotFilter === option.value} onPress={() => setSpotFilter(option.value)} colors={colors} />)}
-      </FilterGroup>
-      {activeFilterCount || query.trim() ? <Pressable accessibilityRole="button" onPress={clearFilters} style={styles.clearButton}><Feather name="x-circle" size={14} color={colors.primary} /><Text style={[styles.clearText, { color: colors.primary }]}>Clear filters</Text></Pressable> : null}
-    </View> : <>
-      <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>WHEN</Text>
-      <View style={styles.filters}>{(['Any day', 'Today', 'Tomorrow', 'This week'] as DayFilter[]).map(item => <FilterChip key={item} label={item} selected={dayFilter === item} onPress={() => setDayFilter(item)} colors={colors} />)}</View>
-      <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>AREA</Text>
-      <View style={styles.filters}>{neighborhoods.map(item => <FilterChip key={item} label={item} selected={areaFilter === item} onPress={() => setAreaFilter(item)} colors={colors} />)}</View>
-    </>}
+    {activeFilterCount || query.trim() ? <Pressable accessibilityRole="button" onPress={clearFilters} style={styles.clearButton}><Feather name="x-circle" size={14} color={colors.primary} /><Text style={[styles.clearText, { color: colors.primary }]}>Clear filters</Text></Pressable> : null}
 
     {!matches.isLoading && !matches.isError ? <Text style={[styles.resultCount, { color: colors.mutedForeground }]}>{visible.length} {visible.length === 1 ? 'match' : 'matches'}</Text> : null}
-    {matches.isLoading ? <LoadingState /> : matches.isError ? <EmptyState title="Live matches are unavailable" body="You can still open the local sample below. Reconnect the match service to see published games." icon="wifi-off" action="Retry" onAction={() => matches.refetch()} /> : visible.length ? visible.map(match => <MatchCard key={match.id} match={match} recommended={match.ageGroup === recommendedAgeGroup} onPress={() => router.push({ pathname: '/match-registration', params: { id: match.id } })} />) : <EmptyState icon="map-pin" title={hasActiveFilters ? 'No games match those filters.' : 'No matches scheduled yet.'} body={hasActiveFilters ? 'Try widening the date, area, price, or spots left filters.' : 'New games will appear here as soon as they are published.'} action={hasActiveFilters ? 'Clear filters' : undefined} onAction={hasActiveFilters ? clearFilters : undefined} />}
+    {matches.isLoading ? <LoadingState /> : matches.isError ? <EmptyState title="Live matches are unavailable" body="You can still open the local sample below. Reconnect the match service to see published games." icon="wifi-off" action="Retry" onAction={() => matches.refetch()} /> : visible.length ? visible.map(match => <MatchCard key={match.id} match={match} recommended={match.ageGroup === recommendedAgeGroup} onPress={() => router.push({ pathname: '/match-registration', params: { id: match.id } })} />) : <EmptyState icon="map-pin" title={hasActiveFilters ? 'No games match those filters.' : 'No matches scheduled yet.'} body={hasActiveFilters ? 'Try widening the time or availability filters.' : 'New games will appear here as soon as they are published.'} action={hasActiveFilters ? 'Clear filters' : undefined} onAction={hasActiveFilters ? clearFilters : undefined} />}
     <SectionTitle kicker="LOCAL PREVIEW" title="Try the sample match" />
     <MatchCard match={sampleMatchListing} onPress={() => router.push('/match-registration')} />
     <Modal transparent visible={pushPromptOpen} animationType="fade" onRequestClose={() => setPushPromptOpen(false)}>
@@ -274,10 +227,6 @@ export default function MatchesScreen() {
       </View>
     </Modal>
   </Screen>;
-}
-
-function FilterGroup({ label, color, children }: { label: string; color: string; children: React.ReactNode }) {
-  return <View style={styles.filterGroup}><Text style={[styles.filterLabel, { color }]}>{label}</Text><View style={styles.filters}>{children}</View></View>;
 }
 
 function FilterChip({ label, selected, onPress, colors }: { label: string; selected: boolean; onPress: () => void; colors: ReturnType<typeof useColors> }) {
@@ -316,7 +265,6 @@ const styles = StyleSheet.create({
   filters: { flexDirection: 'row', gap: 8, marginVertical: 9, flexWrap: 'wrap' },
   filter: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 20, borderWidth: 1, minHeight: 40, justifyContent: 'center' },
   filterPanel: { borderWidth: 1, borderRadius: 16, padding: 13, marginTop: 4, marginBottom: 10 },
-  filterGroup: { marginBottom: 9 },
   clearButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.12)', marginTop: 2 },
   clearText: { fontSize: 12, fontWeight: '700' },
   resultCount: { fontSize: 11, fontWeight: '600', marginTop: 4, marginBottom: 8 },

@@ -253,7 +253,7 @@ export function MatchCard({ match, compact = false, recommended = false, onPress
   return <View testID={`match-${match.id}`} style={[styles.matchCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
     <View style={[styles.gallery, compact && { height: 126 }]} onLayout={event => setPhotoWidth(event.nativeEvent.layout.width)}>
       <ScrollView ref={scrollRef} horizontal pagingEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={event => setActivePhoto(Math.min(gallery.length - 1, Math.round(event.nativeEvent.contentOffset.x / photoWidth)))}>
-        {gallery.map((photo, index) => <Pressable key={`${index}-${photo?.slice(0, 22) || 'default'}`} accessibilityRole="button" accessibilityLabel={`Open registration for ${match.venueName}, pitch photo ${index + 1} of ${gallery.length}`} onPress={onPress}><ImageBackground source={photo ? { uri: photo } : cardImage} resizeMode="cover" style={[styles.matchPhoto, { width: photoWidth }, compact && { height: 126 }]}>
+        {gallery.map((photo, index) => <Pressable key={`${index}-${photo?.slice(0, 22) || 'default'}`} accessibilityRole="button" accessibilityLabel={`Open registration for ${match.venueName}, pitch photo ${index + 1} of ${gallery.length}`} onPress={onPress}><ImageBackground source={matchCardPhotoSource(photo)} resizeMode="cover" style={[styles.matchPhoto, { width: photoWidth }, compact && { height: 126 }]}>
           <View style={styles.photoShade} />
           <View style={styles.photoPills}><Text style={[styles.photoPill, { color: match.isDemo ? colors.destructive : colors.foreground, backgroundColor: 'rgba(8,16,12,.82)' }]}>{match.isDemo ? 'DEMO LISTING' : '7V7 · RIYADH'}</Text><Text style={[styles.spotsPill, { color: colors.primaryForeground, backgroundColor: colors.primary }]}>{match.spotsRemaining} SPOTS LEFT</Text></View>
           {gallery.length === 1 ? <View style={styles.photoVenue}><Text style={[styles.venueName, { color: colors.foreground }]}>{match.venueName}</Text><Text style={[styles.venueLocation, { color: colors.secondaryForeground }]}>{match.neighborhood}  /  {day}</Text></View> : null}
@@ -274,6 +274,13 @@ export function MatchCard({ match, compact = false, recommended = false, onPress
     </View>
     </Pressable>
   </View>;
+}
+
+function matchCardPhotoSource(photo: string | null) {
+  if (photo === 'local:football-match-card') return require('../assets/images/football-match-card.jpg');
+  if (photo === 'local:home-pitch-hero') return require('../assets/images/home-pitch-hero.jpg');
+  if (photo === 'local:home-stadium-sunset') return require('../assets/images/home-stadium-sunset.png');
+  return photo ? { uri: photo } : cardImage;
 }
 
 function Perk({ icon, label, active }: { icon: string; label: string; active: boolean }) {
