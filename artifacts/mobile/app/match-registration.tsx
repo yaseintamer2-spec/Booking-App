@@ -113,6 +113,10 @@ export default function MatchRegistrationScreen() {
     durationHours: remoteMatch.data.durationMinutes / 60,
     maxPlayers: remoteMatch.data.capacity,
     pricePerPlayer: remoteMatch.data.priceHalalas / 100,
+    pitchRatingAverage: remoteMatch.data.pitchRatingAverage,
+    pitchRatingCount: remoteMatch.data.pitchRatingCount,
+    refereeName: remoteMatch.data.refereeName,
+    refereeAvatarUrl: remoteMatch.data.refereeAvatarUrl,
     status: remoteMatch.data.status === 'cancelled' ? 'cancelled' as const : remoteMatch.data.bookedCount >= remoteMatch.data.capacity ? 'full' as const : 'open' as const,
   } : matchRegistrationMock.match;
   const currentUser = account.data ? {
@@ -358,6 +362,10 @@ export default function MatchRegistrationScreen() {
             <Text style={[styles.mapsLinkText, { color: colors.primary }]}>View pitch location in Google Maps</Text>
             <Feather name="arrow-up-right" size={13} color={colors.primary} />
           </Pressable>
+          <View style={[styles.matchTrust, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.trustRating, { backgroundColor: colors.secondary }]}><Feather name="star" size={15} color={colors.amber} /><View><Text accessibilityLabel={match.pitchRatingAverage == null ? 'Pitch rating: no reviews yet' : `Pitch rating ${match.pitchRatingAverage.toFixed(1)} out of 5 from ${match.pitchRatingCount || 0} reviews`} style={[styles.trustValue, { color: colors.foreground }]}>{match.pitchRatingAverage == null ? 'New pitch' : `${match.pitchRatingAverage.toFixed(1)} / 5`}</Text><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>{match.pitchRatingCount ? `${match.pitchRatingCount} player ratings` : 'No player ratings yet'}</Text></View></View>
+            {match.refereeName ? <View style={styles.assignedReferee}>{match.refereeAvatarUrl ? <Image accessibilityLabel={`${match.refereeName}, assigned referee`} source={{ uri: match.refereeAvatarUrl }} style={styles.assignedRefereePhoto} /> : <View style={[styles.assignedRefereePhoto, styles.assignedRefereeFallback, { backgroundColor: colors.secondary }]}><Feather name="user" size={15} color={colors.mutedForeground} /></View>}<View style={{ flexShrink: 1 }}><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>REFEREE</Text><Text numberOfLines={1} style={[styles.trustValue, { color: colors.foreground }]}>{match.refereeName}</Text></View></View> : <View style={styles.assignedReferee}><Feather name="shield" size={17} color={colors.mutedForeground} /><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>Referee not assigned yet</Text></View>}
+          </View>
 
           {liveMatchId ? <>
             <SectionLabel colors={colors}>BOOK FOR FRIENDS</SectionLabel>
@@ -979,6 +987,13 @@ const styles = StyleSheet.create({
   matchSubtitle: { fontSize: 14, marginTop: 3 },
   mapsLink: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 8, paddingRight: 8, marginTop: 2, marginBottom: 5 },
   mapsLinkText: { fontSize: 11, fontWeight: '700', textDecorationLine: 'underline' },
+  matchTrust: { minHeight: 68, borderWidth: 1, borderRadius: 15, paddingHorizontal: 12, paddingVertical: 9, marginTop: 2, marginBottom: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  trustRating: { minHeight: 44, borderRadius: 12, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  trustValue: { fontSize: 12, fontWeight: '800' },
+  trustCaption: { fontSize: 9, lineHeight: 13, fontWeight: '600' },
+  assignedReferee: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: '53%', minHeight: 44 },
+  assignedRefereePhoto: { width: 38, height: 38, borderRadius: 19 },
+  assignedRefereeFallback: { alignItems: 'center', justifyContent: 'center' },
   sectionLabel: { fontSize: 12, letterSpacing: 1.5, fontWeight: '800', marginTop: 26, marginBottom: 12 },
   pitch: { height: PITCH_HEIGHT, borderWidth: 3, borderRadius: 24, overflow: 'hidden', position: 'relative', backgroundColor: SCREEN_COLORS.pitch },
   pitchStripes: { ...StyleSheet.absoluteFill, flexDirection: 'column' },

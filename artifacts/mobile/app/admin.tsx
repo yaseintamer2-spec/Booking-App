@@ -1,33 +1,53 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Image, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useQueryClient } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
+import { useAuth } from '@clerk/expo';
 import { getGetCurrentUserQueryKey, getListAdminMatchesQueryKey, getListMatchesQueryKey, useCreateAdminMatch, useDeleteAdminMatch, useGetCurrentUser, useListAdminMatches, useUpdateAdminMatch } from '@workspace/api-client-react';
 import type { Match } from '@workspace/api-client-react';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { BrandHeader, Button, EmptyState, Field, LoadingState, Screen, formatRiyadhDateTime, formatSar, parseRiyadhLocalInput, toRiyadhLocalInput } from '@/components/KickoffUI';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { apiBaseUrl } from '@/lib/apiBaseUrl';
+
+type Referee = { id: string; name: string; avatarUrl: string | null };
 
 type FormState = {
   venueName: string; neighborhood: string; address: string; startsAt: string;
   durationMinutes: string; capacity: string; price: string; compareAt: string;
-  status: 'draft' | 'published' | 'cancelled'; refereeIncluded: boolean; waterIncluded: boolean; imageUrl: string; imageUrls: string[];
+  status: 'draft' | 'published' | 'cancelled'; refereeIncluded: boolean; refereeUserId: string; waterIncluded: boolean; imageUrl: string; imageUrls: string[];
 };
-const freshForm = (): FormState => ({ venueName: '', neighborhood: '', address: '', startsAt: toRiyadhLocalInput(new Date(Date.now() + 86400000)), durationMinutes: '120', capacity: '14', price: '30', compareAt: '35', status: 'draft', refereeIncluded: true, waterIncluded: true, imageUrl: '', imageUrls: [] });
+const freshForm = (): FormState => ({ venueName: '', neighborhood: '', address: '', startsAt: toRiyadhLocalInput(new Date(Date.now() + 86400000)), durationMinutes: '120', capacity: '14', price: '30', compareAt: '35', status: 'draft', refereeIncluded: true, refereeUserId: '', waterIncluded: true, imageUrl: '', imageUrls: [] });
 function fromMatch(match: Match): FormState {
   const imageUrls = match.imageUrls?.length ? match.imageUrls : /^https:\/\//i.test(match.imageUrl) ? [match.imageUrl] : [];
-  return { venueName: match.venueName, neighborhood: match.neighborhood, address: match.address, startsAt: toRiyadhLocalInput(match.startsAt), durationMinutes: String(match.durationMinutes), capacity: String(match.capacity), price: String(match.priceHalalas / 100), compareAt: String(match.compareAtPriceHalalas / 100), status: match.status, refereeIncluded: match.refereeIncluded, waterIncluded: match.waterIncluded, imageUrl: imageUrls[0] || '', imageUrls };
+  return { venueName: match.venueName, neighborhood: match.neighborhood, address: match.address, startsAt: toRiyadhLocalInput(match.startsAt), durationMinutes: String(match.durationMinutes), capacity: String(match.capacity), price: String(match.priceHalalas / 100), compareAt: String(match.compareAtPriceHalalas / 100), status: match.status, refereeIncluded: match.refereeIncluded, refereeUserId: match.refereeUserId || '', waterIncluded: match.waterIncluded, imageUrl: imageUrls[0] || '', imageUrls };
 }
 
 export default function AdminScreen() {
-  const colors = useColors(); const insets = useSafeAreaInsets(); const qc = useQueryClient(); const router = useRouter();
+  const colors = useColors(); const insets = useSafeAreaInsets(); const qc = useQueryClient(); const router = useRouter(); const { getToken } = useAuth();
   const me = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const isAdmin = !!me.data?.isAdmin;
   const list = useListAdminMatches({ query: { queryKey: getListAdminMatchesQueryKey(), enabled: isAdmin } });
   const create = useCreateAdminMatch(); const update = useUpdateAdminMatch(); const remove = useDeleteAdminMatch();
+  const [referees, setReferees] = useState<Referee[]>([]);
+  const [refereeLoadError, setRefereeLoadError] = useState('');
+  useEffect(() => {
+    if (!isAdmin) return;
+    let active = true;
+    void (async () => {
+      try {
+        const token = await getToken();
+        const response = await fetch(`${apiBaseUrl}/api/admin/referees`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        if (!response.ok) throw new Error('Could not load approved referee accounts.');
+        const result = await response.json() as Referee[];
+        if (active) { setReferees(result); setRefereeLoadError(''); }
+      } catch { if (active) setRefereeLoadError('Approved referees could not be loaded.'); }
+    })();
+    return () => { active = false; };
+  }, [getToken, isAdmin]);
   const [formOpen, setFormOpen] = useState(false); const [editing, setEditing] = useState<Match | null>(null); const [form, setForm] = useState<FormState>(freshForm); const [formError, setFormError] = useState('');
   const busy = create.isPending || update.isPending;
   const refresh = async () => { await Promise.all([qc.invalidateQueries({ queryKey: getListAdminMatchesQueryKey() }), qc.invalidateQueries({ queryKey: getListMatchesQueryKey() })]); };
@@ -37,7 +57,7 @@ export default function AdminScreen() {
     setFormError('');
     const startsAt = parseRiyadhLocalInput(form.startsAt);
     if (!form.venueName.trim() || !form.neighborhood.trim() || form.address.trim().length < 5 || !startsAt) { setFormError('Add a venue, Riyadh neighborhood, full address, and date/time in YYYY-MM-DDTHH:mm format.'); return; }
-    const payload = { venueName: form.venueName.trim(), neighborhood: form.neighborhood.trim(), address: form.address.trim(), startsAt: startsAt.toISOString(), durationMinutes: Number(form.durationMinutes), capacity: Number(form.capacity), priceHalalas: Math.round(Number(form.price) * 100), compareAtPriceHalalas: Math.round(Number(form.compareAt) * 100), status: form.status, refereeIncluded: form.refereeIncluded, waterIncluded: form.waterIncluded, imageUrl: 'match-card', imageUrls: form.imageUrls };
+    const payload = { venueName: form.venueName.trim(), neighborhood: form.neighborhood.trim(), address: form.address.trim(), startsAt: startsAt.toISOString(), durationMinutes: Number(form.durationMinutes), capacity: Number(form.capacity), priceHalalas: Math.round(Number(form.price) * 100), compareAtPriceHalalas: Math.round(Number(form.compareAt) * 100), status: form.status, refereeIncluded: form.refereeIncluded, refereeUserId: form.refereeUserId || null, waterIncluded: form.waterIncluded, imageUrl: 'match-card', imageUrls: form.imageUrls };
     if (!Number.isInteger(payload.durationMinutes) || payload.durationMinutes < 30 || payload.durationMinutes > 240 || !Number.isInteger(payload.capacity) || payload.capacity < 2 || payload.capacity > 30 || !Number.isFinite(payload.priceHalalas) || payload.priceHalalas < 0 || !Number.isFinite(payload.compareAtPriceHalalas) || payload.compareAtPriceHalalas <= payload.priceHalalas) { setFormError('Use 30–240 minutes, 2–30 players, and a compare-at price above the SAR player price.'); return; }
     if (startsAt.getTime() <= Date.now()) { setFormError('Match start time must be in the future.'); return; }
     try { if (editing) await update.mutateAsync({ id: editing.id, data: payload }); else await create.mutateAsync({ data: payload }); await refresh(); setFormOpen(false); }
@@ -85,6 +105,17 @@ export default function AdminScreen() {
           <Text style={[styles.formGroupTitle, { color: colors.primary }]}>STATUS AND INCLUSIONS</Text>
           <View style={styles.statusChoices}>{(['draft', 'published', 'cancelled'] as const).map(status => <Pressable key={status} onPress={() => change('status', status)} style={[styles.statusChoice, { borderColor: form.status === status ? colors.primary : colors.border, backgroundColor: form.status === status ? colors.accent : colors.card }]}><Text style={{ color: form.status === status ? colors.primary : colors.mutedForeground, fontSize: 10, fontWeight: '700' }}>{status.toUpperCase()}</Text></Pressable>)}</View>
           <ToggleRow label="Referee included" value={form.refereeIncluded} onPress={() => change('refereeIncluded', !form.refereeIncluded)} />
+          <Text style={[styles.photoHint, { color: colors.mutedForeground, marginTop: 8 }]}>ASSIGNED REFEREE · OPTIONAL</Text>
+          {refereeLoadError ? <Text style={[styles.error, { color: colors.mutedForeground }]}>{refereeLoadError}</Text> : null}
+          <View style={styles.refereeOptions}>
+            {[{ id: '', name: 'Not assigned', avatarUrl: null }, ...referees].map(referee => {
+              const selected = form.refereeUserId === referee.id;
+              return <Pressable key={referee.id || 'unassigned'} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => change('refereeUserId', referee.id)} style={[styles.refereeOption, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.accent : colors.card }]}>
+                {referee.avatarUrl ? <Image source={{ uri: referee.avatarUrl }} style={styles.refereeAvatar} /> : <View style={[styles.refereeAvatar, { backgroundColor: colors.secondary, alignItems: 'center', justifyContent: 'center' }]}><Feather name="user" size={13} color={colors.mutedForeground} /></View>}
+                <Text numberOfLines={1} style={{ color: selected ? colors.primary : colors.foreground, fontSize: 10, fontWeight: '700', flexShrink: 1 }}>{referee.name}</Text>
+              </Pressable>;
+            })}
+          </View>
           <ToggleRow label="Water provided" value={form.waterIncluded} onPress={() => change('waterIncluded', !form.waterIncluded)} />
           {formError ? <Text style={[styles.error, { color: colors.destructive }]}>{formError}</Text> : null}
           <Button label={busy ? 'Saving match…' : editing ? 'Save changes' : 'Create match'} onPress={save} disabled={busy} icon="check" />
@@ -120,6 +151,9 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 17, fontWeight: '700' },
   formGroupTitle: { fontSize: 9, letterSpacing: 1.6, fontWeight: '800', marginBottom: 13, marginTop: 8 },
   photoHint: { fontSize: 11, lineHeight: 16, marginTop: -5, marginBottom: 12 },
+  refereeOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  refereeOption: { minHeight: 44, maxWidth: '100%', borderWidth: 1, borderRadius: 13, paddingVertical: 5, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  refereeAvatar: { width: 30, height: 30, borderRadius: 15 },
   photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
   photoPreviewWrap: { width: 84, height: 84 },
   photoPreview: { width: 84, height: 84, borderRadius: 12 },

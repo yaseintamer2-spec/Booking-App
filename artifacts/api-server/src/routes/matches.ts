@@ -15,7 +15,7 @@ import {
   UpdateAdminMatchParams,
   UpdateAdminMatchResponse,
 } from "@workspace/api-zod";
-import { db, matchAlertSubscriptionsTable, matchesTable, notificationsTable, pushTokensTable, registrationsTable } from "@workspace/db";
+import { db, matchAlertSubscriptionsTable, matchRatingsTable, matchesTable, notificationsTable, pushTokensTable, registrationsTable } from "@workspace/db";
 import { isAdminUser, isMatchStaffUser, requireAdmin, requireAuth, requireMatchStaff } from "../middlewares/auth";
 import { getMatchEndAt, WAITLIST_OFFER_TTL_MS, canConfirmPaidRegistration, canReserveSeat, isCheckInTokenValid, isOfferExpired, isValidMatchImageList } from "../lib/registration-rules";
 
@@ -32,8 +32,36 @@ function toMatch(row: typeof matchesTable.$inferSelect) {
   return {
     ...row,
     imageUrls,
+    refereeUserId: row.refereeUserId,
+    refereeName: row.refereeName,
+    refereeAvatarUrl: row.refereeAvatarUrl,
     spotsRemaining: Math.max(0, row.capacity - row.bookedCount),
   };
+}
+
+async function addPitchRatings<T extends typeof matchesTable.$inferSelect>(rows: T[]) {
+  if (!rows.length) return [];
+  const venueNames = [...new Set(rows.map(({ venueName }) => venueName))];
+  const aggregates = await db.select({
+    venueName: matchesTable.venueName,
+    average: sql<number>`avg(${matchRatingsTable.pitchRating})`,
+    count: sql<number>`count(${matchRatingsTable.id})`,
+  }).from(matchRatingsTable)
+    .innerJoin(matchesTable, eq(matchRatingsTable.matchId, matchesTable.id))
+    .where(inArray(matchesTable.venueName, venueNames))
+    .groupBy(matchesTable.venueName);
+  const byVenue = new Map<string, { average: number; count: number }>(aggregates.map((entry: { venueName: string; average: number; count: number }) => [entry.venueName, { average: Number(entry.average), count: Number(entry.count) }]));
+  return rows.map((row) => {
+    const rating = byVenue.get(row.venueName);
+    return { ...toMatch(row), pitchRatingAverage: rating?.average ?? null, pitchRatingCount: rating?.count ?? 0 };
+  });
+}
+
+async function getRefereeAssignment(userId: string | null | undefined) {
+  if (!userId) return { refereeUserId: null, refereeName: null, refereeAvatarUrl: null };
+  if (!(await isMatchStaffUser(userId))) throw new Error("Choose an account approved for match staff.");
+  const user = await clerkClient.users.getUser(userId);
+  return { refereeUserId: user.id, refereeName: user.fullName ?? user.firstName ?? "Match referee", refereeAvatarUrl: user.imageUrl || null };
 }
 
 async function sendPushToUsers(userIds: string[], title: string, body: string, data: Record<string, string>): Promise<void> {
@@ -189,10 +217,11 @@ router.get("/matches", async (req, res): Promise<void> => {
     .orderBy(asc(matchesTable.startsAt));
 
   const neighborhood = typeof req.query.neighborhood === "string" ? req.query.neighborhood.trim().toLowerCase() : "";
-  res.json(ListMatchesResponse.parse(rows.filter((row) =>
+  const filtered = rows.filter((row) =>
     (!from || row.startsAt >= from) && (!to || row.startsAt < to) &&
     (!neighborhood || row.neighborhood.toLowerCase() === neighborhood)
-  ).map(toMatch)));
+  );
+  res.json(ListMatchesResponse.parse(await addPitchRatings(filtered)));
 });
 
 router.get("/matches/:id/participants", async (req, res): Promise<void> => {
@@ -397,7 +426,10 @@ router.get("/me/registrations", requireAuth, async (_req, res): Promise<void> =>
   await expireWaitlistOffers();
   const userId = res.locals.userId as string;
   const rows = await db.select({ registration: registrationsTable, match: matchesTable }).from(registrationsTable).innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id)).where(and(or(eq(registrationsTable.userId, userId), eq(registrationsTable.bookedByUserId, userId)), sql`${registrationsTable.status} IN ('joined', 'offered', 'waitlisted', 'checked_in')`)).orderBy(asc(matchesTable.startsAt));
-  res.json(rows.map(({ registration, match }) => ({
+  const ratedMatches = await addPitchRatings(rows.map(({ match }) => match));
+  const myRatings = await db.select({ matchId: matchRatingsTable.matchId, pitchRating: matchRatingsTable.pitchRating, refereeRating: matchRatingsTable.refereeRating }).from(matchRatingsTable).where(eq(matchRatingsTable.userId, userId));
+  const myRatingByMatch = new Map(myRatings.map((rating) => [rating.matchId, { pitchRating: rating.pitchRating, refereeRating: rating.refereeRating }]));
+  res.json(rows.map(({ registration }, index) => ({
     id: registration.id,
     userId: registration.userId,
     bookedByUserId: registration.bookedByUserId,
@@ -407,7 +439,8 @@ router.get("/me/registrations", requireAuth, async (_req, res): Promise<void> =>
     status: registration.status,
     offerExpiresAt: registration.offerExpiresAt,
     checkInAvailable: registration.status === "joined",
-    match: toMatch(match),
+    myRating: myRatingByMatch.get(registration.matchId) ?? null,
+    match: ratedMatches[index],
   })));
 });
 
@@ -523,7 +556,42 @@ router.get("/matches/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(GetMatchResponse.parse(toMatch(row)));
+  res.json(GetMatchResponse.parse((await addPitchRatings([row]))[0]));
+});
+
+router.post("/matches/:id/ratings", requireAuth, async (req, res): Promise<void> => {
+  const matchId = paramId(req.params.id);
+  const userId = res.locals.userId as string;
+  const pitchRating = req.body?.pitchRating;
+  const refereeRating = req.body?.refereeRating;
+  if (!Number.isInteger(pitchRating) || pitchRating < 1 || pitchRating > 5 || (refereeRating != null && (!Number.isInteger(refereeRating) || refereeRating < 1 || refereeRating > 5))) {
+    res.status(400).json({ error: "Rate the pitch from 1 to 5 stars and, optionally, the referee." }); return;
+  }
+  const [match] = await db.select().from(matchesTable).where(and(eq(matchesTable.id, matchId), eq(matchesTable.status, "published"))).limit(1);
+  if (!match) { res.status(404).json({ error: "Match not found." }); return; }
+  const matchEnd = new Date(match.startsAt.getTime() + match.durationMinutes * 60_000);
+  if (Date.now() < matchEnd.getTime()) { res.status(400).json({ error: "You can rate this match after it ends." }); return; }
+  const [registration] = await db.select({ id: registrationsTable.id }).from(registrationsTable)
+    .where(and(eq(registrationsTable.matchId, matchId), eq(registrationsTable.userId, userId), sql`${registrationsTable.status} IN ('joined', 'checked_in')`)).limit(1);
+  if (!registration) { res.status(403).json({ error: "Only players who joined this match can leave a rating." }); return; }
+  await db.insert(matchRatingsTable).values({ matchId, userId, pitchRating, refereeRating: match.refereeUserId ? refereeRating ?? null : null })
+    .onConflictDoUpdate({ target: [matchRatingsTable.matchId, matchRatingsTable.userId], set: { pitchRating, refereeRating: match.refereeUserId ? refereeRating ?? null : null, createdAt: new Date() } });
+  res.status(201).json({ saved: true });
+});
+
+router.get("/admin/referees", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+  const users = [];
+  let offset = 0;
+  while (true) {
+    const page = await clerkClient.users.getUserList({ limit: 100, offset });
+    users.push(...page.data);
+    if (page.data.length < 100) break;
+    offset += page.data.length;
+  }
+  const approvedEmails = new Set(`${process.env.MATCH_STAFF_EMAILS ?? ""},${process.env.ADMIN_EMAILS ?? ""}`.split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
+  const referees = users.filter((user) => user.emailAddresses.some((email) => email.verification?.status === "verified" && approvedEmails.has(email.emailAddress.trim().toLowerCase())))
+    .map((user) => ({ id: user.id, name: user.fullName ?? user.firstName ?? "Match referee", avatarUrl: user.imageUrl || null }));
+  res.json(referees);
 });
 
 router.get(
@@ -535,7 +603,7 @@ router.get(
       .select()
       .from(matchesTable)
       .orderBy(asc(matchesTable.startsAt));
-    res.json(ListAdminMatchesResponse.parse(rows.map(toMatch)));
+    res.json(ListAdminMatchesResponse.parse(await addPitchRatings(rows)));
   },
 );
 
@@ -565,10 +633,13 @@ router.post(
     }
 
     const recipients = parsed.data.status === "published" ? await getMatchAlertRecipientIds() : [];
+    let refereeAssignment;
+    try { refereeAssignment = await getRefereeAssignment(parsed.data.refereeUserId); }
+    catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "Invalid referee." }); return; }
     const [row] = await db.transaction(async (tx) => {
       const [created] = await tx
         .insert(matchesTable)
-        .values({ ...parsed.data, imageUrls, imageUrl: parsed.data.imageUrls?.length ? "match-card" : parsed.data.imageUrl })
+        .values({ ...parsed.data, ...refereeAssignment, imageUrls, imageUrl: parsed.data.imageUrls?.length ? "match-card" : parsed.data.imageUrl })
         .returning();
       const message = getNewMatchMessage(created);
       for (let offset = 0; offset < recipients.length; offset += 100) {
@@ -586,7 +657,7 @@ router.post(
 
     res
       .status(201)
-      .json(CreateAdminMatchResponse.parse(toMatch(row)));
+      .json(CreateAdminMatchResponse.parse((await addPitchRatings([row]))[0]));
   },
 );
 
@@ -638,11 +709,17 @@ router.patch(
 
     const shouldAnnounce = existing.status !== "published" && parsed.data.status === "published";
     const recipients = shouldAnnounce ? await getMatchAlertRecipientIds() : [];
+    let refereeAssignment = {};
+    if (parsed.data.refereeUserId !== undefined) {
+      try { refereeAssignment = await getRefereeAssignment(parsed.data.refereeUserId); }
+      catch (error) { res.status(400).json({ error: error instanceof Error ? error.message : "Invalid referee." }); return; }
+    }
     const [row] = await db.transaction(async (tx) => {
       const [updated] = await tx
         .update(matchesTable)
         .set({
         ...parsed.data,
+        ...refereeAssignment,
         ...(parsed.data.imageUrls !== undefined ? { imageUrls, imageUrl: "match-card" } : parsed.data.imageUrl ? { imageUrls: [] } : {}),
         updatedAt: new Date(),
         })
@@ -664,7 +741,7 @@ router.patch(
 
     if (shouldAnnounce && recipients.length) void sendPushToUsers(recipients, "A new match is available", getNewMatchMessage(row), { matchId: row.id, screen: "matches" }).catch(() => undefined);
 
-    res.json(UpdateAdminMatchResponse.parse(toMatch(row)));
+    res.json(UpdateAdminMatchResponse.parse((await addPitchRatings([row]))[0]));
   },
 );
 

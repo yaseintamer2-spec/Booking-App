@@ -31,6 +31,7 @@ export interface MatchUpdate {
   compareAtPriceHalalas?: number;
   status?: MatchUpdateStatus;
   refereeIncluded?: boolean;
+  refereeUserId?: string | null;
   waterIncluded?: boolean;
   imageUrl?: string;
   /** @maxItems 3 */

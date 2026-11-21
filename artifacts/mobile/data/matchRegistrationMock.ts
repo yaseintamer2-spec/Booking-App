@@ -30,6 +30,10 @@ export type RegistrationMatch = {
   maxGoalkeepers: number;
   maxPlayers: number;
   status: RegistrationMatchStatus;
+  pitchRatingAverage?: number | null;
+  pitchRatingCount?: number;
+  refereeName?: string | null;
+  refereeAvatarUrl?: string | null;
 };
 
 export type RegistrationCurrentUser = {

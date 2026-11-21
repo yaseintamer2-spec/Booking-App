@@ -51,6 +51,11 @@ export interface Match {
   compareAtPriceHalalas: number;
   status: MatchStatus;
   refereeIncluded: boolean;
+  refereeUserId: string | null;
+  refereeName: string | null;
+  refereeAvatarUrl: string | null;
+  pitchRatingAverage: number | null;
+  pitchRatingCount: number;
   waterIncluded: boolean;
   imageUrl: string;
   imageUrls: string[];
@@ -91,6 +96,7 @@ export interface MatchInput {
   compareAtPriceHalalas: number;
   status: MatchInputStatus;
   refereeIncluded: boolean;
+  refereeUserId?: string | null;
   waterIncluded: boolean;
   imageUrl: string;
   imageUrls?: string[];
@@ -129,6 +135,7 @@ export interface MatchUpdate {
   compareAtPriceHalalas?: number;
   status?: MatchUpdateStatus;
   refereeIncluded?: boolean;
+  refereeUserId?: string | null;
   waterIncluded?: boolean;
   imageUrl?: string;
   imageUrls?: string[];

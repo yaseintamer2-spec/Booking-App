@@ -23,6 +23,11 @@ export interface Match {
   compareAtPriceHalalas: number;
   status: MatchStatus;
   refereeIncluded: boolean;
+  refereeUserId: string | null;
+  refereeName: string | null;
+  refereeAvatarUrl: string | null;
+  pitchRatingAverage: number | null;
+  pitchRatingCount: number;
   waterIncluded: boolean;
   imageUrl: string;
   /** @maxItems 3 */

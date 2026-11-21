@@ -49,6 +49,9 @@ export const matchesTable = pgTable(
       .default(3500),
     status: text("status").notNull().default("draft"),
     refereeIncluded: boolean("referee_included").notNull().default(true),
+    refereeUserId: text("referee_user_id"),
+    refereeName: text("referee_name"),
+    refereeAvatarUrl: text("referee_avatar_url"),
     waterIncluded: boolean("water_included").notNull().default(true),
     imageUrl: text("image_url").notNull().default("match-card"),
     imageUrls: jsonb("image_urls").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
@@ -107,6 +110,24 @@ export const registrationsTable = pgTable(
     check("match_registrations_status_check", sql`${table.status} IN ('joined', 'waitlisted', 'offered', 'cancelled', 'checked_in')`),
     check("match_registrations_pitch_slot_check", sql`${table.pitchSlot} IS NULL OR (${table.pitchSlot} >= 0 AND ${table.pitchSlot} < 14)`),
     check("match_registrations_position_check", sql`${table.positionPreference} IN ('anywhere', 'goalkeeper', 'defender', 'midfielder', 'attacker')`),
+  ],
+);
+
+export const matchRatingsTable = pgTable(
+  "match_ratings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    matchId: uuid("match_id").notNull().references(() => matchesTable.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull(),
+    pitchRating: integer("pitch_rating").notNull(),
+    refereeRating: integer("referee_rating"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("match_ratings_match_user_idx").on(table.matchId, table.userId),
+    index("match_ratings_match_idx").on(table.matchId),
+    check("match_ratings_pitch_check", sql`${table.pitchRating} BETWEEN 1 AND 5`),
+    check("match_ratings_referee_check", sql`${table.refereeRating} IS NULL OR ${table.refereeRating} BETWEEN 1 AND 5`),
   ],
 );
 

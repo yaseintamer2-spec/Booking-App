@@ -31,6 +31,7 @@ export interface MatchInput {
   compareAtPriceHalalas: number;
   status: MatchInputStatus;
   refereeIncluded: boolean;
+  refereeUserId?: string | null;
   waterIncluded: boolean;
   imageUrl: string;
   /** @maxItems 3 */
