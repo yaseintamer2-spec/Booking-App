@@ -78,8 +78,9 @@ async function getLiveMatchSnapshot(matchId: string) {
     .from(registrationsTable)
     .where(and(eq(registrationsTable.matchId, matchId), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
     .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
-  const redScore = events.filter((event) => event.team === "red").length;
-  const blueScore = events.filter((event) => event.team === "blue").length;
+  const goals = events.filter((event) => event.type === "goal");
+  const redScore = goals.filter((event) => event.team === "red").length;
+  const blueScore = goals.filter((event) => event.team === "blue").length;
   return {
     id: match.id,
     matchStatus: match.status,
@@ -334,8 +335,9 @@ router.post("/matches/:id/live/events", requireMatchStaff, async (req, res): Pro
   if (!params.success) { res.status(400).json({ error: "A valid match ID is required." }); return; }
   const userId = res.locals.userId as string;
   const { clientEventId, team, scorerUserId, assistUserId } = req.body ?? {};
-  if (typeof clientEventId !== "string" || !clientEventId.trim() || clientEventId.length > 100 || !["red", "blue"].includes(team) || typeof scorerUserId !== "string" || (assistUserId != null && typeof assistUserId !== "string")) {
-    res.status(400).json({ error: "Choose a team and scorer, and use a valid goal entry." }); return;
+  const eventType = req.body?.type ?? "goal";
+  if (typeof clientEventId !== "string" || !clientEventId.trim() || clientEventId.length > 100 || !["red", "blue"].includes(team) || typeof scorerUserId !== "string" || !["goal", "yellow_card", "red_card"].includes(eventType) || (assistUserId != null && typeof assistUserId !== "string") || (eventType !== "goal" && assistUserId != null)) {
+    res.status(400).json({ error: "Choose a team and player, and use a valid match event." }); return;
   }
   const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
   if (!match) { res.status(404).json({ error: "Match not found." }); return; }
@@ -346,13 +348,13 @@ router.post("/matches/:id/live/events", requireMatchStaff, async (req, res): Pro
   const occurredAt = typeof req.body?.occurredAt === "string" ? new Date(req.body.occurredAt) : new Date();
   const now = new Date();
   if (Number.isNaN(occurredAt.getTime()) || occurredAt.getTime() > now.getTime() + 60_000 || !match.liveStartedAt || occurredAt < match.liveStartedAt || (match.liveEndedAt && occurredAt > match.liveEndedAt)) {
-    res.status(400).json({ error: "This goal time is outside the match." }); return;
+    res.status(400).json({ error: "This event time is outside the match." }); return;
   }
   const period = match.liveFirstHalfEndedAt && occurredAt > match.liveFirstHalfEndedAt
     ? match.liveSecondHalfStartedAt && occurredAt >= match.liveSecondHalfStartedAt ? 2 : 0
     : 1;
   const phaseStart = period === 1 ? match.liveStartedAt : match.liveSecondHalfStartedAt;
-  if (!period || !phaseStart) { res.status(409).json({ error: "Goals can only be recorded during a half, not during the break." }); return; }
+  if (!period || !phaseStart) { res.status(409).json({ error: "Events can only be recorded during a half, not during the break." }); return; }
   if (match.liveStatus === "scheduled" || (match.liveStatus === "halftime" && occurredAt >= (match.liveSecondHalfStartedAt ?? now)) || (match.liveStatus === "full_time" && (!match.liveEndedAt || occurredAt > match.liveEndedAt))) {
     res.status(409).json({ error: "The match is not in a playing phase." }); return;
   }
@@ -363,11 +365,11 @@ router.post("/matches/:id/live/events", requireMatchStaff, async (req, res): Pro
   const assist = assistUserId ? registrations.find((player) => player.userId === assistUserId) : undefined;
   const getPlayerTeam = (player: typeof registrations[number]) => player.pitchSlot == null ? (registrations.indexOf(player) < Math.ceil(registrations.length / 2) ? "red" : "blue") : player.pitchSlot < Math.ceil(match.capacity / 2) ? "red" : "blue";
   if (!scorer || getPlayerTeam(scorer) !== team || (assistUserId && (!assist || assist.userId === scorer.userId || getPlayerTeam(assist) !== team))) {
-    res.status(400).json({ error: "Choose a scorer and assist from the selected team." }); return;
+    res.status(400).json({ error: "Choose a player and assist from the selected team." }); return;
   }
   const halfMinutes = Math.ceil(match.durationMinutes / 2);
   const minute = Math.max(1, (period === 2 ? halfMinutes : 0) + Math.ceil((occurredAt.getTime() - phaseStart.getTime()) / 60_000));
-  await db.insert(matchEventsTable).values({ matchId: match.id, clientEventId: clientEventId.trim(), type: "goal", team, period, minute, scorerUserId: scorer.userId, scorerName: scorer.firstName, assistUserId: assist?.userId ?? null, assistName: assist?.firstName ?? null, occurredAt, recordedByUserId: userId }).onConflictDoNothing({ target: [matchEventsTable.matchId, matchEventsTable.clientEventId] });
+  await db.insert(matchEventsTable).values({ matchId: match.id, clientEventId: clientEventId.trim(), type: eventType, team, period, minute, scorerUserId: scorer.userId, scorerName: scorer.firstName, assistUserId: assist?.userId ?? null, assistName: assist?.firstName ?? null, occurredAt, recordedByUserId: userId }).onConflictDoNothing({ target: [matchEventsTable.matchId, matchEventsTable.clientEventId] });
   res.status(201).json(await getLiveMatchSnapshot(match.id));
 });
 
@@ -380,7 +382,7 @@ router.delete("/matches/:id/live/events/:eventId", requireMatchStaff, async (req
   if (!match) { res.status(404).json({ error: "Match not found." }); return; }
   if (!(await canControlLiveMatch(userId, match.refereeUserId))) { res.status(403).json({ error: "Only the assigned referee or an admin can correct match events." }); return; }
   const [event] = await db.update(matchEventsTable).set({ voidedAt: new Date(), voidedByUserId: userId }).where(and(eq(matchEventsTable.id, eventId), eq(matchEventsTable.matchId, match.id), isNull(matchEventsTable.voidedAt))).returning({ id: matchEventsTable.id });
-  if (!event) { res.status(404).json({ error: "That goal is already removed or could not be found." }); return; }
+  if (!event) { res.status(404).json({ error: "That event is already removed or could not be found." }); return; }
   res.json(await getLiveMatchSnapshot(match.id));
 });
 

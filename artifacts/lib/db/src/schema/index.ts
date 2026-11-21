@@ -160,7 +160,7 @@ export const matchEventsTable = pgTable(
   (table) => [
     uniqueIndex("match_events_client_event_idx").on(table.matchId, table.clientEventId),
     index("match_events_match_created_idx").on(table.matchId, table.createdAt),
-    check("match_events_type_check", sql`${table.type} IN ('goal')`),
+    check("match_events_type_check", sql`${table.type} IN ('goal', 'yellow_card', 'red_card')`),
     check("match_events_team_check", sql`${table.team} IN ('red', 'blue')`),
     check("match_events_period_check", sql`${table.period} IN (1, 2)`),
     check("match_events_minute_check", sql`${table.minute} > 0`),
