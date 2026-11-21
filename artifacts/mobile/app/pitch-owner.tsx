@@ -7,6 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import { BrandHeader, Button, EmptyState, Field, LoadingState, Screen, formatRiyadhDateTime, formatSar, parseRiyadhLocalInput, toRiyadhLocalInput } from '@/components/KickoffUI';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
+import { uploadMatchImages } from '@/lib/matchImageUpload';
 
 type Pitch = { email: string; venueName: string; neighborhood: string; address: string };
 type Submission = { id: string; venueName: string; neighborhood: string; address: string; contactPhone: string; startsAt: string; durationMinutes: number; capacity: number; priceHalalas: number; compareAtPriceHalalas: number; refereeIncluded: boolean; waterIncluded: boolean; imageUrls: string[]; status: 'pending' | 'approved' | 'rejected'; reviewNote: string | null; matchId: string | null };
@@ -53,7 +54,8 @@ export default function PitchOwnerScreen() {
     if (!Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > 240 || !Number.isInteger(capacity) || capacity < 2 || capacity > 30 || !Number.isFinite(priceHalalas) || priceHalalas < 0 || !Number.isFinite(compareAtPriceHalalas) || compareAtPriceHalalas < priceHalalas) { setError('Check the duration, capacity, and player prices.'); return; }
     setBusy(true);
     try {
-      await request('/pitch-owner/submissions', { method: 'POST', body: JSON.stringify({ startsAt: startsAt.toISOString(), durationMinutes, capacity, priceHalalas, compareAtPriceHalalas, contactPhone: form.contactPhone.trim(), refereeIncluded: form.refereeIncluded, waterIncluded: form.waterIncluded, imageUrls: form.imageUrls }) });
+      const imageUrls = await uploadMatchImages(form.imageUrls, getToken);
+      await request('/pitch-owner/submissions', { method: 'POST', body: JSON.stringify({ startsAt: startsAt.toISOString(), durationMinutes, capacity, priceHalalas, compareAtPriceHalalas, contactPhone: form.contactPhone.trim(), refereeIncluded: form.refereeIncluded, waterIncluded: form.waterIncluded, imageUrls }) });
       setForm(freshForm()); await load();
       Alert.alert('Request sent', 'Your match time is now waiting for admin review. It will appear in Discover only after approval.');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not submit the match request.'); }

@@ -10,6 +10,12 @@ export function isValidMatchImageList(value: unknown): value is string[] {
   return value.reduce<number>((total, image) => total + image.length, 0) <= 4_200_000;
 }
 
+export function isStoredMatchImageList(value: unknown): value is string[] {
+  if (value === undefined) return true;
+  if (!Array.isArray(value) || value.length > 3 || !value.every((item) => typeof item === "string" && /^https:\/\//i.test(item) && item.length <= 1_450_000)) return false;
+  return value.reduce<number>((total, image) => total + image.length, 0) <= 4_200_000;
+}
+
 function validMatchImage(value: string): boolean {
   if (value.length > 1_450_000) return false;
   if (/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value)) return true;

@@ -12,6 +12,7 @@ import { BrandHeader, Button, EmptyState, Field, LoadingState, Screen, formatRiy
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
+import { uploadMatchImages } from '@/lib/matchImageUpload';
 
 type Referee = { id: string; name: string; avatarUrl: string | null };
 type AdminGrant = { email: string; createdAt: string };
@@ -52,6 +53,9 @@ export default function AdminScreen() {
   const [adminEmail, setAdminEmail] = useState('');
   const [adminAccessBusy, setAdminAccessBusy] = useState(false);
   const [adminAccessError, setAdminAccessError] = useState('');
+  const [imageMigrationBusy, setImageMigrationBusy] = useState(false);
+  const [photoUploadBusy, setPhotoUploadBusy] = useState(false);
+  const [imageMigrationMessage, setImageMigrationMessage] = useState('');
   const loadReferees = useCallback(async () => {
     const token = await getToken();
     const response = await fetch(`${apiBaseUrl}/api/admin/referees`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
@@ -85,7 +89,7 @@ export default function AdminScreen() {
     return () => { active = false; };
   }, [loadReferees, isAdmin]);
   const [formOpen, setFormOpen] = useState(false); const [editing, setEditing] = useState<Match | null>(null); const [form, setForm] = useState<FormState>(freshForm); const [formError, setFormError] = useState('');
-  const busy = create.isPending || update.isPending;
+  const busy = create.isPending || update.isPending || imageMigrationBusy || photoUploadBusy;
   const refresh = async () => { await Promise.all([qc.invalidateQueries({ queryKey: getListAdminMatchesQueryKey() }), qc.invalidateQueries({ queryKey: getListMatchesQueryKey() })]); };
   const openCreate = () => { setEditing(null); setForm(freshForm()); setFormError(''); setFormOpen(true); };
   const openEdit = (match: Match) => { setEditing(match); setForm(fromMatch(match)); setFormError(''); setFormOpen(true); };
@@ -96,8 +100,24 @@ export default function AdminScreen() {
     const payload = { venueName: form.venueName.trim(), neighborhood: form.neighborhood.trim(), address: form.address.trim(), startsAt: startsAt.toISOString(), durationMinutes: Number(form.durationMinutes), capacity: Number(form.capacity), priceHalalas: Math.round(Number(form.price) * 100), compareAtPriceHalalas: Math.round(Number(form.compareAt) * 100), status: form.status, refereeIncluded: form.refereeIncluded, refereeUserId: form.refereeUserId || null, waterIncluded: form.waterIncluded, imageUrl: 'match-card', imageUrls: form.imageUrls };
     if (!Number.isInteger(payload.durationMinutes) || payload.durationMinutes < 30 || payload.durationMinutes > 240 || !Number.isInteger(payload.capacity) || payload.capacity < 2 || payload.capacity > 30 || !Number.isFinite(payload.priceHalalas) || payload.priceHalalas < 0 || !Number.isFinite(payload.compareAtPriceHalalas) || payload.compareAtPriceHalalas <= payload.priceHalalas) { setFormError('Use 30–240 minutes, 2–30 players, and a compare-at price above the SAR player price.'); return; }
     if (startsAt.getTime() <= Date.now()) { setFormError('Match start time must be in the future.'); return; }
-    try { if (editing) await update.mutateAsync({ id: editing.id, data: payload }); else await create.mutateAsync({ data: payload }); await refresh(); setFormOpen(false); }
-    catch { setFormError('Could not save this match. Check the fields and try again.'); }
+    try {
+      setPhotoUploadBusy(true);
+      const imageUrls = await uploadMatchImages(form.imageUrls, getToken);
+      const savedPayload = { ...payload, imageUrls, imageUrl: imageUrls.length ? 'match-card' : '' };
+      if (editing) await update.mutateAsync({ id: editing.id, data: savedPayload }); else await create.mutateAsync({ data: savedPayload });
+      await refresh(); setFormOpen(false);
+    }
+    catch (error) { setFormError(error instanceof Error ? error.message : 'Could not save this match. Check the fields and try again.'); }
+    finally { setPhotoUploadBusy(false); }
+  };
+  const migrateExistingMatchImages = async () => {
+    setImageMigrationBusy(true); setImageMigrationMessage('');
+    try {
+      const result = await adminAccessRequest('/admin/match-images/migrate', { method: 'POST' }) as { migratedPhotos: number };
+      setImageMigrationMessage(`${result.migratedPhotos} existing photo${result.migratedPhotos === 1 ? '' : 's'} moved to file storage.`);
+      await refresh();
+    } catch (error) { setImageMigrationMessage(error instanceof Error ? error.message : 'Could not move existing photos.'); }
+    finally { setImageMigrationBusy(false); }
   };
   const deleteMatch = (match: Match) => Alert.alert('Remove this match?', `${match.venueName} will be removed from KICKOFF.`, [{ text: 'Keep match', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: async () => { try { await remove.mutateAsync({ id: match.id }); await refresh(); } catch { Alert.alert('Could not remove match', 'Try again shortly.'); } } }]);
   const grantAdminAccess = () => {
@@ -144,6 +164,12 @@ export default function AdminScreen() {
         {adminGrants.length ? adminGrants.map(grant => <View key={grant.email} style={[styles.adminGrantRow, { borderTopColor: colors.border }]}><View style={{ flex: 1 }}><Text numberOfLines={1} style={[styles.grantEmail, { color: colors.foreground }]}>{grant.email}</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 3 }]}>Admin access</Text></View><Pressable accessibilityRole="button" accessibilityLabel={`Revoke admin access for ${grant.email}`} disabled={adminAccessBusy} onPress={() => revokeAdminAccess(grant.email)} style={[styles.revokeButton, { borderColor: colors.destructive, opacity: adminAccessBusy ? .5 : 1 }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>Revoke</Text></Pressable></View>) : <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 12 }]}>No additional admins yet.</Text>}
       </View> : null}
       <PitchSubmissionReview visible={isAdmin} />
+      {isOwner ? <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.formGroupTitle, { color: colors.primary, marginTop: 0 }]}>PITCH PHOTO STORAGE</Text>
+        <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 0 }]}>Move older photos from the database into the configured image bucket. New photos upload there automatically.</Text>
+        {imageMigrationMessage ? <Text accessibilityRole="alert" style={[styles.meta, { color: imageMigrationMessage.includes('moved to file storage') ? colors.primary : colors.destructive }]}>{imageMigrationMessage}</Text> : null}
+        <Pressable accessibilityRole="button" disabled={imageMigrationBusy} onPress={() => confirmAdminAction('Move existing pitch photos?', 'This uploads old pitch photos to the configured storage bucket and replaces their database copies with file addresses.', 'Move photos', false, () => void migrateExistingMatchImages())} style={[styles.grantButton, { backgroundColor: colors.primary, alignSelf: 'flex-start', opacity: imageMigrationBusy ? .55 : 1 }]}><Feather name="upload-cloud" size={15} color={colors.primaryForeground} /><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{imageMigrationBusy ? 'Moving photos…' : 'Move existing photos'}</Text></Pressable>
+      </View> : null}
       <RefereeAssignmentReview visible={isAdmin} />
       <PitchOwnerManagement visible={isOwner} />
       <RefereeAccessManagement visible={isAdmin} onChanged={loadReferees} />

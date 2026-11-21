@@ -17,10 +17,49 @@ import {
 } from "@workspace/api-zod";
 import { adminAccessTable, db, matchAlertSubscriptionsTable, matchEventsTable, matchRatingsTable, matchesTable, notificationsTable, pitchMatchSubmissionsTable, pitchOwnerAccessTable, playerCareerStatsTable, playerProfilesTable, pushTokensTable, refereeAccessTable, refereeMatchApplicationsTable, registrationsTable } from "@workspace/db";
 import { isAdminUser, isMatchStaffUser, isOwnerUser, isPitchOwnerUser, OWNER_EMAIL, requireAdmin, requireAuth, requireOwner, requirePitchOwner } from "../middlewares/auth";
-import { getMatchEndAt, WAITLIST_OFFER_TTL_MS, canConfirmPaidRegistration, canReserveSeat, isCheckInTokenValid, isOfferExpired, isValidMatchImageList } from "../lib/registration-rules";
+import { getMatchEndAt, WAITLIST_OFFER_TTL_MS, canConfirmPaidRegistration, canReserveSeat, isCheckInTokenValid, isOfferExpired, isStoredMatchImageList } from "../lib/registration-rules";
+import { isMatchImageStorageConfigured, uploadMatchImage } from "../lib/match-image-storage";
 const MATCH_ARCHIVE_HOURS = 12;
 
 const router: IRouter = Router();
+
+router.post("/match-images", requireAuth, async (req, res): Promise<void> => {
+  const userId = res.locals.userId as string;
+  if (!(await isAdminUser(userId)) && !(await isPitchOwnerUser(userId))) {
+    res.status(403).json({ error: "Admin or pitch owner access is required to upload pitch photos." }); return;
+  }
+  try {
+    res.status(201).json({ url: await uploadMatchImage(req.body?.imageDataUrl, userId) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not upload the pitch photo.";
+    res.status(message.includes("not configured") ? 503 : 400).json({ error: message });
+  }
+});
+
+router.post("/admin/match-images/migrate", requireAuth, requireOwner, async (_req, res): Promise<void> => {
+  if (!isMatchImageStorageConfigured()) {
+    res.status(503).json({ error: "Pitch photo storage is not configured. Set the OBJECT_STORAGE_* settings on the API, then retry." }); return;
+  }
+  let migratedPhotos = 0;
+  const migrateRows = async (rows: Array<{ id: string; imageUrls: string[]; imageUrl?: string }>, save: (id: string, imageUrls: string[]) => Promise<unknown>) => {
+    for (const row of rows) {
+      const source = row.imageUrls?.length ? row.imageUrls : row.imageUrl?.startsWith("data:image/") ? [row.imageUrl] : [];
+      if (!source.some((image) => image.startsWith("data:image/"))) continue;
+      const imageUrls = [...source];
+      for (let index = 0; index < imageUrls.length; index += 1) {
+        if (!imageUrls[index].startsWith("data:image/")) continue;
+        imageUrls[index] = await uploadMatchImage(imageUrls[index], res.locals.userId as string);
+        await save(row.id, imageUrls);
+        migratedPhotos += 1;
+      }
+    }
+  };
+  const matches = await db.select({ id: matchesTable.id, imageUrls: matchesTable.imageUrls, imageUrl: matchesTable.imageUrl }).from(matchesTable);
+  await migrateRows(matches, async (id, imageUrls) => db.update(matchesTable).set({ imageUrls, imageUrl: imageUrls.length ? "match-card" : "" }).where(eq(matchesTable.id, id)));
+  const submissions = await db.select({ id: pitchMatchSubmissionsTable.id, imageUrls: pitchMatchSubmissionsTable.imageUrls }).from(pitchMatchSubmissionsTable);
+  await migrateRows(submissions, async (id, imageUrls) => db.update(pitchMatchSubmissionsTable).set({ imageUrls }).where(eq(pitchMatchSubmissionsTable.id, id)));
+  res.json({ migratedPhotos });
+});
 
 function paramId(value: string | string[] | undefined): string {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
@@ -1280,7 +1319,7 @@ router.post("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (r
   if (!Number.isFinite(startsAt.getTime()) || startsAt <= new Date()) { res.status(400).json({ error: "Choose a future match date and time." }); return; }
   if (!Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > 240 || !Number.isInteger(capacity) || capacity < 2 || capacity > 30) { res.status(400).json({ error: "Use a duration from 30 to 240 minutes and capacity from 2 to 30 players." }); return; }
   if (!Number.isInteger(priceHalalas) || !Number.isInteger(compareAtPriceHalalas) || priceHalalas < 0 || compareAtPriceHalalas < priceHalalas) { res.status(400).json({ error: "Set a valid player price and a comparison price at least as high." }); return; }
-  if (!isValidMatchImageList(imageUrls)) { res.status(400).json({ error: "Add up to 3 pitch photos. Each photo must be under 1.45 MB." }); return; }
+  if (!isStoredMatchImageList(imageUrls)) { res.status(400).json({ error: "Upload up to 3 pitch photos before submitting the match request." }); return; }
   const [submission] = await db.insert(pitchMatchSubmissionsTable).values({
       ownerUserId: userId, ownerEmail: access.email, venueName: access.venueName, neighborhood: access.neighborhood,
       address: access.address, contactPhone, startsAt, durationMinutes, capacity, priceHalalas, compareAtPriceHalalas,
@@ -1334,6 +1373,7 @@ router.patch("/admin/pitch-match-submissions/:id", requireAuth, requireAdmin, as
   const result = await db.transaction(async (tx) => {
     const [submission] = await tx.select().from(pitchMatchSubmissionsTable).where(eq(pitchMatchSubmissionsTable.id, id)).for("update").limit(1);
     if (!submission || submission.status !== "pending") return { error: "This request is no longer pending." } as const;
+    if (action === "approve" && !isStoredMatchImageList(submission.imageUrls)) return { error: "Move this request's photos to file storage before approving it." } as const;
     const reviewedAt = new Date();
     if (action === "reject") {
       const [updated] = await tx.update(pitchMatchSubmissionsTable).set({ status: "rejected", reviewNote, reviewedByUserId: userId, reviewedAt, updatedAt: reviewedAt }).where(eq(pitchMatchSubmissionsTable.id, id)).returning();
@@ -1404,7 +1444,7 @@ router.post(
       return;
     }
 
-    if (!isValidMatchImageList(parsed.data.imageUrls)) { res.status(400).json({ error: "Add up to 3 HTTPS photos. Each photo must be under 1.45 MB." }); return; }
+    if (!isStoredMatchImageList(parsed.data.imageUrls)) { res.status(400).json({ error: "Upload up to 3 pitch photos before saving the match." }); return; }
     const imageUrls = parsed.data.imageUrls ?? [];
 
     if (
@@ -1465,7 +1505,7 @@ router.patch(
       return;
     }
 
-    if (!isValidMatchImageList(parsed.data.imageUrls)) { res.status(400).json({ error: "Add up to 3 HTTPS photos. Each photo must be under 1.45 MB." }); return; }
+    if (!isStoredMatchImageList(parsed.data.imageUrls)) { res.status(400).json({ error: "Upload up to 3 pitch photos before saving the match." }); return; }
     const imageUrls = parsed.data.imageUrls ?? [];
 
     const [existing] = await db
