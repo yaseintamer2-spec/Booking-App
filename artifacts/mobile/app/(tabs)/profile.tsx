@@ -136,6 +136,7 @@ export default function ProfileScreen() {
         </View>
       </View>
       {isMatchStaff ? <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as Href)} style={[styles.settingsRow, { borderColor: colors.border }]}><Feather name="camera" size={17} color={colors.primary} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Staff check-in scanner</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable> : null}
+      {isMatchStaff ? <Pressable accessibilityRole="button" onPress={() => router.push('/referee-matches' as Href)} style={[styles.settingsRow, { borderColor: colors.border }]}><Feather name="activity" size={17} color={colors.primary} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Live match controls</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable> : null}
       <Pressable onPress={() => router.push('/settings')} style={[styles.settingsRow, { borderColor: colors.border }]}>
         <Feather name="settings" size={17} color={colors.mutedForeground} />
         <Text style={[styles.settingsText, { color: colors.foreground }]}>Account settings</Text>

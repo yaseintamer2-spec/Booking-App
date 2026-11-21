@@ -19,6 +19,7 @@ import { useAuth, useUser } from '@clerk/expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { NotificationsButton } from '@/components/NotificationsButton';
+import { LiveScoreboard } from '@/components/LiveScoreboard';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import {
   matchRegistrationMock,
@@ -366,6 +367,7 @@ export default function MatchRegistrationScreen() {
             <View style={[styles.trustRating, { backgroundColor: colors.secondary }]}><Feather name="star" size={15} color={colors.amber} /><View><Text accessibilityLabel={match.pitchRatingAverage == null ? 'Pitch rating: no reviews yet' : `Pitch rating ${match.pitchRatingAverage.toFixed(1)} out of 5 from ${match.pitchRatingCount || 0} reviews`} style={[styles.trustValue, { color: colors.foreground }]}>{match.pitchRatingAverage == null ? 'New pitch' : `${match.pitchRatingAverage.toFixed(1)} / 5`}</Text><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>{match.pitchRatingCount ? `${match.pitchRatingCount} player ratings` : 'No player ratings yet'}</Text></View></View>
             {match.refereeName ? <View style={styles.assignedReferee}>{match.refereeAvatarUrl ? <Image accessibilityLabel={`${match.refereeName}, assigned referee`} source={{ uri: match.refereeAvatarUrl }} style={styles.assignedRefereePhoto} /> : <View style={[styles.assignedRefereePhoto, styles.assignedRefereeFallback, { backgroundColor: colors.secondary }]}><Feather name="user" size={15} color={colors.mutedForeground} /></View>}<View style={{ flexShrink: 1 }}><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>REFEREE</Text><Text numberOfLines={1} style={[styles.trustValue, { color: colors.foreground }]}>{match.refereeName}</Text></View></View> : <View style={styles.assignedReferee}><Feather name="shield" size={17} color={colors.mutedForeground} /><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>Referee not assigned yet</Text></View>}
           </View>
+          {liveMatchId ? <LiveScoreboard matchId={liveMatchId} /> : null}
 
           {liveMatchId ? <>
             <SectionLabel colors={colors}>BOOK FOR FRIENDS</SectionLabel>

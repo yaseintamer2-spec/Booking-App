@@ -61,6 +61,8 @@ function RootLayoutNav() {
       <Stack.Screen name="settings" />
       <Stack.Screen name="admin" />
       <Stack.Screen name="staff-check-in" />
+      <Stack.Screen name="referee-matches" />
+      <Stack.Screen name="referee-match/[id]" />
     </Stack>
   );
 }

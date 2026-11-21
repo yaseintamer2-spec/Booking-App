@@ -15,7 +15,7 @@ import {
   UpdateAdminMatchParams,
   UpdateAdminMatchResponse,
 } from "@workspace/api-zod";
-import { db, matchAlertSubscriptionsTable, matchRatingsTable, matchesTable, notificationsTable, pushTokensTable, registrationsTable } from "@workspace/db";
+import { db, matchAlertSubscriptionsTable, matchEventsTable, matchRatingsTable, matchesTable, notificationsTable, pushTokensTable, registrationsTable } from "@workspace/db";
 import { isAdminUser, isMatchStaffUser, requireAdmin, requireAuth, requireMatchStaff } from "../middlewares/auth";
 import { getMatchEndAt, WAITLIST_OFFER_TTL_MS, canConfirmPaidRegistration, canReserveSeat, isCheckInTokenValid, isOfferExpired, isValidMatchImageList } from "../lib/registration-rules";
 
@@ -62,6 +62,46 @@ async function getRefereeAssignment(userId: string | null | undefined) {
   if (!(await isMatchStaffUser(userId))) throw new Error("Choose an account approved for match staff.");
   const user = await clerkClient.users.getUser(userId);
   return { refereeUserId: user.id, refereeName: user.fullName ?? user.firstName ?? "Match referee", refereeAvatarUrl: user.imageUrl || null };
+}
+
+async function canControlLiveMatch(userId: string, refereeUserId: string | null): Promise<boolean> {
+  return refereeUserId === userId || await isAdminUser(userId);
+}
+
+async function getLiveMatchSnapshot(matchId: string) {
+  const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, matchId)).limit(1);
+  if (!match) return null;
+  const events = await db.select().from(matchEventsTable)
+    .where(and(eq(matchEventsTable.matchId, matchId), isNull(matchEventsTable.voidedAt)))
+    .orderBy(asc(matchEventsTable.createdAt));
+  const players = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, avatarUrl: registrationsTable.avatarUrl, pitchSlot: registrationsTable.pitchSlot })
+    .from(registrationsTable)
+    .where(and(eq(registrationsTable.matchId, matchId), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
+    .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
+  const redScore = events.filter((event) => event.team === "red").length;
+  const blueScore = events.filter((event) => event.team === "blue").length;
+  return {
+    id: match.id,
+    matchStatus: match.status,
+    venueName: match.venueName,
+    neighborhood: match.neighborhood,
+    startsAt: match.startsAt,
+    durationMinutes: match.durationMinutes,
+    capacity: match.capacity,
+    refereeUserId: match.refereeUserId,
+    refereeName: match.refereeName,
+    refereeAvatarUrl: match.refereeAvatarUrl,
+    liveStatus: match.liveStatus,
+    liveStartedAt: match.liveStartedAt,
+    livePhaseStartedAt: match.livePhaseStartedAt,
+    liveFirstHalfEndedAt: match.liveFirstHalfEndedAt,
+    liveSecondHalfStartedAt: match.liveSecondHalfStartedAt,
+    liveEndedAt: match.liveEndedAt,
+    score: { red: redScore, blue: blueScore },
+    players: players.map((player, index) => ({ ...player, team: player.pitchSlot == null ? (index < Math.ceil(players.length / 2) ? "red" : "blue") : player.pitchSlot < Math.ceil(match.capacity / 2) ? "red" : "blue" })),
+    events: events.map((event) => ({ id: event.id, clientEventId: event.clientEventId, type: event.type, team: event.team, period: event.period, minute: event.minute, scorerUserId: event.scorerUserId, scorerName: event.scorerName, assistUserId: event.assistUserId, assistName: event.assistName, createdAt: event.createdAt })),
+    updatedAt: match.updatedAt,
+  };
 }
 
 async function sendPushToUsers(userIds: string[], title: string, body: string, data: Record<string, string>): Promise<void> {
@@ -230,6 +270,118 @@ router.get("/matches/:id/participants", async (req, res): Promise<void> => {
   const rows = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, avatarUrl: registrationsTable.avatarUrl, pitchSlot: registrationsTable.pitchSlot, positionPreference: registrationsTable.positionPreference })
     .from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`)).orderBy(asc(registrationsTable.createdAt));
   res.json(rows);
+});
+
+router.get("/me/referee-matches", requireMatchStaff, async (_req, res): Promise<void> => {
+  const userId = res.locals.userId as string;
+  const admin = await isAdminUser(userId);
+  const now = Date.now();
+  const rows = await db.select().from(matchesTable)
+    .where(and(eq(matchesTable.status, "published"), gt(matchesTable.startsAt, new Date(now - 8 * 60 * 60_000))))
+    .orderBy(asc(matchesTable.startsAt));
+  res.json(rows.filter((match) => (admin || match.refereeUserId === userId) && match.liveStatus !== "full_time")
+    .map((match) => ({ id: match.id, venueName: match.venueName, neighborhood: match.neighborhood, startsAt: match.startsAt, durationMinutes: match.durationMinutes, liveStatus: match.liveStatus, refereeName: match.refereeName })));
+});
+
+router.get("/matches/:id/live", async (req, res): Promise<void> => {
+  const params = GetMatchParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "A valid match ID is required." }); return; }
+  const snapshot = await getLiveMatchSnapshot(params.data.id);
+  if (!snapshot) { res.status(404).json({ error: "Match not found." }); return; }
+  if (snapshot.matchStatus !== "published") { res.status(404).json({ error: "This live match is unavailable." }); return; }
+  if (snapshot.liveStatus === "scheduled" && !snapshot.refereeUserId) { res.status(404).json({ error: "This match has no live match setup." }); return; }
+  res.setHeader("Cache-Control", "no-store");
+  res.json(snapshot);
+});
+
+router.post("/matches/:id/live/state", requireMatchStaff, async (req, res): Promise<void> => {
+  const params = GetMatchParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "A valid match ID is required." }); return; }
+  const userId = res.locals.userId as string;
+  const [current] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
+  if (!current) { res.status(404).json({ error: "Match not found." }); return; }
+  if (!(await canControlLiveMatch(userId, current.refereeUserId))) { res.status(403).json({ error: "Only the assigned referee or an admin can control this match." }); return; }
+  const action = req.body?.action;
+  const now = new Date();
+  const updated = await db.transaction(async (tx) => {
+    const [match] = await tx.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).for("update").limit(1);
+    if (!match || match.status !== "published") return null;
+    if (action === "start_first_half" && match.liveStatus === "scheduled") {
+      const [row] = await tx.update(matchesTable).set({ liveStatus: "first_half", liveStartedAt: now, livePhaseStartedAt: now, updatedAt: now }).where(eq(matchesTable.id, match.id)).returning();
+      return row;
+    }
+    if (action === "start_halftime" && match.liveStatus === "first_half") {
+      const [row] = await tx.update(matchesTable).set({ liveStatus: "halftime", livePhaseStartedAt: null, liveFirstHalfEndedAt: now, updatedAt: now }).where(eq(matchesTable.id, match.id)).returning();
+      return row;
+    }
+    if (action === "start_second_half" && match.liveStatus === "halftime") {
+      const [row] = await tx.update(matchesTable).set({ liveStatus: "second_half", livePhaseStartedAt: now, liveSecondHalfStartedAt: now, updatedAt: now }).where(eq(matchesTable.id, match.id)).returning();
+      return row;
+    }
+    if (action === "finish_match" && match.liveStatus === "second_half") {
+      const [row] = await tx.update(matchesTable).set({ liveStatus: "full_time", livePhaseStartedAt: null, liveEndedAt: now, updatedAt: now }).where(eq(matchesTable.id, match.id)).returning();
+      return row;
+    }
+    return undefined;
+  });
+  if (updated === undefined) { res.status(409).json({ error: "That match-day action is not available in the current phase." }); return; }
+  if (!updated) { res.status(404).json({ error: "Published match not found." }); return; }
+  res.json(await getLiveMatchSnapshot(updated.id));
+});
+
+router.post("/matches/:id/live/events", requireMatchStaff, async (req, res): Promise<void> => {
+  const params = GetMatchParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "A valid match ID is required." }); return; }
+  const userId = res.locals.userId as string;
+  const { clientEventId, team, scorerUserId, assistUserId } = req.body ?? {};
+  if (typeof clientEventId !== "string" || !clientEventId.trim() || clientEventId.length > 100 || !["red", "blue"].includes(team) || typeof scorerUserId !== "string" || (assistUserId != null && typeof assistUserId !== "string")) {
+    res.status(400).json({ error: "Choose a team and scorer, and use a valid goal entry." }); return;
+  }
+  const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
+  if (!match) { res.status(404).json({ error: "Match not found." }); return; }
+  if (match.status !== "published") { res.status(404).json({ error: "This match is not published." }); return; }
+  if (!(await canControlLiveMatch(userId, match.refereeUserId))) { res.status(403).json({ error: "Only the assigned referee or an admin can record match events." }); return; }
+  const [duplicate] = await db.select({ id: matchEventsTable.id }).from(matchEventsTable).where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.clientEventId, clientEventId))).limit(1);
+  if (duplicate) { res.json(await getLiveMatchSnapshot(match.id)); return; }
+  const occurredAt = typeof req.body?.occurredAt === "string" ? new Date(req.body.occurredAt) : new Date();
+  const now = new Date();
+  if (Number.isNaN(occurredAt.getTime()) || occurredAt.getTime() > now.getTime() + 60_000 || !match.liveStartedAt || occurredAt < match.liveStartedAt || (match.liveEndedAt && occurredAt > match.liveEndedAt)) {
+    res.status(400).json({ error: "This goal time is outside the match." }); return;
+  }
+  const period = match.liveFirstHalfEndedAt && occurredAt > match.liveFirstHalfEndedAt
+    ? match.liveSecondHalfStartedAt && occurredAt >= match.liveSecondHalfStartedAt ? 2 : 0
+    : 1;
+  const phaseStart = period === 1 ? match.liveStartedAt : match.liveSecondHalfStartedAt;
+  if (!period || !phaseStart) { res.status(409).json({ error: "Goals can only be recorded during a half, not during the break." }); return; }
+  if (match.liveStatus === "scheduled" || (match.liveStatus === "halftime" && occurredAt >= (match.liveSecondHalfStartedAt ?? now)) || (match.liveStatus === "full_time" && (!match.liveEndedAt || occurredAt > match.liveEndedAt))) {
+    res.status(409).json({ error: "The match is not in a playing phase." }); return;
+  }
+  const registrations = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, pitchSlot: registrationsTable.pitchSlot })
+    .from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
+    .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
+  const scorer = registrations.find((player) => player.userId === scorerUserId);
+  const assist = assistUserId ? registrations.find((player) => player.userId === assistUserId) : undefined;
+  const getPlayerTeam = (player: typeof registrations[number]) => player.pitchSlot == null ? (registrations.indexOf(player) < Math.ceil(registrations.length / 2) ? "red" : "blue") : player.pitchSlot < Math.ceil(match.capacity / 2) ? "red" : "blue";
+  if (!scorer || getPlayerTeam(scorer) !== team || (assistUserId && (!assist || assist.userId === scorer.userId || getPlayerTeam(assist) !== team))) {
+    res.status(400).json({ error: "Choose a scorer and assist from the selected team." }); return;
+  }
+  const halfMinutes = Math.ceil(match.durationMinutes / 2);
+  const minute = Math.max(1, (period === 2 ? halfMinutes : 0) + Math.ceil((occurredAt.getTime() - phaseStart.getTime()) / 60_000));
+  await db.insert(matchEventsTable).values({ matchId: match.id, clientEventId: clientEventId.trim(), type: "goal", team, period, minute, scorerUserId: scorer.userId, scorerName: scorer.firstName, assistUserId: assist?.userId ?? null, assistName: assist?.firstName ?? null, occurredAt, recordedByUserId: userId }).onConflictDoNothing({ target: [matchEventsTable.matchId, matchEventsTable.clientEventId] });
+  res.status(201).json(await getLiveMatchSnapshot(match.id));
+});
+
+router.delete("/matches/:id/live/events/:eventId", requireMatchStaff, async (req, res): Promise<void> => {
+  const params = GetMatchParams.safeParse(req.params);
+  const eventId = paramId(req.params.eventId);
+  if (!params.success) { res.status(400).json({ error: "A valid match ID is required." }); return; }
+  const userId = res.locals.userId as string;
+  const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
+  if (!match) { res.status(404).json({ error: "Match not found." }); return; }
+  if (!(await canControlLiveMatch(userId, match.refereeUserId))) { res.status(403).json({ error: "Only the assigned referee or an admin can correct match events." }); return; }
+  const [event] = await db.update(matchEventsTable).set({ voidedAt: new Date(), voidedByUserId: userId }).where(and(eq(matchEventsTable.id, eventId), eq(matchEventsTable.matchId, match.id), isNull(matchEventsTable.voidedAt))).returning({ id: matchEventsTable.id });
+  if (!event) { res.status(404).json({ error: "That goal is already removed or could not be found." }); return; }
+  res.json(await getLiveMatchSnapshot(match.id));
 });
 
 router.post("/matches/:id/registrations", requireAuth, async (req, res): Promise<void> => {
