@@ -19,7 +19,9 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
+import { StatusBar } from 'expo-status-bar';
 import { useColors } from '@/hooks/useColors';
+import { ThemeProvider, useAppTheme } from '@/providers/ThemeProvider';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -41,6 +43,7 @@ if (apiBaseUrl) setBaseUrl(apiBaseUrl);
 
 function RootLayoutNav() {
   const colors = useColors();
+  const { theme } = useAppTheme();
   const router = useRouter();
   const lastNotificationResponse = useRef<string | null>(null);
   useEffect(() => {
@@ -68,6 +71,8 @@ function RootLayoutNav() {
     return () => style.remove();
   }, []);
   return (
+    <>
+    <StatusBar style={theme === 'light' ? 'dark' : 'light'} />
     <Stack screenOptions={{ headerBackTitle: 'Back', headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" />
@@ -83,6 +88,7 @@ function RootLayoutNav() {
       <Stack.Screen name="referee-matches" />
       <Stack.Screen name="referee-match/[id]" />
     </Stack>
+    </>
   );
 }
 
@@ -140,8 +146,10 @@ export default function RootLayout() {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache} proxyUrl={proxyUrl}>
       <ClerkLoaded>
-        <AuthTokenBridge />
-        {app}
+        <ThemeProvider>
+          <AuthTokenBridge />
+          {app}
+        </ThemeProvider>
       </ClerkLoaded>
     </ClerkProvider>
   );

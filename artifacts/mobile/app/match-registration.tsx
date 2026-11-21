@@ -23,6 +23,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { NotificationsButton } from '@/components/NotificationsButton';
 import { LiveScoreboard, type LiveView } from '@/components/LiveScoreboard';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
+import { useColors } from '@/hooks/useColors';
 import {
   matchRegistrationMock,
   mockJoinMatch,
@@ -32,25 +33,6 @@ import {
 } from '@/data/matchRegistrationMock';
 
 const SHOW_PREVIEW_NOTICE = true;
-const SCREEN_COLORS = {
-  background: '#05111A',
-  card: '#12293A',
-  secondary: '#12293A',
-  border: '#1F3D52',
-  foreground: '#F5FBFF',
-  mutedForeground: '#A3BDCE',
-  primary: '#C8F53A',
-  primaryForeground: '#07120A',
-  accent: '#C8F53A',
-  secondaryForeground: '#A3BDCE',
-  destructive: '#FF1A2B',
-  amber: '#F5C451',
-  blue: '#0A62FF',
-  red: '#FF1A2B',
-  pitch: '#3AA860',
-  pitchDark: '#319956',
-  pitchOutline: '#0B3A26',
-};
 const PREVIEW_COPY =
   "For illustrative purposes only. This isn't the final result: the match shown is a sample, and the design and prices may change.";
 const POSITION_OPTIONS: { label: string; value: PositionPreference }[] = [
@@ -78,7 +60,9 @@ const PITCH_SLOTS = [0, 1].flatMap((half) =>
   ),
 );
 
-type Palette = typeof SCREEN_COLORS;
+type Palette = ReturnType<typeof useColors> & {
+  amber: string; blue: string; red: string; pitch: string; pitchDark: string; pitchOutline: string;
+};
 type ConfirmationTicket = {
   id: string;
   firstName: string;
@@ -97,7 +81,11 @@ type RegistrationTicket = {
 };
 
 export default function MatchRegistrationScreen() {
-  const colors = SCREEN_COLORS;
+  const colors: Palette = {
+    ...useColors(),
+    amber: '#F5C451', blue: '#0A62FF', red: '#FF1A2B',
+    pitch: '#3AA860', pitchDark: '#319956', pitchOutline: '#0B3A26',
+  };
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id: routeId, view: routeView } = useLocalSearchParams<{ id?: string; view?: string }>();
@@ -113,6 +101,8 @@ export default function MatchRegistrationScreen() {
     pitchName: remoteMatch.data.venueName,
     area: remoteMatch.data.neighborhood,
     address: remoteMatch.data.address,
+    imageUrl: remoteMatch.data.imageUrl,
+    imageUrls: remoteMatch.data.imageUrls,
     startsAt: remoteMatch.data.startsAt,
     durationHours: remoteMatch.data.durationMinutes / 60,
     maxPlayers: remoteMatch.data.capacity,
@@ -124,12 +114,39 @@ export default function MatchRegistrationScreen() {
     refereeAvatarUrl: remoteMatch.data.refereeAvatarUrl,
     status: remoteMatch.data.status === 'cancelled' ? 'cancelled' as const : remoteMatch.data.bookedCount >= remoteMatch.data.capacity ? 'full' as const : 'open' as const,
   } : matchRegistrationMock.match;
+  const matchPhotoList = match.imageUrls?.filter((url) => typeof url === 'string' && url.length > 0).slice(0, 3) || [];
+  const uploadedPitchPhotos = matchPhotoList.length
+    ? matchPhotoList
+    : match.imageUrl && (/^https:\/\//i.test(match.imageUrl) || /^data:image\//i.test(match.imageUrl)) ? [match.imageUrl] : [];
+  const pitchPhotos: (string | null)[] = uploadedPitchPhotos.length ? uploadedPitchPhotos : [null];
   const currentUser = account.data ? {
     userId: account.data.id,
     firstName: account.data.name.split(' ')[0],
     avatarUrl: clerkUser?.imageUrl ?? null,
   } : matchRegistrationMock.currentUser;
   const [noticeVisible, setNoticeVisible] = useState(SHOW_PREVIEW_NOTICE);
+  const [pitchPhotosExpanded, setPitchPhotosExpanded] = useState(false);
+  const [activePitchPhoto, setActivePitchPhoto] = useState(0);
+  const [pitchPhotoWidth, setPitchPhotoWidth] = useState(320);
+  const pitchPhotoScroll = useRef<ScrollView>(null);
+  useEffect(() => {
+    setActivePitchPhoto(0);
+    pitchPhotoScroll.current?.scrollTo({ x: 0, animated: false });
+  }, [match.id]);
+  useEffect(() => {
+    if (pitchPhotos.length < 2) return;
+    const timer = setInterval(() => setActivePitchPhoto((current) => {
+      const next = (current + 1) % pitchPhotos.length;
+      pitchPhotoScroll.current?.scrollTo({ x: next * pitchPhotoWidth, animated: true });
+      return next;
+    }), 5000);
+    return () => clearInterval(timer);
+  }, [pitchPhotos.length, pitchPhotoWidth]);
+  useEffect(() => {
+    if (pitchPhotosExpanded) {
+      pitchPhotoScroll.current?.scrollTo({ x: activePitchPhoto * pitchPhotoWidth, animated: false });
+    }
+  }, [pitchPhotosExpanded, activePitchPhoto, pitchPhotoWidth]);
   const [participants, setParticipants] = useState(
     matchRegistrationMock.participants,
   );
@@ -362,44 +379,79 @@ export default function MatchRegistrationScreen() {
               onDismiss={() => setNoticeVisible(false)}
             />
           ) : null}
-          <ImageBackground
-            source={require('../assets/images/riyadh-pitch-hero.jpg')}
-            resizeMode="cover"
-            imageStyle={styles.registrationHeroImage}
-            style={styles.registrationHero}
-            accessibilityLabel="Football pitch under the Riyadh skyline at night"
-          >
-            <LinearGradient
-              pointerEvents="none"
-              colors={['rgba(5,17,26,0.04)', 'rgba(5,17,26,0.35)', 'rgba(5,17,26,0.94)']}
-              locations={[0, 0.42, 1]}
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={styles.registrationHeroCopy}>
-              <Text style={[styles.matchKicker, { color: colors.primary }]}>
-                {`7x7 · ${match.durationHours} HOURS · REFEREE INCLUDED`}
-              </Text>
-              <Text style={[styles.matchTitle, { color: colors.foreground }]}>
-                {dateTitle}
-              </Text>
-              <Text style={[styles.matchSubtitle, { color: colors.foreground }]}>
-                {match.pitchName} · {match.area}
-              </Text>
+          <View style={[styles.registrationLocationCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <ImageBackground
+              source={pitchPhotos[activePitchPhoto] ? { uri: pitchPhotos[activePitchPhoto]! } : require('../assets/images/football-match-card.jpg')}
+              resizeMode="cover"
+              imageStyle={styles.registrationHeroImage}
+              style={[styles.registrationHero, { backgroundColor: colors.card }]}
+              accessibilityLabel={`${match.pitchName} pitch photo ${activePitchPhoto + 1} of ${pitchPhotos.length}`}
+            >
+              <LinearGradient
+                pointerEvents="none"
+                colors={['rgba(5,17,26,0.08)', 'rgba(5,17,26,0.35)', 'rgba(5,17,26,0.94)']}
+                locations={[0, 0.42, 1]}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.registrationHeroCopy}>
+                <Text style={[styles.matchKicker, { color: colors.primary }]}>
+                  {`7x7 · ${match.durationHours} HOURS · REFEREE INCLUDED`}
+                </Text>
+                <Text style={[styles.matchTitle, { color: colors.foreground }]}>{dateTitle}</Text>
+                <Text style={[styles.matchSubtitle, { color: colors.foreground }]}>{match.pitchName}</Text>
+              </View>
+              {pitchPhotos.length > 1 ? <View style={styles.registrationHeroDots}>{pitchPhotos.map((_, index) => <Pressable key={index} accessibilityRole="button" accessibilityLabel={`Show pitch photo ${index + 1} of ${pitchPhotos.length}`} onPress={() => { setActivePitchPhoto(index); pitchPhotoScroll.current?.scrollTo({ x: index * pitchPhotoWidth, animated: true }); }} style={styles.registrationGalleryDotHit}><View style={[styles.registrationGalleryDot, { backgroundColor: index === activePitchPhoto ? colors.googleBlue : 'rgba(232,238,233,.78)' }]} /></Pressable>)}</View> : null}
+            </ImageBackground>
+            <View style={styles.locationSummary}>
+              <View style={styles.locationSummaryCopy}>
+                <View style={styles.locationNameRow}><Feather name="map-pin" size={15} color={colors.primary} /><Text numberOfLines={1} style={[styles.locationName, { color: colors.foreground }]}>{match.area}</Text></View>
+                <Text numberOfLines={2} style={[styles.locationAddress, { color: colors.mutedForeground }]}>{match.address || match.area}</Text>
+                <Pressable
+                  accessibilityRole="link"
+                  accessibilityLabel={`Open ${match.pitchName} in Google Maps`}
+                  onPress={() => {
+                    const query = `${match.pitchName}, ${match.address || match.area}, Riyadh`;
+                    void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
+                  }}
+                  style={styles.mapsLink}
+                >
+                  <Text style={[styles.mapsLinkText, { color: colors.primary }]}>Open in Google Maps</Text>
+                  <Feather name="arrow-up-right" size={13} color={colors.primary} />
+                </Pressable>
+              </View>
               <Pressable
-                accessibilityRole="link"
-                accessibilityLabel={`Open ${match.pitchName} in Google Maps`}
-                onPress={() => {
-                  const query = `${match.pitchName}, ${match.address || match.area}, Riyadh`;
-                  void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
-                }}
-                style={styles.mapsLink}
+                accessibilityRole="button"
+                accessibilityLabel={pitchPhotosExpanded ? 'Hide pitch photos' : `Show ${pitchPhotos.length} pitch photos`}
+                accessibilityState={{ expanded: pitchPhotosExpanded }}
+                onPress={() => setPitchPhotosExpanded((expanded) => !expanded)}
+                style={[styles.expandPitchPhotos, { borderColor: colors.border, backgroundColor: colors.secondary }]}
               >
-                <Feather name="map-pin" size={14} color={colors.primary} />
-                <Text style={[styles.mapsLinkText, { color: colors.primary }]}>View pitch location in Google Maps</Text>
-                <Feather name="arrow-up-right" size={13} color={colors.primary} />
+                <Feather name={pitchPhotosExpanded ? 'chevron-up' : 'chevron-down'} size={19} color={colors.primary} />
               </Pressable>
             </View>
-          </ImageBackground>
+            {pitchPhotosExpanded ? (
+              <View style={styles.expandedPitchGallery} onLayout={(event) => setPitchPhotoWidth(event.nativeEvent.layout.width)}>
+                <ScrollView
+                  ref={pitchPhotoScroll}
+                  horizontal
+                  pagingEnabled
+                  nestedScrollEnabled
+                  showsHorizontalScrollIndicator={false}
+                  onMomentumScrollEnd={(event) => setActivePitchPhoto(Math.min(pitchPhotos.length - 1, Math.round(event.nativeEvent.contentOffset.x / pitchPhotoWidth)))}
+                >
+                  {pitchPhotos.map((photo, index) => (
+                    <ImageBackground
+                      key={`${match.id}-pitch-photo-${index}`}
+                      source={photo ? { uri: photo } : require('../assets/images/football-match-card.jpg')}
+                      resizeMode="cover"
+                      style={[styles.expandedPitchPhoto, { width: pitchPhotoWidth }]}
+                      accessibilityLabel={`${match.pitchName} pitch photo ${index + 1} of ${pitchPhotos.length}`}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+          </View>
           <View accessibilityRole="alert" style={[styles.agePolicy, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="shield" size={16} color={colors.primary} /><Text style={[styles.agePolicyText, { color: colors.mutedForeground }]}>Age group: <Text style={{ color: colors.foreground, fontWeight: '800' }}>{match.ageGroup.replace('-', '–')}</Text>. The referee checks age at the venue and may refuse entry if you do not meet this group, even if you have paid.</Text></View>
           <View style={[styles.matchTrust, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={[styles.trustRating, { backgroundColor: colors.secondary }]}><Feather name="star" size={15} color={colors.amber} /><View><Text accessibilityLabel={match.pitchRatingAverage == null ? 'Pitch rating: no reviews yet' : `Pitch rating ${match.pitchRatingAverage.toFixed(1)} out of 5 from ${match.pitchRatingCount || 0} reviews`} style={[styles.trustValue, { color: colors.foreground }]}>{match.pitchRatingAverage == null ? 'New pitch' : `${match.pitchRatingAverage.toFixed(1)} / 5`}</Text><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>{match.pitchRatingCount ? `${match.pitchRatingCount} player ratings` : 'No player ratings yet'}</Text></View></View>
@@ -1090,10 +1142,23 @@ const styles = StyleSheet.create({
   matchKicker: { fontSize: 12, letterSpacing: 1.3, fontWeight: '700', marginTop: 6 },
   matchTitle: { fontSize: 34, lineHeight: 40, fontWeight: '800', marginTop: 8 },
   matchSubtitle: { fontSize: 14, marginTop: 3 },
-  registrationHero: { height: 248, marginTop: 4, marginBottom: 14, borderRadius: 22, overflow: 'hidden', justifyContent: 'flex-end', backgroundColor: SCREEN_COLORS.card },
+  registrationLocationCard: { marginTop: 4, marginBottom: 14, borderWidth: 1, borderRadius: 22, overflow: 'hidden' },
+  registrationHero: { height: 226, justifyContent: 'flex-end' },
   registrationHeroImage: { borderRadius: 22 },
-  registrationHeroCopy: { paddingHorizontal: 18, paddingBottom: 8 },
-  mapsLink: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 8, paddingRight: 8, marginTop: 2, marginBottom: 5 },
+  registrationHeroCopy: { paddingHorizontal: 18, paddingBottom: 14 },
+  registrationHeroDots: { position: 'absolute', top: 8, right: 7, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, borderRadius: 18, backgroundColor: 'rgba(5,17,26,.56)' },
+  locationSummary: { minHeight: 112, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15, paddingVertical: 8 },
+  locationSummaryCopy: { flex: 1, minWidth: 0 },
+  locationNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  locationName: { fontSize: 14, fontWeight: '800', flexShrink: 1 },
+  locationAddress: { fontSize: 11, lineHeight: 16, marginTop: 5 },
+  expandPitchPhotos: { width: 46, height: 46, borderWidth: 1, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  expandedPitchGallery: { height: 168, overflow: 'hidden', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,.08)' },
+  expandedPitchPhoto: { height: 168, justifyContent: 'flex-end' },
+  registrationGalleryDots: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 2 },
+  registrationGalleryDotHit: { width: 28, minHeight: 42, alignItems: 'center', justifyContent: 'center' },
+  registrationGalleryDot: { width: 7, height: 7, borderRadius: 4 },
+  mapsLink: { minHeight: 40, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingRight: 8, marginTop: 1 },
   mapsLinkText: { fontSize: 11, fontWeight: '700', textDecorationLine: 'underline' },
   agePolicy: { flexDirection: 'row', gap: 9, alignItems: 'flex-start', borderWidth: 1, borderRadius: 13, padding: 11, marginBottom: 8 },
   agePolicyText: { flex: 1, fontSize: 11, lineHeight: 17 },
@@ -1105,7 +1170,7 @@ const styles = StyleSheet.create({
   assignedRefereePhoto: { width: 38, height: 38, borderRadius: 19 },
   assignedRefereeFallback: { alignItems: 'center', justifyContent: 'center' },
   sectionLabel: { fontSize: 12, letterSpacing: 1.5, fontWeight: '800', marginTop: 26, marginBottom: 12 },
-  pitch: { height: PITCH_HEIGHT, borderWidth: 3, borderRadius: 24, overflow: 'hidden', position: 'relative', backgroundColor: SCREEN_COLORS.pitch },
+  pitch: { height: PITCH_HEIGHT, borderWidth: 3, borderRadius: 24, overflow: 'hidden', position: 'relative', backgroundColor: '#3AA860' },
   pitchStripes: { ...StyleSheet.absoluteFill, flexDirection: 'column' },
   pitchStripe: { width: '100%', flex: 1 },
   pitchOutline: { position: 'absolute', top: 8, bottom: 8, left: 8, right: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)', borderRadius: 14 },

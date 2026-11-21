@@ -25,6 +25,8 @@ export type RegistrationMatch = {
   pitchName: string;
   area: string;
   address?: string;
+  imageUrl?: string;
+  imageUrls?: string[];
   pricePerPlayer: number;
   durationHours: number;
   maxGoalkeepers: number;

@@ -123,7 +123,7 @@ export default function ProfileScreen() {
               {(user.data?.name || 'K').slice(0, 1).toUpperCase()}
             </Text>
           )}
-          <View style={[styles.cameraBadge, { backgroundColor: colors.primary }]}>
+          <View style={[styles.cameraBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
             {uploadingImage
               ? <ActivityIndicator size="small" color={colors.primaryForeground} />
               : <Feather name="camera" size={13} color={colors.primaryForeground} />}
