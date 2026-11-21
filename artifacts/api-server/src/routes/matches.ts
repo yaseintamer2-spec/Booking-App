@@ -15,9 +15,10 @@ import {
   UpdateAdminMatchParams,
   UpdateAdminMatchResponse,
 } from "@workspace/api-zod";
-import { db, matchAlertSubscriptionsTable, matchEventsTable, matchRatingsTable, matchesTable, notificationsTable, pushTokensTable, registrationsTable } from "@workspace/db";
+import { db, matchAlertSubscriptionsTable, matchEventsTable, matchRatingsTable, matchesTable, notificationsTable, playerCareerStatsTable, pushTokensTable, registrationsTable } from "@workspace/db";
 import { isAdminUser, isMatchStaffUser, requireAdmin, requireAuth, requireMatchStaff } from "../middlewares/auth";
 import { getMatchEndAt, WAITLIST_OFFER_TTL_MS, canConfirmPaidRegistration, canReserveSeat, isCheckInTokenValid, isOfferExpired, isValidMatchImageList } from "../lib/registration-rules";
+const MATCH_ARCHIVE_HOURS = 12;
 
 const router: IRouter = Router();
 
@@ -69,7 +70,25 @@ async function canControlLiveMatch(userId: string, refereeUserId: string | null)
 }
 
 async function getLiveMatchSnapshot(matchId: string) {
-  const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, matchId)).limit(1);
+  const [match] = await db.select({
+    id: matchesTable.id,
+    status: matchesTable.status,
+    venueName: matchesTable.venueName,
+    neighborhood: matchesTable.neighborhood,
+    startsAt: matchesTable.startsAt,
+    durationMinutes: matchesTable.durationMinutes,
+    capacity: matchesTable.capacity,
+    refereeUserId: matchesTable.refereeUserId,
+    refereeName: matchesTable.refereeName,
+    refereeAvatarUrl: matchesTable.refereeAvatarUrl,
+    liveStatus: matchesTable.liveStatus,
+    liveStartedAt: matchesTable.liveStartedAt,
+    livePhaseStartedAt: matchesTable.livePhaseStartedAt,
+    liveFirstHalfEndedAt: matchesTable.liveFirstHalfEndedAt,
+    liveSecondHalfStartedAt: matchesTable.liveSecondHalfStartedAt,
+    liveEndedAt: matchesTable.liveEndedAt,
+    updatedAt: matchesTable.updatedAt,
+  }).from(matchesTable).where(eq(matchesTable.id, matchId)).limit(1);
   if (!match) return null;
   const events = await db.select().from(matchEventsTable)
     .where(and(eq(matchEventsTable.matchId, matchId), isNull(matchEventsTable.voidedAt)))
@@ -266,7 +285,7 @@ router.get("/matches", async (req, res): Promise<void> => {
 });
 
 router.get("/matches/:id/participants", async (req, res): Promise<void> => {
-  const [match] = await db.select({ id: matchesTable.id }).from(matchesTable).where(and(eq(matchesTable.id, paramId(req.params.id)), eq(matchesTable.status, "published"))).limit(1);
+  const [match] = await db.select({ id: matchesTable.id, liveStatus: matchesTable.liveStatus }).from(matchesTable).where(and(eq(matchesTable.id, paramId(req.params.id)), or(eq(matchesTable.status, "published"), eq(matchesTable.liveStatus, "full_time")))).limit(1);
   if (!match) { res.status(404).json({ error: "Match not found." }); return; }
   const rows = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, avatarUrl: registrationsTable.avatarUrl, pitchSlot: registrationsTable.pitchSlot, positionPreference: registrationsTable.positionPreference })
     .from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`)).orderBy(asc(registrationsTable.createdAt));
@@ -289,10 +308,97 @@ router.get("/matches/:id/live", async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: "A valid match ID is required." }); return; }
   const snapshot = await getLiveMatchSnapshot(params.data.id);
   if (!snapshot) { res.status(404).json({ error: "Match not found." }); return; }
-  if (snapshot.matchStatus !== "published") { res.status(404).json({ error: "This live match is unavailable." }); return; }
+  if (snapshot.matchStatus !== "published" && snapshot.liveStatus !== "full_time") { res.status(404).json({ error: "This live match is unavailable." }); return; }
   if (snapshot.liveStatus === "scheduled" && !snapshot.refereeUserId) { res.status(404).json({ error: "This match has no live match setup." }); return; }
   res.setHeader("Cache-Control", "no-store");
   res.json(snapshot);
+});
+
+router.get("/me/recent-matches", requireAuth, async (_req, res): Promise<void> => {
+  const userId = res.locals.userId as string;
+  const archiveAfter = new Date(Date.now() - MATCH_ARCHIVE_HOURS * 60 * 60_000);
+  const rows = await db.selectDistinct({ matchId: registrationsTable.matchId, endedAt: matchesTable.liveEndedAt }).from(registrationsTable)
+    .innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id))
+    .where(and(
+      eq(matchesTable.liveStatus, "full_time"),
+      gt(matchesTable.liveEndedAt, archiveAfter),
+      sql`${registrationsTable.status} IN ('joined', 'checked_in')`,
+      or(eq(registrationsTable.userId, userId), eq(registrationsTable.bookedByUserId, userId)),
+    ))
+    .orderBy(desc(matchesTable.liveEndedAt)).limit(12);
+  const ids = rows.map(row => row.matchId);
+  const matchRows = ids.length ? await db.select({ id: matchesTable.id, venueName: matchesTable.venueName, neighborhood: matchesTable.neighborhood, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, liveEndedAt: matchesTable.liveEndedAt })
+    .from(matchesTable).where(inArray(matchesTable.id, ids)) : [];
+  const matchesById = new Map(matchRows.map(match => [match.id, match]));
+  const orderedMatches = rows.map(row => matchesById.get(row.matchId)).filter((match): match is NonNullable<typeof match> => Boolean(match));
+  const snapshots = await Promise.all(orderedMatches.map(async (match) => {
+    const live = await getLiveMatchSnapshot(match.id);
+    return live && match.liveEndedAt ? {
+      match: { id: match.id, venueName: match.venueName, neighborhood: match.neighborhood, startsAt: match.startsAt, durationMinutes: match.durationMinutes },
+      live,
+      endedAt: match.liveEndedAt,
+      expiresAt: new Date(match.liveEndedAt.getTime() + MATCH_ARCHIVE_HOURS * 60 * 60_000),
+    } : null;
+  }));
+  res.setHeader("Cache-Control", "no-store");
+  res.json(snapshots.filter(Boolean));
+});
+
+router.get("/me/match-history", requireAuth, async (_req, res): Promise<void> => {
+  const userId = res.locals.userId as string;
+  const offset = typeof _req.query.offset === "string" && /^\d+$/.test(_req.query.offset) ? Number(_req.query.offset) : 0;
+  if (offset > 100_000) { res.status(400).json({ error: "Match history offset is too large." }); return; }
+  const pageSize = 50;
+  const rows = await db.selectDistinct({ matchId: registrationsTable.matchId, endedAt: matchesTable.liveEndedAt }).from(registrationsTable)
+    .innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id))
+    .where(and(
+      eq(matchesTable.liveStatus, "full_time"),
+      sql`${registrationsTable.status} IN ('joined', 'checked_in')`,
+      or(eq(registrationsTable.userId, userId), eq(registrationsTable.bookedByUserId, userId)),
+    ))
+    .orderBy(desc(matchesTable.liveEndedAt)).limit(pageSize).offset(offset);
+  const ids = rows.map(row => row.matchId);
+  const matchRows = ids.length ? await db.select({ id: matchesTable.id, venueName: matchesTable.venueName, neighborhood: matchesTable.neighborhood, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, liveEndedAt: matchesTable.liveEndedAt })
+    .from(matchesTable).where(inArray(matchesTable.id, ids)) : [];
+  const matchesById = new Map(matchRows.map(match => [match.id, match]));
+  const uniqueMatches = rows.map(row => matchesById.get(row.matchId)).filter((match): match is NonNullable<typeof match> => Boolean(match));
+  const events = ids.length ? await db.select({ matchId: matchEventsTable.matchId, team: matchEventsTable.team, type: matchEventsTable.type })
+    .from(matchEventsTable).where(and(inArray(matchEventsTable.matchId, ids), isNull(matchEventsTable.voidedAt))) : [];
+  const scores = new Map<string, { red: number; blue: number; goals: number }>();
+  for (const event of events) {
+    if (event.type !== "goal") continue;
+    const score = scores.get(event.matchId) ?? { red: 0, blue: 0, goals: 0 };
+    score[event.team === "red" ? "red" : "blue"] += 1; score.goals += 1; scores.set(event.matchId, score);
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ items: uniqueMatches.map(match => ({
+    match: { id: match.id, venueName: match.venueName, neighborhood: match.neighborhood, startsAt: match.startsAt, durationMinutes: match.durationMinutes },
+    score: scores.get(match.id) ?? { red: 0, blue: 0, goals: 0 },
+    endedAt: match.liveEndedAt,
+  })), nextOffset: rows.length === pageSize ? offset + pageSize : null });
+});
+
+router.get("/players/:userId/profile", async (req, res): Promise<void> => {
+  const userId = paramId(req.params.userId).trim();
+  if (!userId || userId.length > 128) { res.status(400).json({ error: "Choose a valid player." }); return; }
+  const [stats] = await db.select().from(playerCareerStatsTable).where(eq(playerCareerStatsTable.userId, userId)).limit(1);
+  try {
+    const user = await clerkClient.users.getUser(userId);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      userId,
+      firstName: user.firstName ?? user.fullName?.split(" ")[0] ?? "Player",
+      avatarUrl: user.imageUrl || null,
+      matchesPlayed: stats?.matchesPlayed ?? 0,
+      goals: stats?.goals ?? 0,
+      assists: stats?.assists ?? 0,
+      yellowCards: stats?.yellowCards ?? 0,
+      redCards: stats?.redCards ?? 0,
+      fairPlayScore: stats && stats.matchesPlayed ? Math.round(stats.fairPlayPoints / stats.matchesPlayed) : null,
+    });
+  } catch {
+    res.status(404).json({ error: "Player profile is unavailable." });
+  }
 });
 
 router.post("/matches/:id/live/state", requireMatchStaff, async (req, res): Promise<void> => {
@@ -320,6 +426,27 @@ router.post("/matches/:id/live/state", requireMatchStaff, async (req, res): Prom
       return row;
     }
     if (action === "finish_match" && match.liveStatus === "second_half") {
+      const participants = await tx.select({ userId: registrationsTable.userId }).from(registrationsTable)
+        .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`));
+      const events = await tx.select().from(matchEventsTable)
+        .where(and(eq(matchEventsTable.matchId, match.id), isNull(matchEventsTable.voidedAt)));
+      for (const player of participants) {
+        const goals = events.filter((event) => event.type === "goal" && event.scorerUserId === player.userId).length;
+        const assists = events.filter((event) => event.type === "goal" && event.assistUserId === player.userId).length;
+        const yellowCards = events.filter((event) => event.type === "yellow_card" && event.scorerUserId === player.userId).length;
+        const redCards = events.filter((event) => event.type === "red_card" && event.scorerUserId === player.userId).length;
+        const fairPlayPoints = Math.max(0, 100 - yellowCards * 10 - redCards * 25);
+        await tx.insert(playerCareerStatsTable).values({ userId: player.userId, matchesPlayed: 1, goals, assists, yellowCards, redCards, fairPlayPoints, updatedAt: now })
+          .onConflictDoUpdate({ target: playerCareerStatsTable.userId, set: {
+            matchesPlayed: sql`${playerCareerStatsTable.matchesPlayed} + 1`,
+            goals: sql`${playerCareerStatsTable.goals} + ${goals}`,
+            assists: sql`${playerCareerStatsTable.assists} + ${assists}`,
+            yellowCards: sql`${playerCareerStatsTable.yellowCards} + ${yellowCards}`,
+            redCards: sql`${playerCareerStatsTable.redCards} + ${redCards}`,
+            fairPlayPoints: sql`${playerCareerStatsTable.fairPlayPoints} + ${fairPlayPoints}`,
+            updatedAt: now,
+          } });
+      }
       const [row] = await tx.update(matchesTable).set({ liveStatus: "full_time", livePhaseStartedAt: null, liveEndedAt: now, updatedAt: now }).where(eq(matchesTable.id, match.id)).returning();
       return row;
     }
@@ -369,7 +496,33 @@ router.post("/matches/:id/live/events", requireMatchStaff, async (req, res): Pro
   }
   const halfMinutes = Math.ceil(match.durationMinutes / 2);
   const minute = Math.max(1, (period === 2 ? halfMinutes : 0) + Math.ceil((occurredAt.getTime() - phaseStart.getTime()) / 60_000));
-  await db.insert(matchEventsTable).values({ matchId: match.id, clientEventId: clientEventId.trim(), type: eventType, team, period, minute, scorerUserId: scorer.userId, scorerName: scorer.firstName, assistUserId: assist?.userId ?? null, assistName: assist?.firstName ?? null, occurredAt, recordedByUserId: userId }).onConflictDoNothing({ target: [matchEventsTable.matchId, matchEventsTable.clientEventId] });
+  const insertResult = await db.transaction(async (tx) => {
+    const [lockedMatch] = await tx.select({ liveStatus: matchesTable.liveStatus, liveEndedAt: matchesTable.liveEndedAt })
+      .from(matchesTable).where(eq(matchesTable.id, match.id)).for("update").limit(1);
+    if (!lockedMatch) return { inserted: false, afterEnd: false };
+    if (lockedMatch.liveStatus === "full_time" && (!lockedMatch.liveEndedAt || occurredAt > lockedMatch.liveEndedAt)) return { inserted: false, afterEnd: true };
+    const [inserted] = await tx.insert(matchEventsTable).values({ matchId: match.id, clientEventId: clientEventId.trim(), type: eventType, team, period, minute, scorerUserId: scorer.userId, scorerName: scorer.firstName, assistUserId: assist?.userId ?? null, assistName: assist?.firstName ?? null, occurredAt, recordedByUserId: userId }).onConflictDoNothing({ target: [matchEventsTable.matchId, matchEventsTable.clientEventId] }).returning({ id: matchEventsTable.id });
+    if (inserted && lockedMatch.liveStatus === "full_time") {
+      let fairPlayDelta = 0;
+      if (eventType === "yellow_card" || eventType === "red_card") {
+        const oldCards = await tx.select({ type: matchEventsTable.type }).from(matchEventsTable)
+          .where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.scorerUserId, scorer.userId), isNull(matchEventsTable.voidedAt)));
+        const oldYellow = oldCards.filter(card => card.type === "yellow_card").length - Number(eventType === "yellow_card");
+        const oldRed = oldCards.filter(card => card.type === "red_card").length - Number(eventType === "red_card");
+        fairPlayDelta = Math.max(0, 100 - (oldYellow + Number(eventType === "yellow_card")) * 10 - (oldRed + Number(eventType === "red_card")) * 25) - Math.max(0, 100 - oldYellow * 10 - oldRed * 25);
+      }
+      await tx.update(playerCareerStatsTable).set({
+        goals: sql`${playerCareerStatsTable.goals} + ${Number(eventType === "goal")}`,
+        yellowCards: sql`${playerCareerStatsTable.yellowCards} + ${Number(eventType === "yellow_card")}`,
+        redCards: sql`${playerCareerStatsTable.redCards} + ${Number(eventType === "red_card")}`,
+        fairPlayPoints: sql`${playerCareerStatsTable.fairPlayPoints} + ${fairPlayDelta}`,
+        updatedAt: now,
+      }).where(eq(playerCareerStatsTable.userId, scorer.userId));
+      if (assist) await tx.update(playerCareerStatsTable).set({ assists: sql`${playerCareerStatsTable.assists} + 1`, updatedAt: now }).where(eq(playerCareerStatsTable.userId, assist.userId));
+    }
+    return { inserted: Boolean(inserted), afterEnd: false };
+  });
+  if (insertResult.afterEnd) { res.status(400).json({ error: "This event happened after the match ended." }); return; }
   res.status(201).json(await getLiveMatchSnapshot(match.id));
 });
 
@@ -381,7 +534,35 @@ router.delete("/matches/:id/live/events/:eventId", requireMatchStaff, async (req
   const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
   if (!match) { res.status(404).json({ error: "Match not found." }); return; }
   if (!(await canControlLiveMatch(userId, match.refereeUserId))) { res.status(403).json({ error: "Only the assigned referee or an admin can correct match events." }); return; }
-  const [event] = await db.update(matchEventsTable).set({ voidedAt: new Date(), voidedByUserId: userId }).where(and(eq(matchEventsTable.id, eventId), eq(matchEventsTable.matchId, match.id), isNull(matchEventsTable.voidedAt))).returning({ id: matchEventsTable.id });
+  const voidedAt = new Date();
+  const event = await db.transaction(async (tx) => {
+    const [lockedMatch] = await tx.select({ liveStatus: matchesTable.liveStatus }).from(matchesTable)
+      .where(eq(matchesTable.id, match.id)).for("update").limit(1);
+    if (!lockedMatch) return null;
+    const [current] = await tx.select().from(matchEventsTable).where(and(eq(matchEventsTable.id, eventId), eq(matchEventsTable.matchId, match.id), isNull(matchEventsTable.voidedAt))).for("update").limit(1);
+    if (!current) return null;
+    let fairPlayDelta = 0;
+    if (lockedMatch.liveStatus === "full_time" && (current.type === "yellow_card" || current.type === "red_card")) {
+      const cards = await tx.select({ type: matchEventsTable.type }).from(matchEventsTable)
+        .where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.scorerUserId, current.scorerUserId), isNull(matchEventsTable.voidedAt)));
+      const oldYellow = cards.filter(card => card.type === "yellow_card").length;
+      const oldRed = cards.filter(card => card.type === "red_card").length;
+      fairPlayDelta = Math.max(0, 100 - (oldYellow - Number(current.type === "yellow_card")) * 10 - (oldRed - Number(current.type === "red_card")) * 25) - Math.max(0, 100 - oldYellow * 10 - oldRed * 25);
+    }
+    const [removed] = await tx.update(matchEventsTable).set({ voidedAt, voidedByUserId: userId })
+      .where(eq(matchEventsTable.id, current.id)).returning({ id: matchEventsTable.id });
+    if (removed && lockedMatch.liveStatus === "full_time") {
+      await tx.update(playerCareerStatsTable).set({
+        goals: sql`${playerCareerStatsTable.goals} - ${Number(current.type === "goal")}`,
+        yellowCards: sql`${playerCareerStatsTable.yellowCards} - ${Number(current.type === "yellow_card")}`,
+        redCards: sql`${playerCareerStatsTable.redCards} - ${Number(current.type === "red_card")}`,
+        fairPlayPoints: sql`${playerCareerStatsTable.fairPlayPoints} + ${fairPlayDelta}`,
+        updatedAt: voidedAt,
+      }).where(eq(playerCareerStatsTable.userId, current.scorerUserId));
+      if (current.assistUserId && current.type === "goal") await tx.update(playerCareerStatsTable).set({ assists: sql`${playerCareerStatsTable.assists} - 1`, updatedAt: voidedAt }).where(eq(playerCareerStatsTable.userId, current.assistUserId));
+    }
+    return removed;
+  });
   if (!event) { res.status(404).json({ error: "That event is already removed or could not be found." }); return; }
   res.json(await getLiveMatchSnapshot(match.id));
 });
@@ -579,11 +760,27 @@ router.post("/matches/:id/waitlist/accept", requireAuth, async (req, res): Promi
 router.get("/me/registrations", requireAuth, async (_req, res): Promise<void> => {
   await expireWaitlistOffers();
   const userId = res.locals.userId as string;
-  const rows = await db.select({ registration: registrationsTable, match: matchesTable }).from(registrationsTable).innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id)).where(and(or(eq(registrationsTable.userId, userId), eq(registrationsTable.bookedByUserId, userId)), sql`${registrationsTable.status} IN ('joined', 'offered', 'waitlisted', 'checked_in')`)).orderBy(asc(matchesTable.startsAt));
-  const ratedMatches = await addPitchRatings(rows.map(({ match }) => match));
+  const rows = await db.select({
+    registration: registrationsTable,
+    match: {
+      id: matchesTable.id,
+      venueName: matchesTable.venueName,
+      neighborhood: matchesTable.neighborhood,
+      address: matchesTable.address,
+      startsAt: matchesTable.startsAt,
+      durationMinutes: matchesTable.durationMinutes,
+      bookedCount: matchesTable.bookedCount,
+      capacity: matchesTable.capacity,
+      priceHalalas: matchesTable.priceHalalas,
+      refereeUserId: matchesTable.refereeUserId,
+      liveStatus: matchesTable.liveStatus,
+    },
+  }).from(registrationsTable).innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id))
+    .where(and(or(eq(registrationsTable.userId, userId), eq(registrationsTable.bookedByUserId, userId)), sql`${registrationsTable.status} IN ('joined', 'offered', 'waitlisted', 'checked_in')`))
+    .orderBy(asc(matchesTable.startsAt));
   const myRatings = await db.select({ matchId: matchRatingsTable.matchId, pitchRating: matchRatingsTable.pitchRating, refereeRating: matchRatingsTable.refereeRating }).from(matchRatingsTable).where(eq(matchRatingsTable.userId, userId));
   const myRatingByMatch = new Map(myRatings.map((rating) => [rating.matchId, { pitchRating: rating.pitchRating, refereeRating: rating.refereeRating }]));
-  res.json(rows.map(({ registration }, index) => ({
+  res.json(rows.map(({ registration, match }) => ({
     id: registration.id,
     userId: registration.userId,
     bookedByUserId: registration.bookedByUserId,
@@ -594,7 +791,7 @@ router.get("/me/registrations", requireAuth, async (_req, res): Promise<void> =>
     offerExpiresAt: registration.offerExpiresAt,
     checkInAvailable: registration.status === "joined",
     myRating: myRatingByMatch.get(registration.matchId) ?? null,
-    match: ratedMatches[index],
+    match,
   })));
 });
 
@@ -700,7 +897,7 @@ router.get("/matches/:id", async (req, res): Promise<void> => {
     .where(
       and(
         eq(matchesTable.id, params.data.id),
-        eq(matchesTable.status, "published"),
+        or(eq(matchesTable.status, "published"), eq(matchesTable.liveStatus, "full_time")),
       ),
     )
     .limit(1);

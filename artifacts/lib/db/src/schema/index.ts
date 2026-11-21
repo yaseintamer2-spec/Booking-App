@@ -74,6 +74,7 @@ export const matchesTable = pgTable(
       table.status,
       table.startsAt,
     ),
+    index("football_matches_live_status_ended_idx").on(table.liveStatus, table.liveEndedAt),
     check(
       "football_matches_capacity_positive",
       sql`${table.capacity} > 0 AND ${table.bookedCount} >= 0 AND ${table.bookedCount} <= ${table.capacity}`,
@@ -204,4 +205,19 @@ export const pushTokensTable = pgTable(
     index("player_push_tokens_user_idx").on(table.userId),
     check("player_push_tokens_platform_check", sql`${table.platform} IN ('ios', 'android')`),
   ],
+);
+
+export const playerCareerStatsTable = pgTable(
+  "player_career_stats",
+  {
+    userId: text("user_id").primaryKey(),
+    matchesPlayed: integer("matches_played").notNull().default(0),
+    goals: integer("goals").notNull().default(0),
+    assists: integer("assists").notNull().default(0),
+    yellowCards: integer("yellow_cards").notNull().default(0),
+    redCards: integer("red_cards").notNull().default(0),
+    fairPlayPoints: integer("fair_play_points").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("player_career_stats_goals_idx").on(table.goals)],
 );

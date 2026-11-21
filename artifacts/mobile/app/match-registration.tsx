@@ -19,7 +19,7 @@ import { useAuth, useUser } from '@clerk/expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { NotificationsButton } from '@/components/NotificationsButton';
-import { LiveScoreboard } from '@/components/LiveScoreboard';
+import { LiveScoreboard, type LiveView } from '@/components/LiveScoreboard';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import {
   matchRegistrationMock,
@@ -98,8 +98,9 @@ export default function MatchRegistrationScreen() {
   const colors = SCREEN_COLORS;
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { id: routeId } = useLocalSearchParams<{ id?: string }>();
+  const { id: routeId, view: routeView } = useLocalSearchParams<{ id?: string; view?: string }>();
   const liveMatchId = Array.isArray(routeId) ? routeId[0] : routeId;
+  const readOnly = routeView === 'played';
   const { getToken } = useAuth();
   const { user: clerkUser } = useUser();
   const remoteMatch = useGetMatch(liveMatchId || '', { query: { queryKey: getGetMatchQueryKey(liveMatchId || ''), enabled: !!liveMatchId } });
@@ -146,6 +147,23 @@ export default function MatchRegistrationScreen() {
   const [focusedPosition, setFocusedPosition] =
     useState<PositionPreference | null>(null);
   const [joinButtonFocused, setJoinButtonFocused] = useState(false);
+  const [liveSnapshot, setLiveSnapshot] = useState<LiveView | null>(null);
+  const [profileParticipant, setProfileParticipant] = useState<RegistrationParticipant | null>(null);
+  const [profileStats, setProfileStats] = useState<{ firstName: string; avatarUrl: string | null; matchesPlayed: number; goals: number; assists: number; yellowCards: number; redCards: number; fairPlayScore: number | null } | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState('');
+
+  useEffect(() => {
+    if (!profileParticipant) return;
+    let active = true;
+    setProfileStats(null); setProfileError(''); setProfileLoading(true);
+    fetch(`${apiBaseUrl}/api/players/${encodeURIComponent(profileParticipant.userId)}/profile`)
+      .then(response => response.ok ? response.json() : Promise.reject(new Error('Player stats are not available yet.')))
+      .then(data => { if (active) setProfileStats(data); })
+      .catch(error => { if (active) setProfileError(error instanceof Error ? error.message : 'Could not load player stats.'); })
+      .finally(() => { if (active) setProfileLoading(false); });
+    return () => { active = false; };
+  }, [profileParticipant]);
 
   useFocusEffect(useCallback(() => {
     if (!liveMatchId) return;
@@ -331,11 +349,11 @@ export default function MatchRegistrationScreen() {
               <Feather name="arrow-left" size={21} color={colors.foreground} />
             </Pressable>
             <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>
-              MATCH REGISTRATION
+              {readOnly ? 'MATCH DETAILS' : 'MATCH REGISTRATION'}
             </Text>
             <NotificationsButton />
           </View>
-          {noticeVisible ? (
+          {noticeVisible && !readOnly ? (
             <PreviewNotice
               colors={colors}
               onDismiss={() => setNoticeVisible(false)}
@@ -367,9 +385,9 @@ export default function MatchRegistrationScreen() {
             <View style={[styles.trustRating, { backgroundColor: colors.secondary }]}><Feather name="star" size={15} color={colors.amber} /><View><Text accessibilityLabel={match.pitchRatingAverage == null ? 'Pitch rating: no reviews yet' : `Pitch rating ${match.pitchRatingAverage.toFixed(1)} out of 5 from ${match.pitchRatingCount || 0} reviews`} style={[styles.trustValue, { color: colors.foreground }]}>{match.pitchRatingAverage == null ? 'New pitch' : `${match.pitchRatingAverage.toFixed(1)} / 5`}</Text><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>{match.pitchRatingCount ? `${match.pitchRatingCount} player ratings` : 'No player ratings yet'}</Text></View></View>
             {match.refereeName ? <View style={styles.assignedReferee}>{match.refereeAvatarUrl ? <Image accessibilityLabel={`${match.refereeName}, assigned referee`} source={{ uri: match.refereeAvatarUrl }} style={styles.assignedRefereePhoto} /> : <View style={[styles.assignedRefereePhoto, styles.assignedRefereeFallback, { backgroundColor: colors.secondary }]}><Feather name="user" size={15} color={colors.mutedForeground} /></View>}<View style={{ flexShrink: 1 }}><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>REFEREE</Text><Text numberOfLines={1} style={[styles.trustValue, { color: colors.foreground }]}>{match.refereeName}</Text></View></View> : <View style={styles.assignedReferee}><Feather name="shield" size={17} color={colors.mutedForeground} /><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>Referee not assigned yet</Text></View>}
           </View>
-          {liveMatchId ? <LiveScoreboard matchId={liveMatchId} /> : null}
+          {liveMatchId ? <LiveScoreboard matchId={liveMatchId} showAllEvents={readOnly} onSnapshot={setLiveSnapshot} /> : null}
 
-          {liveMatchId ? <>
+          {liveMatchId && !readOnly ? <>
             <SectionLabel colors={colors}>BOOK FOR FRIENDS</SectionLabel>
             <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>
               Friends need a KICKOFF account with a verified email. Each person gets their own free ticket and QR code.
@@ -412,18 +430,20 @@ export default function MatchRegistrationScreen() {
             colors={colors}
             maxPlayers={match.maxPlayers}
             selectedPitchSlots={selectedPitchSlots}
+            goalsByUser={Object.fromEntries((liveSnapshot?.events || []).filter(event => event.type === 'goal').reduce((counts, event) => counts.set(event.scorerUserId, (counts.get(event.scorerUserId) || 0) + 1), new Map<string, number>()))}
+            onOpenProfile={setProfileParticipant}
             onSelectSpot={selectPitchSpot}
-            disabled={joining || joined || isFull || isCancelled}
+            disabled={readOnly || joining || joined || isFull || isCancelled}
           />
-          <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>
+          {!readOnly ? <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>
             {joined
               ? `Your spot is confirmed. Reopen each ticket QR from My Matches.`
               : !selectedPitchSlots.length
               ? `Tap open + spots to choose ${expectedTicketCount} spot${expectedTicketCount === 1 ? '' : 's'}; they are not confirmed until you join.`
               : `Selected: ${selectedSpotSummary}. Tap an open or selected spot to adjust.`}
-          </Text>
+          </Text> : null}
 
-          <SectionLabel colors={colors}>YOUR POSITION</SectionLabel>
+          {!readOnly ? <><SectionLabel colors={colors}>YOUR POSITION</SectionLabel>
           <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>
             Position preference is for team balancing; your selected pitch spot is saved separately.
           </Text>
@@ -481,10 +501,11 @@ export default function MatchRegistrationScreen() {
             spotsRemaining={spotsRemaining}
             colors={colors}
           />
+          </> : null}
         </View>
       </ScrollView>
 
-      <View
+      {!readOnly ? <View
         style={[
           styles.footer,
           {
@@ -540,7 +561,7 @@ export default function MatchRegistrationScreen() {
             </Text>
           ) : null}
         </View>
-      </View>
+      </View> : null}
       <Modal visible={confirmationTickets.length > 0} transparent animationType="fade" onRequestClose={() => setConfirmationTickets([])}>
         <View style={styles.ticketBackdrop}>
           <View style={[styles.ticketModal, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -561,6 +582,7 @@ export default function MatchRegistrationScreen() {
           </View>
         </View>
       </Modal>
+      <PlayerProfileModal participant={profileParticipant} stats={profileStats} loading={profileLoading} error={profileError} colors={colors} onClose={() => setProfileParticipant(null)} />
     </View>
   );
 }
@@ -630,6 +652,8 @@ function Pitch({
   colors,
   maxPlayers,
   selectedPitchSlots,
+  goalsByUser,
+  onOpenProfile,
   onSelectSpot,
   disabled,
 }: {
@@ -637,6 +661,8 @@ function Pitch({
   colors: Palette;
   maxPlayers: number;
   selectedPitchSlots: number[];
+  goalsByUser: Record<string, number>;
+  onOpenProfile: (participant: RegistrationParticipant) => void;
   onSelectSpot: (slotIndex: number) => void;
   disabled: boolean;
 }) {
@@ -694,6 +720,8 @@ function Pitch({
             teamAccent={slot.half === 0 ? colors.blue : colors.red}
             slotIndex={index}
             selected={selectedPitchSlots.includes(index)}
+            goals={goalsByUser[participantsBySlot.get(index)?.userId || ''] || 0}
+            onOpenProfile={onOpenProfile}
             onSelectSpot={onSelectSpot}
             disabled={disabled}
           />
@@ -709,6 +737,8 @@ function PlayerSlot({
   teamAccent,
   slotIndex,
   selected,
+  goals,
+  onOpenProfile,
   onSelectSpot,
   disabled,
 }: {
@@ -717,6 +747,8 @@ function PlayerSlot({
   teamAccent: string;
   slotIndex: number;
   selected: boolean;
+  goals: number;
+  onOpenProfile: (participant: RegistrationParticipant) => void;
   onSelectSpot: (slotIndex: number) => void;
   disabled: boolean;
 }) {
@@ -772,7 +804,10 @@ function PlayerSlot({
         { opacity, transform: [{ scale }] },
       ]}
     >
-      <View
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`View ${participant.firstName}'s player profile; ${goals} goals in this match`}
+        onPress={() => onOpenProfile(participant)}
         style={[
           styles.playerAvatar,
           {
@@ -783,7 +818,8 @@ function PlayerSlot({
         ]}
       >
         <PlayerPortrait participant={participant} colors={colors} />
-      </View>
+        <View style={styles.matchGoalBadge}><Text style={styles.matchGoalBadgeText}>⚽ {goals}</Text></View>
+      </Pressable>
       <View style={styles.nameChip}>
         <Text
           numberOfLines={1}
@@ -834,6 +870,43 @@ function PlayerPortrait({
       </Text>
     </View>
   );
+}
+
+function PlayerProfileModal({ participant, stats, loading, error, colors, onClose }: {
+  participant: RegistrationParticipant | null;
+  stats: { firstName: string; avatarUrl: string | null; matchesPlayed: number; goals: number; assists: number; yellowCards: number; redCards: number; fairPlayScore: number | null } | null;
+  loading: boolean;
+  error: string;
+  colors: Palette;
+  onClose: () => void;
+}) {
+  return <Modal transparent visible={Boolean(participant)} animationType="fade" onRequestClose={onClose}>
+    <View style={styles.profileBackdrop}><View style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Close player profile" onPress={onClose} style={[styles.profileClose, { backgroundColor: colors.secondary }]}><Feather name="x" size={18} color={colors.foreground} /></Pressable>
+      {participant ? <>
+        <View style={[styles.profilePortrait, { borderColor: colors.primary }]}>{(stats?.avatarUrl || participant.avatarUrl) ? <Image source={{ uri: stats?.avatarUrl || participant.avatarUrl || undefined }} accessibilityLabel={`${stats?.firstName || participant.firstName}'s profile picture`} style={styles.profileImage} /> : <Text style={[styles.profileInitial, { color: colors.primary }]}>{getInitials(participant.firstName)}</Text>}</View>
+        <Text style={[styles.profileName, { color: colors.foreground }]}>{stats?.firstName || participant.firstName}</Text>
+        {profileDetails(stats, loading, error, colors)}
+      </> : null}
+    </View></View>
+  </Modal>;
+}
+
+function profileDetails(stats: { matchesPlayed: number; goals: number; assists: number; yellowCards: number; redCards: number; fairPlayScore: number | null } | null, loading: boolean, error: string, colors: Palette) {
+  const statTiles = [
+    { label: 'MATCHES', value: stats?.matchesPlayed ?? '—', icon: 'users' },
+    { label: 'GOALS', value: stats?.goals ?? '—', icon: 'target' },
+    { label: 'ASSISTS', value: stats?.assists ?? '—', icon: 'corner-up-right' },
+    { label: 'FAIR PLAY', value: stats?.fairPlayScore == null ? '—' : `${stats.fairPlayScore}`, icon: 'shield' },
+    { label: 'YELLOW', value: stats?.yellowCards ?? '—', icon: 'alert-triangle' },
+    { label: 'RED', value: stats?.redCards ?? '—', icon: 'alert-octagon' },
+  ] as const;
+  return <>
+    {loading ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 18 }} /> : null}
+    {error ? <Text style={[styles.profileError, { color: colors.mutedForeground }]}>{error}</Text> : null}
+    {stats ? <View style={styles.profileGrid}>{statTiles.map(tile => <View key={tile.label} style={[styles.profileStat, { backgroundColor: colors.background, borderColor: colors.border }]}><Feather name={tile.icon as never} size={14} color={tile.label === 'YELLOW' ? '#F4C542' : tile.label === 'RED' ? '#EF4444' : colors.primary} /><Text style={[styles.profileStatValue, { color: colors.foreground }]}>{tile.value}</Text><Text style={[styles.profileStatLabel, { color: colors.mutedForeground }]}>{tile.label}</Text></View>)}</View> : null}
+    <Text style={[styles.profileFootnote, { color: colors.mutedForeground }]}>Fair play is an app score out of 100, reduced by cards and averaged across completed matches. Stats remain after the match archive expires.</Text>
+  </>;
 }
 
 function ProgressArea({
@@ -1009,7 +1082,9 @@ const styles = StyleSheet.create({
   absoluteSlot: { position: 'absolute', width: 76, marginLeft: -38 },
   playerSlot: { width: 76, height: SLOT_HEIGHT, alignItems: 'center', justifyContent: 'flex-start' },
   openPlayerSlot: { justifyContent: 'flex-start' },
-  playerAvatar: { width: 50, height: 50, borderRadius: 25, borderWidth: 3, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+  playerAvatar: { width: 50, height: 50, borderRadius: 25, borderWidth: 3, alignItems: 'center', justifyContent: 'center', overflow: 'visible', position: 'relative', shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+  matchGoalBadge: { position: 'absolute', right: -15, bottom: -2, minWidth: 24, height: 16, paddingHorizontal: 3, borderRadius: 8, backgroundColor: 'rgba(4,12,20,.94)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,.3)' },
+  matchGoalBadgeText: { color: '#FFFFFF', fontSize: 8, fontWeight: '900' },
   playerImage: { width: '100%', height: '100%', borderRadius: 25 },
   initialsAvatar: { width: '100%', height: '100%', borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
   initials: { fontSize: 12, fontWeight: '700' },
@@ -1043,4 +1118,17 @@ const styles = StyleSheet.create({
   ticketCard: { minHeight: 260, borderWidth: 1, borderRadius: 16, padding: 12, alignItems: 'center', justifyContent: 'center', gap: 10 },
   ticketName: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
   ticketExpiry: { fontSize: 10, textAlign: 'center' },
+  profileBackdrop: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 22, backgroundColor: 'rgba(0,0,0,.76)' },
+  profileCard: { width: '100%', maxWidth: 380, borderWidth: 1, borderRadius: 22, padding: 20, alignItems: 'center' },
+  profileClose: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end' },
+  profilePortrait: { width: 78, height: 78, borderRadius: 39, borderWidth: 3, backgroundColor: 'rgba(200,245,58,.12)', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginTop: -5 },
+  profileImage: { width: '100%', height: '100%' },
+  profileInitial: { fontSize: 24, fontWeight: '900' },
+  profileName: { fontFamily: 'Georgia', fontSize: 23, fontWeight: '700', marginTop: 10, marginBottom: 16 },
+  profileGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  profileStat: { width: '31.5%', minHeight: 90, borderWidth: 1, borderRadius: 13, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  profileStatValue: { fontSize: 19, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  profileStatLabel: { fontSize: 8, fontWeight: '900', letterSpacing: .5 },
+  profileFootnote: { fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 13 },
+  profileError: { fontSize: 11, textAlign: 'center', marginTop: 12 },
 });
