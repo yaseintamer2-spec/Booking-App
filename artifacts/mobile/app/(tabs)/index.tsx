@@ -10,7 +10,7 @@ import { useColors } from '@/hooks/useColors';
 export default function HomeScreen() {
   const colors = useColors(); const router = useRouter();
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
-  const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey() } });
+  const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey(), retry: false, staleTime: 20_000 } });
   return <Screen refreshing={matches.isRefetching} onRefresh={() => { void matches.refetch(); }}>
     <BrandHeader user={user.data} subtitle="RIYADH, SA" />
     <View style={styles.greeting}><Text style={[styles.hello, { color: colors.mutedForeground }]}>GOOD EVENING{user.data?.name ? `, ${user.data.name.split(' ')[0].toUpperCase()}` : ''}</Text><Text style={[styles.headline, { color: colors.foreground }]}>Find your{'\n'}next match.</Text></View>

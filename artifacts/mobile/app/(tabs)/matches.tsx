@@ -53,7 +53,7 @@ export default function MatchesScreen() {
   const [playerAge, setPlayerAge] = useState<number | null>(null);
 
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
-  const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey() } });
+  const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey(), retry: false, staleTime: 20_000 } });
   useEffect(() => { let active = true; if (!isSignedIn) { setPlayerAge(null); return () => { active = false; }; } void (async () => { try { const token = await getToken(); const response = await fetch(`${apiBaseUrl}/api/me/age`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active && response.ok) setPlayerAge(typeof result.age === 'number' ? result.age : null); } catch { if (active) setPlayerAge(null); } })(); return () => { active = false; }; }, [getToken, isSignedIn]);
   const recommendedAgeGroup = playerAge == null ? null : getRecommendedMatchAgeGroup(playerAge);
   const request = useCallback(async (path: string, init: RequestInit = {}) => {

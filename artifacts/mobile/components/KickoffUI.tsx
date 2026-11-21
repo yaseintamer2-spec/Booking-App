@@ -153,7 +153,7 @@ export function Screen({ children, scroll = true, style, refreshing, onRefresh }
   </View>;
 }
 
-export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, hideMenu = false }: { title?: string; subtitle?: string; user?: CurrentUser; back?: boolean; hideMenu?: boolean }) {
+export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, hideMenu = false, onBack }: { title?: string; subtitle?: string; user?: CurrentUser; back?: boolean; hideMenu?: boolean; onBack?: () => void }) {
   const colors = useColors();
   const router = useRouter();
   const { signOut } = useClerk();
@@ -187,7 +187,7 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
   };
   return <>
     <View style={[styles.header, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 67 : 0) + 8 }]}>
-      {back ? <Pressable onPress={() => router.back()} style={styles.headerIcon} accessibilityLabel="Go back"><Feather name="arrow-left" size={21} color={colors.foreground} /></Pressable> :
+      {back ? <Pressable onPress={onBack ?? (() => router.back())} style={styles.headerIcon} accessibilityRole="button" accessibilityLabel="Go back"><Feather name="arrow-left" size={21} color={colors.foreground} /></Pressable> :
         <Pressable onPress={() => router.push('/(tabs)')} style={styles.brandLockup}><View style={[styles.brandMark, { backgroundColor: colors.primary }]}><Feather name="activity" size={15} color={colors.primaryForeground} /></View><Text style={[styles.brand, { color: colors.foreground }]}>{title}</Text></Pressable>}
       <View style={styles.headerRight}>
         {subtitle ? <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{subtitle}</Text> : null}
