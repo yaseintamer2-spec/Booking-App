@@ -8,11 +8,13 @@ import { BrandHeader, Button, EmptyState, Field, LoadingState, Screen, formatRiy
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
 import { uploadMatchImages } from '@/lib/matchImageUpload';
+import { MatchAgeGroupPicker } from '@/components/MatchAgeGroupPicker';
+import type { MatchAgeGroup } from '@/lib/matchAge';
 
 type Pitch = { email: string; venueName: string; neighborhood: string; address: string };
-type Submission = { id: string; venueName: string; neighborhood: string; address: string; contactPhone: string; startsAt: string; durationMinutes: number; capacity: number; priceHalalas: number; compareAtPriceHalalas: number; refereeIncluded: boolean; waterIncluded: boolean; imageUrls: string[]; status: 'pending' | 'approved' | 'rejected'; reviewNote: string | null; matchId: string | null };
-type Form = { startsAt: string; durationMinutes: string; capacity: string; price: string; compareAt: string; contactPhone: string; refereeIncluded: boolean; waterIncluded: boolean; imageUrls: string[] };
-const freshForm = (): Form => ({ startsAt: toRiyadhLocalInput(new Date(Date.now() + 2 * 86400000)), durationMinutes: '120', capacity: '14', price: '30', compareAt: '35', contactPhone: '', refereeIncluded: true, waterIncluded: true, imageUrls: [] });
+type Submission = { id: string; venueName: string; neighborhood: string; address: string; contactPhone: string; startsAt: string; durationMinutes: number; capacity: number; ageGroup: MatchAgeGroup; priceHalalas: number; compareAtPriceHalalas: number; refereeIncluded: boolean; waterIncluded: boolean; imageUrls: string[]; status: 'pending' | 'approved' | 'rejected'; reviewNote: string | null; matchId: string | null };
+type Form = { startsAt: string; durationMinutes: string; capacity: string; ageGroup: MatchAgeGroup; price: string; compareAt: string; contactPhone: string; refereeIncluded: boolean; waterIncluded: boolean; imageUrls: string[] };
+const freshForm = (): Form => ({ startsAt: toRiyadhLocalInput(new Date(Date.now() + 2 * 86400000)), durationMinutes: '120', capacity: '14', ageGroup: '13-16', price: '30', compareAt: '35', contactPhone: '', refereeIncluded: true, waterIncluded: true, imageUrls: [] });
 
 export default function PitchOwnerScreen() {
   const colors = useColors(); const router = useRouter(); const { getToken } = useAuth();
@@ -32,7 +34,7 @@ export default function PitchOwnerScreen() {
     finally { setLoading(false); }
   }, [request]);
   useEffect(() => { void load(); }, [load]);
-  const change = (key: keyof Form, value: string | boolean | string[]) => setForm((old) => ({ ...old, [key]: value }));
+  const change = (key: keyof Form, value: string | boolean | string[] | MatchAgeGroup) => setForm((old) => ({ ...old, [key]: value }));
   const addPhotos = async () => {
     const remaining = 3 - form.imageUrls.length;
     if (!remaining) return;
@@ -55,7 +57,7 @@ export default function PitchOwnerScreen() {
     setBusy(true);
     try {
       const imageUrls = await uploadMatchImages(form.imageUrls, getToken);
-      await request('/pitch-owner/submissions', { method: 'POST', body: JSON.stringify({ startsAt: startsAt.toISOString(), durationMinutes, capacity, priceHalalas, compareAtPriceHalalas, contactPhone: form.contactPhone.trim(), refereeIncluded: form.refereeIncluded, waterIncluded: form.waterIncluded, imageUrls }) });
+      await request('/pitch-owner/submissions', { method: 'POST', body: JSON.stringify({ startsAt: startsAt.toISOString(), durationMinutes, capacity, ageGroup: form.ageGroup, priceHalalas, compareAtPriceHalalas, contactPhone: form.contactPhone.trim(), refereeIncluded: form.refereeIncluded, waterIncluded: form.waterIncluded, imageUrls }) });
       setForm(freshForm()); await load();
       Alert.alert('Request sent', 'Your match time is now waiting for admin review. It will appear in Discover only after approval.');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not submit the match request.'); }
@@ -73,6 +75,7 @@ export default function PitchOwnerScreen() {
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Propose a match</Text>
       <Field label="MATCH DATE AND TIME · RIYADH" value={form.startsAt} onChangeText={(value) => change('startsAt', value)} placeholder="YYYY-MM-DDTHH:mm" />
       <Field label="CONTACT PHONE" value={form.contactPhone} onChangeText={(value) => change('contactPhone', value)} placeholder="+966 5X XXX XXXX" keyboardType="phone-pad" autoComplete="off" />
+      <Text style={[styles.formGroupTitle, { color: colors.primary }]}>PLAYER AGE GROUP</Text><MatchAgeGroupPicker value={form.ageGroup} onChange={(ageGroup) => change('ageGroup', ageGroup)} />
       <View style={styles.inlineFields}><View style={{ flex: 1 }}><Field label="DURATION · MIN" value={form.durationMinutes} onChangeText={(value) => change('durationMinutes', value)} placeholder="120" keyboardType="numeric" /></View><View style={{ flex: 1 }}><Field label="PLAYERS" value={form.capacity} onChangeText={(value) => change('capacity', value)} placeholder="14" keyboardType="numeric" /></View></View>
       <View style={styles.inlineFields}><View style={{ flex: 1 }}><Field label="PLAYER PRICE · SAR" value={form.price} onChangeText={(value) => change('price', value)} placeholder="30" keyboardType="numeric" /></View><View style={{ flex: 1 }}><Field label="COMPARE AT · SAR" value={form.compareAt} onChangeText={(value) => change('compareAt', value)} placeholder="35" keyboardType="numeric" /></View></View>
       <Text style={[styles.formGroupTitle, { color: colors.primary }]}>PITCH PHOTOS · {form.imageUrls.length}/3</Text>
@@ -86,7 +89,7 @@ export default function PitchOwnerScreen() {
     </View>
     <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 22 }]}>Your match requests</Text>
     {submissions.length ? submissions.map((item) => <View key={item.id} style={[styles.submissionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={styles.submissionTop}><View style={{ flex: 1 }}><Text style={[styles.submissionDate, { color: colors.foreground }]}>{formatRiyadhDateTime(item.startsAt)}</Text><Text style={[styles.meta, { color: colors.mutedForeground }]}>{item.durationMinutes} min · {item.capacity} players · {formatSar(item.priceHalalas)} each</Text></View><View style={[styles.statusPill, { backgroundColor: item.status === 'approved' ? colors.accent : colors.secondary }]}><Text style={[styles.statusText, { color: item.status === 'approved' ? colors.primary : colors.mutedForeground }]}>{item.status.toUpperCase()}</Text></View></View>
+      <View style={styles.submissionTop}><View style={{ flex: 1 }}><Text style={[styles.submissionDate, { color: colors.foreground }]}>{formatRiyadhDateTime(item.startsAt)}</Text><Text style={[styles.meta, { color: colors.mutedForeground }]}>{item.durationMinutes} min · {item.capacity} players · ages {item.ageGroup.replace('-', '–')} · {formatSar(item.priceHalalas)} each</Text></View><View style={[styles.statusPill, { backgroundColor: item.status === 'approved' ? colors.accent : colors.secondary }]}><Text style={[styles.statusText, { color: item.status === 'approved' ? colors.primary : colors.mutedForeground }]}>{item.status.toUpperCase()}</Text></View></View>
       <Text style={[styles.meta, { color: colors.mutedForeground }]}>Contact: {item.contactPhone}</Text>
       {item.status === 'pending' ? <Text style={[styles.reviewCopy, { color: colors.mutedForeground }]}>Waiting for admin review. Not visible to players yet.</Text> : null}
       {item.status === 'rejected' ? <Text style={[styles.reviewCopy, { color: colors.destructive }]}>{item.reviewNote || 'Not approved. Contact the KICKOFF team if you need help.'}</Text> : null}

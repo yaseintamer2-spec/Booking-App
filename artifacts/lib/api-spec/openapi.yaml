@@ -255,6 +255,9 @@ components:
         format:
           type: string
           enum: [7v7]
+        ageGroup:
+          type: string
+          enum: [13-16, 16-20, 20+]
         capacity:
           type: integer
         bookedCount:
@@ -292,6 +295,7 @@ components:
         - startsAt
         - durationMinutes
         - format
+        - ageGroup
         - capacity
         - bookedCount
         - spotsRemaining
@@ -327,6 +331,9 @@ components:
           type: integer
           minimum: 2
           maximum: 30
+        ageGroup:
+          type: string
+          enum: [13-16, 16-20, 20+]
         priceHalalas:
           type: integer
           minimum: 0
@@ -354,6 +361,7 @@ components:
         - startsAt
         - durationMinutes
         - capacity
+        - ageGroup
         - priceHalalas
         - compareAtPriceHalalas
         - status
@@ -383,6 +391,9 @@ components:
           type: integer
           minimum: 2
           maximum: 30
+        ageGroup:
+          type: string
+          enum: [13-16, 16-20, 20+]
         priceHalalas:
           type: integer
           minimum: 0

@@ -29,6 +29,7 @@ export type RegistrationMatch = {
   durationHours: number;
   maxGoalkeepers: number;
   maxPlayers: number;
+  ageGroup: '13-16' | '16-20' | '20+';
   status: RegistrationMatchStatus;
   pitchRatingAverage?: number | null;
   pitchRatingCount?: number;
@@ -58,6 +59,7 @@ export const matchRegistrationMock: {
     durationHours: 2,
     maxGoalkeepers: 2,
     maxPlayers: 14,
+    ageGroup: '13-16',
     status: 'open',
   },
   participants: [

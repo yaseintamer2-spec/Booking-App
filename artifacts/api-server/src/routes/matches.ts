@@ -14,6 +14,7 @@ import {
   UpdateAdminMatchBody,
   UpdateAdminMatchParams,
   UpdateAdminMatchResponse,
+  isMatchAgeGroup,
 } from "@workspace/api-zod";
 import { adminAccessTable, db, matchAlertSubscriptionsTable, matchEventsTable, matchRatingsTable, matchesTable, notificationsTable, pitchMatchSubmissionsTable, pitchOwnerAccessTable, playerCareerStatsTable, playerProfilesTable, pushTokensTable, refereeAccessTable, refereeMatchApplicationsTable, registrationsTable } from "@workspace/db";
 import { isAdminUser, isMatchStaffUser, isOwnerUser, isPitchOwnerUser, OWNER_EMAIL, requireAdmin, requireAuth, requireOwner, requirePitchOwner } from "../middlewares/auth";
@@ -328,6 +329,25 @@ router.patch("/me/preferred-position", requireAuth, async (req, res): Promise<vo
   const [profile] = await db.insert(playerProfilesTable).values({ userId, preferredPosition, updatedAt: new Date() })
     .onConflictDoUpdate({ target: playerProfilesTable.userId, set: { preferredPosition, updatedAt: new Date() } })
     .returning({ preferredPosition: playerProfilesTable.preferredPosition });
+  res.json(profile);
+});
+
+router.get("/me/age", requireAuth, async (_req, res): Promise<void> => {
+  const userId = res.locals.userId as string;
+  const [profile] = await db.select({ age: playerProfilesTable.age }).from(playerProfilesTable).where(eq(playerProfilesTable.userId, userId)).limit(1);
+  res.json({ age: profile?.age ?? null });
+});
+
+router.patch("/me/age", requireAuth, async (req, res): Promise<void> => {
+  const userId = res.locals.userId as string;
+  const age = Number(req.body?.age);
+  const guardianAcknowledged = req.body?.guardianAcknowledged === true;
+  if (!Number.isInteger(age) || age < 13 || age > 120) { res.status(400).json({ error: "Enter an age from 13 to 120." }); return; }
+  if (age < 18 && !guardianAcknowledged) { res.status(400).json({ error: "A parent or guardian must give permission for players under 18." }); return; }
+  const [existing] = await db.select({ preferredPosition: playerProfilesTable.preferredPosition }).from(playerProfilesTable).where(eq(playerProfilesTable.userId, userId)).limit(1);
+  const [profile] = await db.insert(playerProfilesTable).values({ userId, preferredPosition: existing?.preferredPosition ?? "striker", age, guardianConsentAttestedAt: age < 18 ? new Date() : null, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: playerProfilesTable.userId, set: { age, guardianConsentAttestedAt: age < 18 ? new Date() : null, updatedAt: new Date() } })
+    .returning({ age: playerProfilesTable.age });
   res.json(profile);
 });
 
@@ -1121,6 +1141,7 @@ router.post("/admin/matches/:id/check-in", requireAuth, async (req, res): Promis
     res.status(403).json({ error: "Only the assigned referee after accepting the assignment, or an admin, can check players in." }); return;
   }
   const token = req.body?.token;
+  if (req.body?.ageChecked !== true) { res.status(400).json({ error: "Confirm that you checked the player's age against this match's age group before check-in." }); return; }
   if (typeof token !== "string" || token.length < 32) { res.status(400).json({ error: "Scan a valid player check-in QR code." }); return; }
   const hash = createHash("sha256").update(token).digest("hex");
   const now = new Date();
@@ -1312,6 +1333,7 @@ router.post("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (r
   const startsAt = new Date(req.body?.startsAt);
   const durationMinutes = Number(req.body?.durationMinutes);
   const capacity = Number(req.body?.capacity);
+  const ageGroup = req.body?.ageGroup;
   const priceHalalas = Number(req.body?.priceHalalas);
   const compareAtPriceHalalas = Number(req.body?.compareAtPriceHalalas);
   const imageUrls = req.body?.imageUrls ?? [];
@@ -1319,10 +1341,11 @@ router.post("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (r
   if (!Number.isFinite(startsAt.getTime()) || startsAt <= new Date()) { res.status(400).json({ error: "Choose a future match date and time." }); return; }
   if (!Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > 240 || !Number.isInteger(capacity) || capacity < 2 || capacity > 30) { res.status(400).json({ error: "Use a duration from 30 to 240 minutes and capacity from 2 to 30 players." }); return; }
   if (!Number.isInteger(priceHalalas) || !Number.isInteger(compareAtPriceHalalas) || priceHalalas < 0 || compareAtPriceHalalas < priceHalalas) { res.status(400).json({ error: "Set a valid player price and a comparison price at least as high." }); return; }
+  if (!isMatchAgeGroup(ageGroup)) { res.status(400).json({ error: "Choose an age group for this match." }); return; }
   if (!isStoredMatchImageList(imageUrls)) { res.status(400).json({ error: "Upload up to 3 pitch photos before submitting the match request." }); return; }
   const [submission] = await db.insert(pitchMatchSubmissionsTable).values({
       ownerUserId: userId, ownerEmail: access.email, venueName: access.venueName, neighborhood: access.neighborhood,
-      address: access.address, contactPhone, startsAt, durationMinutes, capacity, priceHalalas, compareAtPriceHalalas,
+      address: access.address, contactPhone, startsAt, durationMinutes, capacity, ageGroup, priceHalalas, compareAtPriceHalalas,
       refereeIncluded: req.body?.refereeIncluded !== false, waterIncluded: req.body?.waterIncluded !== false,
       imageUrls, status: "pending",
   }).returning();
@@ -1381,7 +1404,7 @@ router.patch("/admin/pitch-match-submissions/:id", requireAuth, requireAdmin, as
     }
     const [match] = await tx.insert(matchesTable).values({
       venueName: submission.venueName, neighborhood: submission.neighborhood, address: submission.address,
-      startsAt: submission.startsAt, durationMinutes: submission.durationMinutes, capacity: submission.capacity,
+      startsAt: submission.startsAt, durationMinutes: submission.durationMinutes, capacity: submission.capacity, ageGroup: submission.ageGroup,
       priceHalalas: submission.priceHalalas, compareAtPriceHalalas: submission.compareAtPriceHalalas,
       status: "published", refereeIncluded: submission.refereeIncluded, waterIncluded: submission.waterIncluded,
       imageUrls: submission.imageUrls, imageUrl: "match-card",

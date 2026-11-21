@@ -41,6 +41,7 @@ export const matchesTable = pgTable(
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     durationMinutes: integer("duration_minutes").notNull().default(120),
     format: text("format").notNull().default("7v7"),
+    ageGroup: text("age_group").notNull().default("13-16"),
     capacity: integer("capacity").notNull().default(14),
     bookedCount: integer("booked_count").notNull().default(0),
     priceHalalas: integer("price_halalas").notNull().default(3000),
@@ -76,6 +77,7 @@ export const matchesTable = pgTable(
       table.startsAt,
     ),
     index("football_matches_live_status_ended_idx").on(table.liveStatus, table.liveEndedAt),
+    check("football_matches_age_group_check", sql`${table.ageGroup} IN ('13-16', '16-20', '20+')`),
     check(
       "football_matches_capacity_positive",
       sql`${table.capacity} > 0 AND ${table.bookedCount} >= 0 AND ${table.bookedCount} <= ${table.capacity}`,
@@ -296,6 +298,7 @@ export const pitchMatchSubmissionsTable = pgTable(
     refereeIncluded: boolean("referee_included").notNull().default(true),
     waterIncluded: boolean("water_included").notNull().default(true),
     imageUrls: jsonb("image_urls").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    ageGroup: text("age_group").notNull().default("13-16"),
     status: text("status").notNull().default("pending"),
     reviewNote: text("review_note"),
     reviewedByUserId: text("reviewed_by_user_id"),
@@ -308,6 +311,7 @@ export const pitchMatchSubmissionsTable = pgTable(
     index("pitch_match_submissions_owner_created_idx").on(table.ownerUserId, table.createdAt),
     index("pitch_match_submissions_status_starts_idx").on(table.status, table.startsAt),
     check("pitch_match_submissions_status_check", sql`${table.status} IN ('pending', 'approved', 'rejected')`),
+    check("pitch_match_submissions_age_group_check", sql`${table.ageGroup} IN ('13-16', '16-20', '20+')`),
     check("pitch_match_submissions_contact_phone_check", sql`length(trim(${table.contactPhone})) >= 8`),
     check("pitch_match_submissions_capacity_check", sql`${table.capacity} BETWEEN 2 AND 30`),
     check("pitch_match_submissions_duration_check", sql`${table.durationMinutes} BETWEEN 30 AND 240`),
@@ -321,10 +325,13 @@ export const playerProfilesTable = pgTable(
   {
     userId: text("user_id").primaryKey(),
     preferredPosition: text("preferred_position").notNull(),
+    age: integer("age"),
+    guardianConsentAttestedAt: timestamp("guardian_consent_attested_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     check("player_profiles_preferred_position_check", sql`${table.preferredPosition} IN ('striker', 'defender', 'midfielder', 'winger')`),
+    check("player_profiles_age_check", sql`${table.age} IS NULL OR ${table.age} BETWEEN 13 AND 120`),
   ],
 );
 

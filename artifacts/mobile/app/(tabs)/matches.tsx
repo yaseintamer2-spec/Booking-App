@@ -9,6 +9,7 @@ import { getGetCurrentUserQueryKey, getListMatchesQueryKey, useGetCurrentUser, u
 import { BrandHeader, EmptyState, LoadingState, MatchCard, Screen } from '@/components/KickoffUI';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
+import { getRecommendedMatchAgeGroup } from '@/lib/matchAge';
 
 type DayFilter = 'Any day' | 'Today' | 'Tomorrow' | 'This week';
 type SortOption = 'soonest' | 'lowest-price' | 'highest-price' | 'most-spots';
@@ -49,9 +50,12 @@ export default function MatchesScreen() {
   const [matchAlertsBusy, setMatchAlertsBusy] = useState(false);
   const [matchAlertsMessage, setMatchAlertsMessage] = useState('');
   const [pushPromptOpen, setPushPromptOpen] = useState(false);
+  const [playerAge, setPlayerAge] = useState<number | null>(null);
 
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey() } });
+  useEffect(() => { let active = true; if (!isSignedIn) { setPlayerAge(null); return () => { active = false; }; } void (async () => { try { const token = await getToken(); const response = await fetch(`${apiBaseUrl}/api/me/age`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active && response.ok) setPlayerAge(typeof result.age === 'number' ? result.age : null); } catch { if (active) setPlayerAge(null); } })(); return () => { active = false; }; }, [getToken, isSignedIn]);
+  const recommendedAgeGroup = playerAge == null ? null : getRecommendedMatchAgeGroup(playerAge);
   const request = useCallback(async (path: string, init: RequestInit = {}) => {
     const token = await getToken();
     const response = await fetch(`${apiBaseUrl}/api${path}`, {
@@ -195,6 +199,7 @@ export default function MatchesScreen() {
     <Text style={[styles.kicker, { color: colors.primary }]}>MADE FOR THE GAME</Text>
     <Text style={[styles.title, { color: colors.foreground }]}>Discover matches.</Text>
     <Text style={[styles.sub, { color: colors.mutedForeground }]}>Organized 7v7 football, across Riyadh.</Text>
+    <Pressable accessibilityRole="button" onPress={() => router.push('/player-age' as never)} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.secondary, marginTop: 10 }}><Feather name="user" size={14} color={colors.primary} /><Text style={{ fontSize: 11, fontWeight: '700', color: colors.foreground }}>{playerAge == null ? 'Add your age for match recommendations' : `Age ${playerAge} · ${recommendedAgeGroup ? `recommended group ${recommendedAgeGroup.replace('-', '–')}` : 'edit age'}`}</Text></Pressable>
 
     <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Feather name="search" size={17} color={colors.mutedForeground} />
@@ -249,7 +254,7 @@ export default function MatchesScreen() {
     </>}
 
     {!matches.isLoading && !matches.isError ? <Text style={[styles.resultCount, { color: colors.mutedForeground }]}>{visible.length} {visible.length === 1 ? 'match' : 'matches'}</Text> : null}
-    {matches.isLoading ? <LoadingState /> : matches.isError ? <EmptyState title="Matches are out of reach" body="We couldn't load the schedule. Try again in a moment." icon="wifi-off" action="Retry" onAction={() => matches.refetch()} /> : visible.length ? visible.map(match => <MatchCard key={match.id} match={match} onPress={() => router.push({ pathname: '/match-registration', params: { id: match.id } })} />) : <EmptyState icon="map-pin" title={hasActiveFilters ? 'No games match those filters.' : 'No matches scheduled yet.'} body={hasActiveFilters ? 'Try widening the date, area, price, or spots left filters.' : 'New games will appear here as soon as they are published.'} action={hasActiveFilters ? 'Clear filters' : undefined} onAction={hasActiveFilters ? clearFilters : undefined} />}
+    {matches.isLoading ? <LoadingState /> : matches.isError ? <EmptyState title="Matches are out of reach" body="We couldn't load the schedule. Try again in a moment." icon="wifi-off" action="Retry" onAction={() => matches.refetch()} /> : visible.length ? visible.map(match => <MatchCard key={match.id} match={match} recommended={match.ageGroup === recommendedAgeGroup} onPress={() => router.push({ pathname: '/match-registration', params: { id: match.id } })} />) : <EmptyState icon="map-pin" title={hasActiveFilters ? 'No games match those filters.' : 'No matches scheduled yet.'} body={hasActiveFilters ? 'Try widening the date, area, price, or spots left filters.' : 'New games will appear here as soon as they are published.'} action={hasActiveFilters ? 'Clear filters' : undefined} onAction={hasActiveFilters ? clearFilters : undefined} />}
     <Modal transparent visible={pushPromptOpen} animationType="fade" onRequestClose={() => setPushPromptOpen(false)}>
       <View style={styles.pushBackdrop}>
         <View style={[styles.pushCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

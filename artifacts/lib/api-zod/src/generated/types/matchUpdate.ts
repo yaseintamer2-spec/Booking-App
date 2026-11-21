@@ -25,6 +25,7 @@ export interface MatchUpdate {
      * @maximum 30
      */
   capacity?: number;
+  ageGroup?: '13-16' | '16-20' | '20+';
   /** @minimum 0 */
   priceHalalas?: number;
   /** @minimum 0 */

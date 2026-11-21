@@ -13,6 +13,8 @@ import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { uploadMatchImages } from '@/lib/matchImageUpload';
+import { MatchAgeGroupPicker } from '@/components/MatchAgeGroupPicker';
+import type { MatchAgeGroup } from '@/lib/matchAge';
 
 type Referee = { id: string; name: string; avatarUrl: string | null };
 type AdminGrant = { email: string; createdAt: string };
@@ -31,12 +33,13 @@ function confirmAdminAction(title: string, message: string, confirmLabel: string
 type FormState = {
   venueName: string; neighborhood: string; address: string; startsAt: string;
   durationMinutes: string; capacity: string; price: string; compareAt: string;
+  ageGroup: MatchAgeGroup;
   status: 'draft' | 'published' | 'cancelled'; refereeIncluded: boolean; refereeUserId: string; waterIncluded: boolean; imageUrl: string; imageUrls: string[];
 };
-const freshForm = (): FormState => ({ venueName: '', neighborhood: '', address: '', startsAt: toRiyadhLocalInput(new Date(Date.now() + 86400000)), durationMinutes: '120', capacity: '14', price: '30', compareAt: '35', status: 'draft', refereeIncluded: true, refereeUserId: '', waterIncluded: true, imageUrl: '', imageUrls: [] });
+const freshForm = (): FormState => ({ venueName: '', neighborhood: '', address: '', startsAt: toRiyadhLocalInput(new Date(Date.now() + 86400000)), durationMinutes: '120', capacity: '14', price: '30', compareAt: '35', ageGroup: '13-16', status: 'draft', refereeIncluded: true, refereeUserId: '', waterIncluded: true, imageUrl: '', imageUrls: [] });
 function fromMatch(match: Match): FormState {
   const imageUrls = match.imageUrls?.length ? match.imageUrls : /^https:\/\//i.test(match.imageUrl) ? [match.imageUrl] : [];
-  return { venueName: match.venueName, neighborhood: match.neighborhood, address: match.address, startsAt: toRiyadhLocalInput(match.startsAt), durationMinutes: String(match.durationMinutes), capacity: String(match.capacity), price: String(match.priceHalalas / 100), compareAt: String(match.compareAtPriceHalalas / 100), status: match.status, refereeIncluded: match.refereeIncluded, refereeUserId: match.refereeUserId || '', waterIncluded: match.waterIncluded, imageUrl: imageUrls[0] || '', imageUrls };
+  return { venueName: match.venueName, neighborhood: match.neighborhood, address: match.address, startsAt: toRiyadhLocalInput(match.startsAt), durationMinutes: String(match.durationMinutes), capacity: String(match.capacity), ageGroup: match.ageGroup, price: String(match.priceHalalas / 100), compareAt: String(match.compareAtPriceHalalas / 100), status: match.status, refereeIncluded: match.refereeIncluded, refereeUserId: match.refereeUserId || '', waterIncluded: match.waterIncluded, imageUrl: imageUrls[0] || '', imageUrls };
 }
 
 export default function AdminScreen() {
@@ -97,7 +100,7 @@ export default function AdminScreen() {
     setFormError('');
     const startsAt = parseRiyadhLocalInput(form.startsAt);
     if (!form.venueName.trim() || !form.neighborhood.trim() || form.address.trim().length < 5 || !startsAt) { setFormError('Add a venue, Riyadh neighborhood, full address, and date/time in YYYY-MM-DDTHH:mm format.'); return; }
-    const payload = { venueName: form.venueName.trim(), neighborhood: form.neighborhood.trim(), address: form.address.trim(), startsAt: startsAt.toISOString(), durationMinutes: Number(form.durationMinutes), capacity: Number(form.capacity), priceHalalas: Math.round(Number(form.price) * 100), compareAtPriceHalalas: Math.round(Number(form.compareAt) * 100), status: form.status, refereeIncluded: form.refereeIncluded, refereeUserId: form.refereeUserId || null, waterIncluded: form.waterIncluded, imageUrl: 'match-card', imageUrls: form.imageUrls };
+    const payload = { venueName: form.venueName.trim(), neighborhood: form.neighborhood.trim(), address: form.address.trim(), startsAt: startsAt.toISOString(), durationMinutes: Number(form.durationMinutes), capacity: Number(form.capacity), ageGroup: form.ageGroup, priceHalalas: Math.round(Number(form.price) * 100), compareAtPriceHalalas: Math.round(Number(form.compareAt) * 100), status: form.status, refereeIncluded: form.refereeIncluded, refereeUserId: form.refereeUserId || null, waterIncluded: form.waterIncluded, imageUrl: 'match-card', imageUrls: form.imageUrls };
     if (!Number.isInteger(payload.durationMinutes) || payload.durationMinutes < 30 || payload.durationMinutes > 240 || !Number.isInteger(payload.capacity) || payload.capacity < 2 || payload.capacity > 30 || !Number.isFinite(payload.priceHalalas) || payload.priceHalalas < 0 || !Number.isFinite(payload.compareAtPriceHalalas) || payload.compareAtPriceHalalas <= payload.priceHalalas) { setFormError('Use 30–240 minutes, 2–30 players, and a compare-at price above the SAR player price.'); return; }
     if (startsAt.getTime() <= Date.now()) { setFormError('Match start time must be in the future.'); return; }
     try {
@@ -185,6 +188,7 @@ export default function AdminScreen() {
           <Field label="FULL ADDRESS" value={form.address} onChangeText={v => change('address', v)} placeholder="Street and location details" multiline />
            <Field label="DATE AND TIME · RIYADH" value={form.startsAt} onChangeText={v => change('startsAt', v)} placeholder="YYYY-MM-DDTHH:mm" />
           <Text style={[styles.formGroupTitle, { color: colors.primary }]}>MATCH SETUP</Text>
+          <Text style={[styles.photoHint, { color: colors.mutedForeground }]}>PLAYER AGE GROUP</Text><MatchAgeGroupPicker value={form.ageGroup} onChange={(ageGroup) => setForm((current) => ({ ...current, ageGroup }))} />
           <View style={styles.inlineFields}><View style={{ flex: 1 }}><Field label="DURATION (MIN)" value={form.durationMinutes} onChangeText={v => change('durationMinutes', v)} placeholder="120" keyboardType="numeric" /></View><View style={{ flex: 1 }}><Field label="CAPACITY" value={form.capacity} onChangeText={v => change('capacity', v)} placeholder="14" keyboardType="numeric" /></View></View>
           <View style={styles.inlineFields}><View style={{ flex: 1 }}><Field label="PLAYER PRICE (SAR)" value={form.price} onChangeText={v => change('price', v)} placeholder="30" keyboardType="numeric" /></View><View style={{ flex: 1 }}><Field label="COMPARE AT (SAR)" value={form.compareAt} onChangeText={v => change('compareAt', v)} placeholder="35" keyboardType="numeric" /></View></View>
           <Text style={[styles.formGroupTitle, { color: colors.primary }]}>PITCH PHOTOS · {form.imageUrls.length}/3</Text>

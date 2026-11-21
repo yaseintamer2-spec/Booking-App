@@ -17,6 +17,7 @@ export interface Match {
   durationMinutes: number;
   format: MatchFormat;
   capacity: number;
+  ageGroup: '13-16' | '16-20' | '20+';
   bookedCount: number;
   spotsRemaining: number;
   priceHalalas: number;

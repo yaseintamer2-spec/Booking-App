@@ -3,8 +3,8 @@ import { eq } from "drizzle-orm";
 import { db, legalAcceptancesTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
 
-export const TERMS_VERSION = "2026-11-21-v1";
-export const PRIVACY_VERSION = "2026-11-21-v1";
+export const TERMS_VERSION = "2026-11-21-v2";
+export const PRIVACY_VERSION = "2026-11-21-v2";
 
 const router: IRouter = Router();
 
