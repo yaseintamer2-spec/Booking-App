@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
 import { BrandHeader, EmptyState, Screen, formatRiyadhDate, formatRiyadhTime } from '@/components/KickoffUI';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { CheckInQrModal } from '@/components/CheckInQrModal';
 import { LiveScoreboard } from '@/components/LiveScoreboard';
 import { useColors } from '@/hooks/useColors';
@@ -25,7 +26,7 @@ export default function MyMatchesScreen() {
   const [pitchRatings, setPitchRatings] = useState<Record<string, number>>({}); const [refereeRatings, setRefereeRatings] = useState<Record<string, number>>({}); const [ratingsSaved, setRatingsSaved] = useState<Record<string, boolean>>({});
   const [qr, setQr] = useState<{ value: string; venue: string; player: string; pitchSlot: number | null; expiresAt: string } | null>(null); const [pushEnabled, setPushEnabled] = useState(false);
   const apiBase = apiBaseUrl;
-  const request = useCallback(async (path: string, init: RequestInit = {}) => { const token = await getToken(); const response = await fetch(`${apiBase}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } }); const payload = response.status === 204 ? null : await response.json(); if (!response.ok) throw new Error(payload?.error || 'Could not complete your request.'); return payload; }, [apiBase, getToken]);
+  const request = useCallback(async (path: string, init: RequestInit = {}) => { const token = await getToken(); const response = await fetchWithTimeout(`${apiBase}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } }); const payload = response.status === 204 ? null : await response.json(); if (!response.ok) throw new Error(payload?.error || 'Could not complete your request.'); return payload; }, [apiBase, getToken]);
   const load = useCallback(async () => { try { const [registrations, alerts, recent, history] = await Promise.all([request('/me/registrations'), request('/me/notifications'), request('/me/recent-matches'), request('/me/match-history?offset=0')]); setItems(registrations); setRecentMatches(recent); setHistoryMatches(history.items); setHistoryNextOffset(history.nextOffset); setNotifications(alerts); setRatingsSaved(Object.fromEntries(registrations.filter((entry: Registration) => entry.myRating).map((entry: Registration) => [entry.match.id, true]))); setPitchRatings(Object.fromEntries(registrations.filter((entry: Registration) => entry.myRating).map((entry: Registration) => [entry.match.id, entry.myRating!.pitchRating]))); setRefereeRatings(Object.fromEntries(registrations.filter((entry: Registration) => entry.myRating?.refereeRating).map((entry: Registration) => [entry.match.id, entry.myRating!.refereeRating!]))); setError(''); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load your matches.'); } }, [request]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { const timer = setInterval(() => setClockNow(Date.now()), 60_000); return () => clearInterval(timer); }, []);

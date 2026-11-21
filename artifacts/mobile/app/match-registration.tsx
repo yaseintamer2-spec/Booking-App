@@ -13,6 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import type { ScrollViewInstance } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -23,6 +24,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { NotificationsButton } from '@/components/NotificationsButton';
 import { LiveScoreboard, type LiveView } from '@/components/LiveScoreboard';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { useColors } from '@/hooks/useColors';
 import {
   matchRegistrationMock,
@@ -128,7 +130,7 @@ export default function MatchRegistrationScreen() {
   const [pitchPhotosExpanded, setPitchPhotosExpanded] = useState(false);
   const [activePitchPhoto, setActivePitchPhoto] = useState(0);
   const [pitchPhotoWidth, setPitchPhotoWidth] = useState(320);
-  const pitchPhotoScroll = useRef<ScrollView>(null);
+  const pitchPhotoScroll = useRef<ScrollViewInstance | null>(null);
   useEffect(() => {
     setActivePitchPhoto(0);
     pitchPhotoScroll.current?.scrollTo({ x: 0, animated: false });
@@ -177,7 +179,7 @@ export default function MatchRegistrationScreen() {
     if (!profileParticipant) return;
     let active = true;
     setProfileStats(null); setProfileError(''); setProfileLoading(true);
-    fetch(`${apiBaseUrl}/api/players/${encodeURIComponent(profileParticipant.userId)}/profile`)
+    fetchWithTimeout(`${apiBaseUrl}/api/players/${encodeURIComponent(profileParticipant.userId)}/profile`, {}, 8_000)
       .then(response => response.ok ? response.json() : Promise.reject(new Error('Player stats are not available yet.')))
       .then(data => { if (active) setProfileStats(data); })
       .catch(error => { if (active) setProfileError(error instanceof Error ? error.message : 'Could not load player stats.'); })
@@ -188,7 +190,7 @@ export default function MatchRegistrationScreen() {
   useFocusEffect(useCallback(() => {
     if (!liveMatchId) return;
     let active = true;
-    fetch(`${apiBaseUrl}/api/matches/${liveMatchId}/participants`)
+    fetchWithTimeout(`${apiBaseUrl}/api/matches/${liveMatchId}/participants`, {}, 8_000)
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('Could not load players.')))
       .then((rows: RegistrationParticipant[]) => {
         if (!active) return;

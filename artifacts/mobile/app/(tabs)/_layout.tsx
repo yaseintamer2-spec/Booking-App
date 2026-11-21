@@ -10,6 +10,7 @@ import { useAppTheme } from '@/providers/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PositionBadge } from '@/components/PreferredPositionPicker';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { useRouter } from 'expo-router';
 
 export default function TabsLayout() {
@@ -28,7 +29,7 @@ export default function TabsLayout() {
     (async () => {
       try {
         const token = await getToken();
-        const response = await fetch(`${apiBaseUrl}/api/legal/acceptance`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        const response = await fetchWithTimeout(`${apiBaseUrl}/api/legal/acceptance`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }, 7_000);
         const result = await response.json();
         if (!response.ok) throw new Error('Could not verify the current terms.');
         if (!active) return;
@@ -38,7 +39,7 @@ export default function TabsLayout() {
     })();
     return () => { active = false; };
   }, [getToken, legalAttempt, router]);
-  useEffect(() => { let active = true; (async () => { try { const token = await getToken(); const response = await fetch(`${apiBaseUrl}/api/me/preferred-position`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active && response.ok && typeof result.preferredPosition === 'string') setPreferredPosition(result.preferredPosition); } catch { /* The profile screen can refresh the badge later. */ } })(); return () => { active = false; }; }, [getToken]);
+  useEffect(() => { let active = true; (async () => { try { const token = await getToken(); const response = await fetchWithTimeout(`${apiBaseUrl}/api/me/preferred-position`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }, 5_000); const result = await response.json(); if (active && response.ok && typeof result.preferredPosition === 'string') setPreferredPosition(result.preferredPosition); } catch { /* The profile screen can refresh the badge later. */ } })(); return () => { active = false; }; }, [getToken]);
   if (legalStatus !== 'accepted') return <View style={[styles.legalGate, { backgroundColor: colors.background }]}>
     {legalStatus === 'error' ? <><Text style={[styles.legalGateTitle, { color: colors.foreground }]}>Can’t verify your terms yet.</Text><Text style={[styles.legalGateCopy, { color: colors.mutedForeground }]}>Check your connection, then try again.</Text><Pressable accessibilityRole="button" onPress={() => { setLegalStatus('checking'); setLegalAttempt((value) => value + 1); }} style={[styles.legalGateButton, { backgroundColor: colors.primary }]}><Text style={{ color: colors.primaryForeground, fontWeight: '800' }}>Try again</Text></Pressable></> : null}
   </View>;

@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { BrandHeader, Button, EmptyState, Field, LoadingState, Screen, formatRiyadhDateTime, formatSar, parseRiyadhLocalInput, toRiyadhLocalInput } from '@/components/KickoffUI';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { useColors } from '@/hooks/useColors';
 import { uploadMatchImages } from '@/lib/matchImageUpload';
 import { MatchAgeGroupPicker } from '@/components/MatchAgeGroupPicker';
@@ -21,7 +22,7 @@ export default function PitchOwnerScreen() {
   const [pitch, setPitch] = useState<Pitch | null>(null); const [submissions, setSubmissions] = useState<Submission[]>([]); const [form, setForm] = useState<Form>(freshForm); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const request = useCallback(async (path: string, init: RequestInit = {}) => {
     const token = await getToken();
-    const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
+    const response = await fetchWithTimeout(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
     const body = response.status === 204 ? null : await response.json();
     if (!response.ok) throw new Error(body?.error || 'Could not complete the pitch request.');
     return body;

@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@clerk/expo';
 import { BrandHeader, EmptyState, LoadingState, Screen, formatRiyadhDateTime } from '@/components/KickoffUI';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { useColors } from '@/hooks/useColors';
 
 type RefereeMatch = {
@@ -20,7 +21,7 @@ export default function RefereeMatchesScreen() {
   const load = useCallback(async () => {
     try {
       const token = await getToken();
-      const response = await fetch(`${apiBaseUrl}/api/me/referee-matches`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const response = await fetchWithTimeout(`${apiBaseUrl}/api/me/referee-matches`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }, 10_000);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not load referee matches.');
       setMatches(result); setError('');
@@ -33,7 +34,7 @@ export default function RefereeMatchesScreen() {
     setBusyId(match.id);
     try {
       const token = await getToken();
-      const response = await fetch(decision === 'apply' ? `${apiBaseUrl}/api/me/referee-applications` : `${apiBaseUrl}/api/me/referee-matches/${match.id}/decision`, {
+      const response = await fetchWithTimeout(decision === 'apply' ? `${apiBaseUrl}/api/me/referee-applications` : `${apiBaseUrl}/api/me/referee-matches/${match.id}/decision`, {
         method: decision === 'apply' ? 'POST' : 'PATCH', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(decision === 'apply' ? { matchId: match.id } : { decision }),
       });
