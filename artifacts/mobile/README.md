@@ -11,12 +11,12 @@
 ## Give someone administrator access
 
 1. Have the person create their account and verify their email first.
-2. Add `ADMIN_EMAILS` to the repository-root `.env` file. Use the exact verified email; separate multiple emails with commas.
-3. Restart the API server and have the person sign in again.
+2. Sign in as the permanent owner account (`yaseintamer2@gmail.com`) and open **Profile → Admin console**.
+3. Enter the person's verified sign-in email, choose **Add admin**, and confirm. To remove access later, choose **Revoke** beside their email and confirm.
 
-The API checks this allowlist on every administrator request. A user cannot grant themselves administrator access from the app. Keep the allowlist on the server and never put it in the mobile app.
+The API checks the owner or database grant on every administrator request. Only the permanent owner can grant or revoke administrator access; the owner account cannot be removed. Admin changes take effect without changing server environment variables or publishing another app build.
 
-Clerk development and production applications use separate user stores. Create accounts in the appropriate Clerk application and configure the matching `ADMIN_EMAILS` value in the API environment.
+The owner must sign in through the same Clerk environment used by the app. Development and production Clerk applications have separate user stores, so an account created in one environment will not exist in the other.
 
 See the repository-root README for local PostgreSQL, Clerk, API, and browser-preview setup.
 
@@ -29,3 +29,4 @@ New matches default to 7v7, 14 spots, a 120-minute booking, SAR 30 per player, a
 ## Payments
 
 The app does not currently take payments, collect card details, or create paid bookings. The checkout screen is prepared for a later integration, and the API contains a provider boundary for checkout creation, webhook verification, and refunds. Connect a Saudi-compatible provider and configure its server-side credentials before enabling any payment action.
+

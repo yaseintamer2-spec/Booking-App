@@ -11,4 +11,6 @@ export interface CurrentUser {
   email: string;
   name: string;
   isAdmin: boolean;
+  isOwner: boolean;
 }
+

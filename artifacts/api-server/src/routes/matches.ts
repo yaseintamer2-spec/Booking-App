@@ -15,8 +15,8 @@ import {
   UpdateAdminMatchParams,
   UpdateAdminMatchResponse,
 } from "@workspace/api-zod";
-import { db, matchAlertSubscriptionsTable, matchEventsTable, matchRatingsTable, matchesTable, notificationsTable, playerCareerStatsTable, pushTokensTable, registrationsTable } from "@workspace/db";
-import { isAdminUser, isMatchStaffUser, requireAdmin, requireAuth, requireMatchStaff } from "../middlewares/auth";
+import { adminAccessTable, db, matchAlertSubscriptionsTable, matchEventsTable, matchRatingsTable, matchesTable, notificationsTable, playerCareerStatsTable, pushTokensTable, registrationsTable } from "@workspace/db";
+import { isAdminUser, isMatchStaffUser, isOwnerUser, OWNER_EMAIL, requireAdmin, requireAuth, requireMatchStaff, requireOwner } from "../middlewares/auth";
 import { getMatchEndAt, WAITLIST_OFFER_TTL_MS, canConfirmPaidRegistration, canReserveSeat, isCheckInTokenValid, isOfferExpired, isValidMatchImageList } from "../lib/registration-rules";
 const MATCH_ARCHIVE_HOURS = 12;
 
@@ -217,6 +217,7 @@ router.get("/me", requireAuth, async (_req, res): Promise<void> => {
       email,
       name: user.fullName ?? user.firstName ?? email,
       isAdmin: await isAdminUser(userId),
+      isOwner: await isOwnerUser(userId),
     }),
   );
 });
@@ -1004,6 +1005,40 @@ router.post("/matches/:id/ratings", requireAuth, async (req, res): Promise<void>
   res.status(201).json({ saved: true });
 });
 
+router.get("/admin/admins", requireAuth, requireOwner, async (_req, res): Promise<void> => {
+  const administrators = await db.select({ email: adminAccessTable.email, createdAt: adminAccessTable.createdAt })
+    .from(adminAccessTable).orderBy(asc(adminAccessTable.email));
+  res.json({ ownerEmail: OWNER_EMAIL, administrators });
+});
+
+router.post("/admin/admins", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    res.status(400).json({ error: "Enter a valid email address." }); return;
+  }
+  if (email === OWNER_EMAIL) {
+    res.status(400).json({ error: "The owner already has permanent admin access." }); return;
+  }
+  const users = await clerkClient.users.getUserList({ emailAddress: [email], limit: 10 });
+  const account = users.data.find((user) => user.emailAddresses.some((address) => address.verification?.status === "verified" && address.emailAddress.trim().toLowerCase() === email));
+  if (!account) {
+    res.status(404).json({ error: "No account with that verified email was found. Ask them to sign up and verify it first." }); return;
+  }
+  const [grant] = await db.insert(adminAccessTable).values({ email, grantedByUserId: res.locals.userId as string })
+    .onConflictDoNothing({ target: adminAccessTable.email }).returning({ email: adminAccessTable.email, createdAt: adminAccessTable.createdAt });
+  const [saved] = grant ? [grant] : await db.select({ email: adminAccessTable.email, createdAt: adminAccessTable.createdAt })
+    .from(adminAccessTable).where(eq(adminAccessTable.email, email)).limit(1);
+  res.status(grant ? 201 : 200).json(saved);
+});
+
+router.delete("/admin/admins/:email", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const email = paramId(req.params.email).trim().toLowerCase();
+  if (email === OWNER_EMAIL) { res.status(403).json({ error: "The owner account cannot be removed." }); return; }
+  const [removed] = await db.delete(adminAccessTable).where(eq(adminAccessTable.email, email)).returning({ email: adminAccessTable.email });
+  if (!removed) { res.status(404).json({ error: "Admin access was not found." }); return; }
+  res.json({ removed: true, email: removed.email });
+});
+
 router.get("/admin/referees", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
   const users = [];
   let offset = 0;
@@ -1013,7 +1048,12 @@ router.get("/admin/referees", requireAuth, requireAdmin, async (_req, res): Prom
     if (page.data.length < 100) break;
     offset += page.data.length;
   }
-  const approvedEmails = new Set(`${process.env.MATCH_STAFF_EMAILS ?? ""},${process.env.ADMIN_EMAILS ?? ""}`.split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
+  const adminGrants = await db.select({ email: adminAccessTable.email }).from(adminAccessTable);
+  const approvedEmails = new Set([
+    ...`${process.env.MATCH_STAFF_EMAILS ?? ""}`.split(",").map((email) => email.trim().toLowerCase()).filter(Boolean),
+    OWNER_EMAIL,
+    ...adminGrants.map((grant) => grant.email),
+  ]);
   const referees = users.filter((user) => user.emailAddresses.some((email) => email.verification?.status === "verified" && approvedEmails.has(email.emailAddress.trim().toLowerCase())))
     .map((user) => ({ id: user.id, name: user.fullName ?? user.firstName ?? "Match referee", avatarUrl: user.imageUrl || null }));
   res.json(referees);

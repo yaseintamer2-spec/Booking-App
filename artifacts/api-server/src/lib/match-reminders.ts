@@ -18,7 +18,7 @@ export async function sendDueMatchReminders(now = new Date()): Promise<void> {
 
     for (const { userId } of players) {
       const [created] = await db.insert(notificationsTable).values({ userId, matchId: match.id, kind: "match_reminder", message })
-        .onConflictDoNothing({ target: [notificationsTable.userId, notificationsTable.matchId], targetWhere: sql`${notificationsTable.kind} = 'match_reminder' AND ${notificationsTable.matchId} IS NOT NULL` })
+        .onConflictDoNothing({ target: [notificationsTable.userId, notificationsTable.matchId], where: sql`${notificationsTable.kind} = 'match_reminder' AND ${notificationsTable.matchId} IS NOT NULL` })
         .returning({ id: notificationsTable.id, pushSentAt: notificationsTable.pushSentAt });
       const notification = created ?? (await db.select({ id: notificationsTable.id, pushSentAt: notificationsTable.pushSentAt }).from(notificationsTable)
         .where(and(eq(notificationsTable.userId, userId), eq(notificationsTable.matchId, match.id), eq(notificationsTable.kind, "match_reminder"))).limit(1))[0];

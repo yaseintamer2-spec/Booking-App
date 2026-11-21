@@ -229,3 +229,13 @@ export const playerCareerStatsTable = pgTable(
   (table) => [index("player_career_stats_goals_idx").on(table.goals)],
 );
 
+/** Email grants managed by the single application owner; only verified Clerk emails can use them. */
+export const adminAccessTable = pgTable(
+  "admin_access",
+  {
+    email: text("email").primaryKey(),
+    grantedByUserId: text("granted_by_user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+

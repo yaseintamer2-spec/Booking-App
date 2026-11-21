@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Image, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useQueryClient } from '@tanstack/react-query';
 import { Feather } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 
 type Referee = { id: string; name: string; avatarUrl: string | null };
+type AdminGrant = { email: string; createdAt: string };
 
 type FormState = {
   venueName: string; neighborhood: string; address: string; startsAt: string;
@@ -30,10 +31,35 @@ export default function AdminScreen() {
   const colors = useColors(); const insets = useSafeAreaInsets(); const qc = useQueryClient(); const router = useRouter(); const { getToken } = useAuth();
   const me = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const isAdmin = !!me.data?.isAdmin;
+  const isOwner = !!me.data?.isOwner;
   const list = useListAdminMatches({ query: { queryKey: getListAdminMatchesQueryKey(), enabled: isAdmin } });
   const create = useCreateAdminMatch(); const update = useUpdateAdminMatch(); const remove = useDeleteAdminMatch();
   const [referees, setReferees] = useState<Referee[]>([]);
   const [refereeLoadError, setRefereeLoadError] = useState('');
+  const [adminGrants, setAdminGrants] = useState<AdminGrant[]>([]);
+  const [ownerEmail, setOwnerEmail] = useState('yaseintamer2@gmail.com');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminAccessBusy, setAdminAccessBusy] = useState(false);
+  const [adminAccessError, setAdminAccessError] = useState('');
+  const adminAccessRequest = useCallback(async (path: string, init: RequestInit = {}) => {
+    const token = await getToken();
+    const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
+    const payload = response.status === 204 ? null : await response.json();
+    if (!response.ok) throw new Error(payload?.error || 'Could not update admin access.');
+    return payload;
+  }, [getToken]);
+  const loadAdminGrants = useCallback(async () => {
+    if (!isOwner) return;
+    try {
+      const result = await adminAccessRequest('/admin/admins') as { ownerEmail: string; administrators: AdminGrant[] };
+      setOwnerEmail(result.ownerEmail);
+      setAdminGrants(result.administrators);
+      setAdminAccessError('');
+    } catch (error) {
+      setAdminAccessError(error instanceof Error ? error.message : 'Could not load administrators.');
+    }
+  }, [adminAccessRequest, isOwner]);
+  useEffect(() => { void loadAdminGrants(); }, [loadAdminGrants]);
   useEffect(() => {
     if (!isAdmin) return;
     let active = true;
@@ -64,6 +90,18 @@ export default function AdminScreen() {
     catch { setFormError('Could not save this match. Check the fields and try again.'); }
   };
   const deleteMatch = (match: Match) => Alert.alert('Remove this match?', `${match.venueName} will be removed from KICKOFF.`, [{ text: 'Keep match', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: async () => { try { await remove.mutateAsync({ id: match.id }); await refresh(); } catch { Alert.alert('Could not remove match', 'Try again shortly.'); } } }]);
+  const grantAdminAccess = () => {
+    const email = adminEmail.trim().toLowerCase();
+    if (!email) { setAdminAccessError('Enter the person’s verified sign-in email.'); return; }
+    Alert.alert('Grant admin access?', `${email} will be able to manage matches and use the admin tools. You can revoke access here anytime.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Grant access', onPress: () => { void (async () => { setAdminAccessBusy(true); setAdminAccessError(''); try { await adminAccessRequest('/admin/admins', { method: 'POST', body: JSON.stringify({ email }) }); setAdminEmail(''); await loadAdminGrants(); } catch (error) { setAdminAccessError(error instanceof Error ? error.message : 'Could not grant admin access.'); } finally { setAdminAccessBusy(false); } })(); } },
+    ]);
+  };
+  const revokeAdminAccess = (email: string) => Alert.alert('Revoke admin access?', `${email} will lose access to the admin console and match controls. You can grant access again later.`, [
+    { text: 'Keep access', style: 'cancel' },
+    { text: 'Revoke access', style: 'destructive', onPress: () => { void (async () => { setAdminAccessBusy(true); setAdminAccessError(''); try { await adminAccessRequest(`/admin/admins/${encodeURIComponent(email)}`, { method: 'DELETE' }); await loadAdminGrants(); } catch (error) { setAdminAccessError(error instanceof Error ? error.message : 'Could not revoke admin access.'); } finally { setAdminAccessBusy(false); } })(); } },
+  ]);
   const change = (key: keyof FormState, value: string | boolean) => setForm(old => ({ ...old, [key]: value }));
   const addPhotos = async () => {
     const slots = 3 - form.imageUrls.length;
@@ -85,6 +123,16 @@ export default function AdminScreen() {
     <Screen><BrandHeader back user={me.data} subtitle="KICKOFF OPERATIONS" />
       <View style={styles.headingRow}><View><Text style={[styles.kicker, { color: colors.primary }]}>RIYADH / MATCH MANAGEMENT</Text><Text style={[styles.title, { color: colors.foreground }]}>Admin console.</Text></View><Pressable onPress={openCreate} style={[styles.addButton, { backgroundColor: colors.primary }]} testID="create-match"><Feather name="plus" size={19} color={colors.primaryForeground} /></Pressable></View>
       <View style={[styles.adminNote, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="shield" size={15} color={colors.primary} /><Text style={[styles.noteText, { color: colors.mutedForeground }]}>Match changes are checked by the API. Admin access in this interface is only for navigation.</Text></View>
+      {isOwner ? <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.accessHeading}><View style={{ flex: 1 }}><Text style={[styles.formGroupTitle, { color: colors.primary, marginTop: 0, marginBottom: 5 }]}>OWNER ACCESS</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 0 }]}>Only you can grant or revoke admin access.</Text></View><View style={[styles.ownerBadge, { backgroundColor: colors.accent }]}><Feather name="shield" size={12} color={colors.primary} /><Text style={[styles.ownerBadgeText, { color: colors.primary }]}>OWNER</Text></View></View>
+        <Text style={[styles.accessEmail, { color: colors.foreground }]}>{ownerEmail}</Text>
+        <View style={[styles.addAdminRow, { borderColor: colors.border }]}>
+          <TextInput accessibilityLabel="Email address to make an admin" autoCapitalize="none" autoComplete="email" autoCorrect={false} keyboardType="email-address" placeholder="Verified account email" placeholderTextColor={colors.mutedForeground} value={adminEmail} onChangeText={setAdminEmail} editable={!adminAccessBusy} style={[styles.adminEmailInput, { color: colors.foreground }]} />
+          <Pressable accessibilityRole="button" accessibilityLabel="Grant admin access" disabled={adminAccessBusy || !adminEmail.trim()} onPress={grantAdminAccess} style={[styles.grantButton, { backgroundColor: colors.primary, opacity: adminAccessBusy || !adminEmail.trim() ? .55 : 1 }]}><Feather name="user-plus" size={15} color={colors.primaryForeground} /><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{adminAccessBusy ? 'Saving…' : 'Add admin'}</Text></Pressable>
+        </View>
+        {adminAccessError ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.destructive }]}>{adminAccessError}</Text> : null}
+        {adminGrants.length ? adminGrants.map(grant => <View key={grant.email} style={[styles.adminGrantRow, { borderTopColor: colors.border }]}><View style={{ flex: 1 }}><Text numberOfLines={1} style={[styles.grantEmail, { color: colors.foreground }]}>{grant.email}</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 3 }]}>Admin access</Text></View><Pressable accessibilityRole="button" accessibilityLabel={`Revoke admin access for ${grant.email}`} disabled={adminAccessBusy} onPress={() => revokeAdminAccess(grant.email)} style={[styles.revokeButton, { borderColor: colors.destructive, opacity: adminAccessBusy ? .5 : 1 }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>Revoke</Text></Pressable></View>) : <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 12 }]}>No additional admins yet.</Text>}
+      </View> : null}
       <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as Href)} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: 14, marginBottom: 15 }}><Feather name="camera" size={16} color={colors.primaryForeground} /><Text style={{ color: colors.primaryForeground, fontSize: 12, fontWeight: '800' }}>Staff check-in scanner</Text></Pressable>
        {list.isLoading ? <LoadingState /> : list.isError ? <EmptyState icon="alert-circle" title="Admin data unavailable." body="Check your connection and admin permissions, then return to the console." action="Retry" onAction={() => list.refetch()} /> : list.data?.length ? list.data.map(match => <View key={match.id} style={[styles.adminCard, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={styles.cardHeader}><View style={{ flex: 1 }}><Text style={[styles.venue, { color: colors.foreground }]}>{match.venueName}</Text><Text style={[styles.meta, { color: colors.mutedForeground }]}>{match.neighborhood} · {formatRiyadhDateTime(match.startsAt)} Riyadh</Text></View><View style={[styles.status, { backgroundColor: match.status === 'published' ? colors.accent : colors.secondary }]}><Text style={[styles.statusText, { color: match.status === 'published' ? colors.primary : colors.mutedForeground }]}>{match.status.toUpperCase()}</Text></View></View><View style={styles.cardFooter}><Text style={[styles.meta, { color: colors.mutedForeground }]}>{match.bookedCount}/{match.capacity} booked · {formatSar(match.priceHalalas)}</Text><View style={{ flexDirection: 'row', gap: 8 }}><Pressable accessibilityRole="button" accessibilityLabel={`Edit ${match.venueName}`} onPress={() => openEdit(match)} style={[styles.iconAction, { borderColor: colors.border }]}><Feather name="edit-2" size={15} color={colors.foreground} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${match.venueName}`} onPress={() => deleteMatch(match)} style={[styles.iconAction, { borderColor: colors.border }]}><Feather name="trash-2" size={15} color={colors.destructive} /></Pressable></View></View></View>) : <EmptyState icon="calendar" title="No matches in the console." body="Create the first match when the next Riyadh pitch is ready." />}
     </Screen>
@@ -137,6 +185,19 @@ const styles = StyleSheet.create({
   addButton: { width: 45, height: 45, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   adminNote: { borderWidth: 1, borderRadius: 14, padding: 13, flexDirection: 'row', gap: 9, marginBottom: 15 },
   noteText: { flex: 1, fontSize: 10, lineHeight: 15 },
+  accessCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 15 },
+  accessHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  ownerBadge: { minHeight: 28, borderRadius: 14, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  ownerBadgeText: { fontSize: 8, fontWeight: '900', letterSpacing: .8 },
+  accessEmail: { fontSize: 12, fontWeight: '800', marginTop: 10, marginBottom: 12 },
+  addAdminRow: { minHeight: 50, borderWidth: 1, borderRadius: 13, flexDirection: 'row', alignItems: 'center', padding: 4, gap: 5 },
+  adminEmailInput: { flex: 1, minWidth: 0, height: 42, paddingHorizontal: 10, fontSize: 12 },
+  grantButton: { minHeight: 42, borderRadius: 10, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  grantButtonText: { fontSize: 10, fontWeight: '800' },
+  adminGrantRow: { minHeight: 56, borderTopWidth: StyleSheet.hairlineWidth, marginTop: 10, paddingTop: 9, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  grantEmail: { fontSize: 11, fontWeight: '700' },
+  revokeButton: { minHeight: 40, borderWidth: 1, borderRadius: 11, paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center' },
+  revokeText: { fontSize: 10, fontWeight: '800' },
   adminCard: { borderWidth: 1, borderRadius: 16, padding: 15, marginBottom: 12 },
   cardHeader: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   venue: { fontSize: 15, fontWeight: '700' },
@@ -169,3 +230,4 @@ const styles = StyleSheet.create({
   toggleDot: { width: 16, height: 16, borderRadius: 8 },
   error: { fontSize: 12, lineHeight: 18, marginVertical: 12 },
 });
+
