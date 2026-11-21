@@ -314,3 +314,16 @@ export const pitchMatchSubmissionsTable = pgTable(
     check("pitch_match_submissions_price_check", sql`${table.priceHalalas} >= 0 AND ${table.compareAtPriceHalalas} >= ${table.priceHalalas}`),
   ],
 );
+
+/** A player's profile-only position label. It does not affect match registrations or balancing. */
+export const playerProfilesTable = pgTable(
+  "player_profiles",
+  {
+    userId: text("user_id").primaryKey(),
+    preferredPosition: text("preferred_position").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check("player_profiles_preferred_position_check", sql`${table.preferredPosition} IN ('striker', 'defender', 'midfielder', 'winger')`),
+  ],
+);

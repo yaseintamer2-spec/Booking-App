@@ -11,7 +11,7 @@ export default function SignInScreen() {
   const colors = useColors(); const insets = useSafeAreaInsets(); const router = useRouter();
   const { signIn, errors, fetchStatus } = useSignIn(); const { isSignedIn } = useAuth();
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [message, setMessage] = useState('');
-  useEffect(() => { if (isSignedIn) router.replace('/(tabs)'); }, [isSignedIn, router]);
+  useEffect(() => { if (isSignedIn) router.replace('/(auth)/preferred-position'); }, [isSignedIn, router]);
   if (isSignedIn) return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   const busy = fetchStatus === 'fetching';
   const submit = async () => {
@@ -20,7 +20,7 @@ export default function SignInScreen() {
       const { error } = await signIn.password({ emailAddress: email.trim(), password });
       if (error) { setMessage(error.message || 'Those details did not match. Try again.'); return; }
       if (signIn.status === 'complete') {
-        await signIn.finalize({ navigate: ({ decorateUrl }) => router.replace(decorateUrl('/(tabs)') as never) });
+        await signIn.finalize({ navigate: ({ decorateUrl }) => router.replace(decorateUrl('/(auth)/preferred-position') as never) });
       } else {
         setMessage('This account requires an extra sign-in check. KICKOFF uses password sign-in without email codes; try Google or contact support.');
       }

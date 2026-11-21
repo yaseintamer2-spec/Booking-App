@@ -95,7 +95,7 @@ function EntryDestination() {
 function AuthenticatedEntryRoute({ colors }: { colors: ReturnType<typeof useColors> }) {
   const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return <View style={{ flex: 1, backgroundColor: colors.background }} />;
-  return <Redirect href={isSignedIn ? '/(tabs)' : '/(auth)/welcome'} />;
+  return <Redirect href={isSignedIn ? '/(auth)/preferred-position' : '/(auth)/welcome'} />;
 }
 
 const styles = StyleSheet.create({

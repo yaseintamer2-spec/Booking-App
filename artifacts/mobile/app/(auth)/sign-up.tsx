@@ -12,7 +12,7 @@ export default function SignUpScreen() {
   const colors = useColors(); const insets = useSafeAreaInsets(); const router = useRouter();
   const { signUp, errors, fetchStatus } = useSignUp(); const { isSignedIn } = useAuth();
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [code, setCode] = useState(''); const [message, setMessage] = useState('');
-  useEffect(() => { if (isSignedIn) router.replace('/(tabs)'); }, [isSignedIn, router]);
+  useEffect(() => { if (isSignedIn) router.replace('/(auth)/preferred-position'); }, [isSignedIn, router]);
   if (isSignedIn) return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   const verifyStep = signUp.status === 'missing_requirements' && signUp.unverifiedFields.includes('email_address') && signUp.missingFields.length === 0;
   const sendCode = async () => {
@@ -30,7 +30,7 @@ export default function SignUpScreen() {
     try {
       const { error } = await signUp.verifications.verifyEmailCode({ code });
       if (error) { setMessage(error.message || 'That code was not accepted.'); return; }
-      if (signUp.status === 'complete') await signUp.finalize({ navigate: ({ decorateUrl }) => router.replace(decorateUrl('/(tabs)') as never) });
+      if (signUp.status === 'complete') await signUp.finalize({ navigate: ({ decorateUrl }) => router.replace(decorateUrl('/(auth)/preferred-position') as never) });
       else setMessage('Your email is verified, but account setup is incomplete. Check the required fields in Auth settings.');
     } catch {
       setMessage('Email verification could not finish. Check the code and try again.');

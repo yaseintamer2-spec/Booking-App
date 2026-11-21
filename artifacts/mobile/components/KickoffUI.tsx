@@ -109,7 +109,7 @@ export function GoogleSignInButton() {
             setError('Finish the required account step, then return to KICKOFF.');
             return;
           }
-          router.replace(decorateUrl('/(tabs)') as never);
+          router.replace(decorateUrl('/(auth)/preferred-position') as never);
         },
       });
     } catch {
