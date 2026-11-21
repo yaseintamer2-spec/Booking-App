@@ -11,6 +11,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PositionBadge } from '@/components/PreferredPositionPicker';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
+import { clearLocalAcceptance, hasCurrentLocalAcceptance } from '@/lib/legalAcceptance';
+import { LEGAL_PRIVACY_VERSION, LEGAL_TERMS_VERSION } from '@/data/legalDocuments';
 import { useRouter } from 'expo-router';
 
 export default function TabsLayout() {
@@ -19,14 +21,15 @@ export default function TabsLayout() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useUser();
-  const { getToken } = useAuth();
+  const { getToken, userId } = useAuth();
   const [accountMenuVisible, setAccountMenuVisible] = useState(false);
   const [preferredPosition, setPreferredPosition] = useState<string | null>(null);
-  const [legalStatus, setLegalStatus] = useState<'checking' | 'accepted' | 'required' | 'error'>('checking');
-  const [legalAttempt, setLegalAttempt] = useState(0);
+  const [legalStatus, setLegalStatus] = useState<'checking' | 'accepted' | 'required'>('checking');
   useEffect(() => {
     let active = true;
     (async () => {
+      const locallyAccepted = userId ? await hasCurrentLocalAcceptance(userId) : false;
+      if (active && locallyAccepted) setLegalStatus('accepted');
       try {
         const token = await getToken();
         const response = await fetchWithTimeout(`${apiBaseUrl}/api/legal/acceptance`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }, 7_000);
@@ -34,14 +37,23 @@ export default function TabsLayout() {
         if (!response.ok) throw new Error('Could not verify the current terms.');
         if (!active) return;
         if (result.accepted) setLegalStatus('accepted');
-        else { setLegalStatus('required'); router.replace('/legal/accept'); }
-      } catch { if (active) setLegalStatus('error'); }
+        else if (locallyAccepted && userId) {
+          setLegalStatus('accepted');
+          const sync = await fetchWithTimeout(`${apiBaseUrl}/api/legal/acceptance`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ termsVersion: LEGAL_TERMS_VERSION, privacyVersion: LEGAL_PRIVACY_VERSION }),
+          }, 7_000);
+          if (sync.ok) await clearLocalAcceptance(userId);
+        } else { setLegalStatus('required'); router.replace('/legal/accept'); }
+      } catch {
+        if (active && !locallyAccepted) { setLegalStatus('required'); router.replace('/legal/accept'); }
+      }
     })();
     return () => { active = false; };
-  }, [getToken, legalAttempt, router]);
+  }, [getToken, router, userId]);
   useEffect(() => { let active = true; (async () => { try { const token = await getToken(); const response = await fetchWithTimeout(`${apiBaseUrl}/api/me/preferred-position`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }, 5_000); const result = await response.json(); if (active && response.ok && typeof result.preferredPosition === 'string') setPreferredPosition(result.preferredPosition); } catch { /* The profile screen can refresh the badge later. */ } })(); return () => { active = false; }; }, [getToken]);
   if (legalStatus !== 'accepted') return <View style={[styles.legalGate, { backgroundColor: colors.background }]}>
-    {legalStatus === 'error' ? <><Text style={[styles.legalGateTitle, { color: colors.foreground }]}>Can’t verify your terms yet.</Text><Text style={[styles.legalGateCopy, { color: colors.mutedForeground }]}>Check your connection, then try again.</Text><Pressable accessibilityRole="button" onPress={() => { setLegalStatus('checking'); setLegalAttempt((value) => value + 1); }} style={[styles.legalGateButton, { backgroundColor: colors.primary }]}><Text style={{ color: colors.primaryForeground, fontWeight: '800' }}>Try again</Text></Pressable></> : null}
+    {legalStatus === 'required' ? <><Text style={[styles.legalGateTitle, { color: colors.foreground }]}>One quick step before you play.</Text><Text style={[styles.legalGateCopy, { color: colors.mutedForeground }]}>Review and accept the current Terms and Privacy Notice to continue.</Text><Pressable accessibilityRole="button" onPress={() => router.replace('/legal/accept')} style={[styles.legalGateButton, { backgroundColor: colors.primary }]}><Text style={{ color: colors.primaryForeground, fontWeight: '800' }}>Review and continue</Text></Pressable></> : null}
   </View>;
   return <><Tabs screenOptions={{
     headerShown: false,

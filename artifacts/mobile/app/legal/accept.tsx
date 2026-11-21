@@ -6,10 +6,12 @@ import { Feather } from '@expo/vector-icons';
 import { BrandHeader, Button, Screen } from '@/components/KickoffUI';
 import { useColors } from '@/hooks/useColors';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
+import { storeLocalAcceptance, clearLocalAcceptance } from '@/lib/legalAcceptance';
 import { LEGAL_PRIVACY_VERSION, LEGAL_TERMS_VERSION } from '@/data/legalDocuments';
 
 export default function LegalAcceptanceScreen() {
-  const colors = useColors(); const router = useRouter(); const { getToken } = useAuth();
+  const colors = useColors(); const router = useRouter(); const { getToken, userId } = useAuth();
   const { consent } = useLocalSearchParams<{ consent?: string }>();
   const [checked, setChecked] = useState(consent === '1');
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
@@ -18,9 +20,19 @@ export default function LegalAcceptanceScreen() {
     setBusy(true); setError('');
     try {
       const token = await getToken();
-      const response = await fetch(`${apiBaseUrl}/api/legal/acceptance`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ termsVersion: LEGAL_TERMS_VERSION, privacyVersion: LEGAL_PRIVACY_VERSION }) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Could not save your agreement.');
+      if (!userId) throw new Error('Your account is still loading. Please try again.');
+      let response: Response;
+      try {
+        response = await fetchWithTimeout(`${apiBaseUrl}/api/legal/acceptance`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ termsVersion: LEGAL_TERMS_VERSION, privacyVersion: LEGAL_PRIVACY_VERSION }) }, 7_000);
+      } catch {
+        await storeLocalAcceptance(userId);
+        router.replace('/(auth)/preferred-position');
+        return;
+      }
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok && response.status < 500) throw new Error(result.error || 'Could not save your agreement.');
+      if (response.ok) await clearLocalAcceptance(userId);
+      else await storeLocalAcceptance(userId);
       router.replace('/(auth)/preferred-position');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not save your agreement. Check your connection and try again.'); }
     finally { setBusy(false); }
