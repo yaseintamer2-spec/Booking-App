@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -16,7 +16,7 @@ import {
   Inter_700Bold,
   useFonts,
 } from '@expo-google-fonts/inter';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { useColors } from '@/hooks/useColors';
@@ -41,6 +41,22 @@ if (apiBaseUrl) setBaseUrl(apiBaseUrl);
 
 function RootLayoutNav() {
   const colors = useColors();
+  const router = useRouter();
+  const lastNotificationResponse = useRef<string | null>(null);
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const openMatch = (response: Notifications.NotificationResponse | null) => {
+      const data = response?.notification.request.content.data as { matchId?: unknown } | undefined;
+      const responseId = response?.notification.request.identifier;
+      if (typeof data?.matchId !== 'string' || !responseId || lastNotificationResponse.current === responseId) return;
+      lastNotificationResponse.current = responseId;
+      router.push({ pathname: '/match-registration', params: { id: data.matchId } });
+      void Notifications.clearLastNotificationResponseAsync();
+    };
+    const subscription = Notifications.addNotificationResponseReceivedListener(openMatch);
+    openMatch(Notifications.getLastNotificationResponse());
+    return () => subscription.remove();
+  }, [router]);
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     const style = document.createElement('style');
@@ -147,4 +163,5 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 });
+
 

@@ -86,7 +86,7 @@ export function NotificationsButton() {
     if (!notification.readAt) void markNotificationRead(notification.id).catch((cause) => {
       setError(cause instanceof Error ? cause.message : 'Could not mark notification as read.');
     });
-    if (notification.match?.id && notification.kind === 'new_match') {
+    if (notification.match?.id && ['new_match', 'match_reminder'].includes(notification.kind)) {
       router.push({ pathname: '/match-registration', params: { id: notification.match.id } });
     } else {
       router.push('/(tabs)/my-matches');
@@ -131,7 +131,7 @@ export function NotificationsButton() {
                 style={[styles.item, { borderColor: colors.border, backgroundColor: notification.readAt ? 'transparent' : colors.secondary }]}
               >
                 <View style={[styles.itemIcon, { backgroundColor: colors.accent }]}>
-                  <Feather name={notification.kind === 'new_match' ? 'calendar' : notification.kind === 'match_invitation' ? 'users' : 'bell'} size={16} color={colors.primary} />
+                  <Feather name={notification.kind === 'new_match' || notification.kind === 'match_reminder' ? 'calendar' : notification.kind === 'match_invitation' ? 'users' : 'bell'} size={16} color={colors.primary} />
                 </View>
                 <View style={styles.itemCopy}>
                   <Text style={[styles.kind, { color: colors.primary }]}>{notification.kind.replaceAll('_', ' ').toUpperCase()}</Text>
@@ -179,3 +179,4 @@ const styles = StyleSheet.create({
   matchInfo: { fontSize: 10, lineHeight: 15, marginTop: 7 },
   unreadDot: { width: 7, height: 7, borderRadius: 4, marginTop: 4 },
 });
+

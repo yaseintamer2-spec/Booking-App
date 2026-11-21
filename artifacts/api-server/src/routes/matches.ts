@@ -69,6 +69,17 @@ async function canControlLiveMatch(userId: string, refereeUserId: string | null)
   return refereeUserId === userId || await isAdminUser(userId);
 }
 
+function teamForRegistration(player: { pitchSlot: number | null }, index: number, players: Array<{ pitchSlot: number | null }>, capacity: number): "red" | "blue" {
+  return player.pitchSlot == null
+    ? index < Math.ceil(players.length / 2) ? "red" : "blue"
+    : player.pitchSlot < Math.ceil(capacity / 2) ? "red" : "blue";
+}
+
+function resultForTeam(team: "red" | "blue", redScore: number, blueScore: number): "wins" | "draws" | "losses" {
+  if (redScore === blueScore) return "draws";
+  return (team === "red") === (redScore > blueScore) ? "wins" : "losses";
+}
+
 async function getLiveMatchSnapshot(matchId: string) {
   const [match] = await db.select({
     id: matchesTable.id,
@@ -390,6 +401,9 @@ router.get("/players/:userId/profile", async (req, res): Promise<void> => {
       firstName: user.firstName ?? user.fullName?.split(" ")[0] ?? "Player",
       avatarUrl: user.imageUrl || null,
       matchesPlayed: stats?.matchesPlayed ?? 0,
+      wins: stats?.wins ?? 0,
+      draws: stats?.draws ?? 0,
+      losses: stats?.losses ?? 0,
       goals: stats?.goals ?? 0,
       assists: stats?.assists ?? 0,
       yellowCards: stats?.yellowCards ?? 0,
@@ -426,19 +440,29 @@ router.post("/matches/:id/live/state", requireMatchStaff, async (req, res): Prom
       return row;
     }
     if (action === "finish_match" && match.liveStatus === "second_half") {
-      const participants = await tx.select({ userId: registrationsTable.userId }).from(registrationsTable)
-        .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`));
+      const participants = await tx.select({ userId: registrationsTable.userId, pitchSlot: registrationsTable.pitchSlot }).from(registrationsTable)
+        .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
+        .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
       const events = await tx.select().from(matchEventsTable)
         .where(and(eq(matchEventsTable.matchId, match.id), isNull(matchEventsTable.voidedAt)));
-      for (const player of participants) {
+      const redScore = events.filter(event => event.type === "goal" && event.team === "red").length;
+      const blueScore = events.filter(event => event.type === "goal" && event.team === "blue").length;
+      for (const [index, player] of participants.entries()) {
         const goals = events.filter((event) => event.type === "goal" && event.scorerUserId === player.userId).length;
         const assists = events.filter((event) => event.type === "goal" && event.assistUserId === player.userId).length;
         const yellowCards = events.filter((event) => event.type === "yellow_card" && event.scorerUserId === player.userId).length;
         const redCards = events.filter((event) => event.type === "red_card" && event.scorerUserId === player.userId).length;
         const fairPlayPoints = Math.max(0, 100 - yellowCards * 10 - redCards * 25);
-        await tx.insert(playerCareerStatsTable).values({ userId: player.userId, matchesPlayed: 1, goals, assists, yellowCards, redCards, fairPlayPoints, updatedAt: now })
+        const playerTeam = player.pitchSlot == null ? (index < Math.ceil(participants.length / 2) ? "red" : "blue") : player.pitchSlot < Math.ceil(match.capacity / 2) ? "red" : "blue";
+        const wins = Number(redScore !== blueScore && ((playerTeam === "red") === (redScore > blueScore)));
+        const draws = Number(redScore === blueScore);
+        const losses = Number(redScore !== blueScore && ((playerTeam === "red") !== (redScore > blueScore)));
+        await tx.insert(playerCareerStatsTable).values({ userId: player.userId, matchesPlayed: 1, wins, draws, losses, goals, assists, yellowCards, redCards, fairPlayPoints, updatedAt: now })
           .onConflictDoUpdate({ target: playerCareerStatsTable.userId, set: {
             matchesPlayed: sql`${playerCareerStatsTable.matchesPlayed} + 1`,
+            wins: sql`${playerCareerStatsTable.wins} + ${wins}`,
+            draws: sql`${playerCareerStatsTable.draws} + ${draws}`,
+            losses: sql`${playerCareerStatsTable.losses} + ${losses}`,
             goals: sql`${playerCareerStatsTable.goals} + ${goals}`,
             assists: sql`${playerCareerStatsTable.assists} + ${assists}`,
             yellowCards: sql`${playerCareerStatsTable.yellowCards} + ${yellowCards}`,
@@ -501,8 +525,33 @@ router.post("/matches/:id/live/events", requireMatchStaff, async (req, res): Pro
       .from(matchesTable).where(eq(matchesTable.id, match.id)).for("update").limit(1);
     if (!lockedMatch) return { inserted: false, afterEnd: false };
     if (lockedMatch.liveStatus === "full_time" && (!lockedMatch.liveEndedAt || occurredAt > lockedMatch.liveEndedAt)) return { inserted: false, afterEnd: true };
+    const scoreEventsBefore = lockedMatch.liveStatus === "full_time" && eventType === "goal"
+      ? await tx.select({ team: matchEventsTable.team }).from(matchEventsTable).where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.type, "goal"), isNull(matchEventsTable.voidedAt)))
+      : [];
     const [inserted] = await tx.insert(matchEventsTable).values({ matchId: match.id, clientEventId: clientEventId.trim(), type: eventType, team, period, minute, scorerUserId: scorer.userId, scorerName: scorer.firstName, assistUserId: assist?.userId ?? null, assistName: assist?.firstName ?? null, occurredAt, recordedByUserId: userId }).onConflictDoNothing({ target: [matchEventsTable.matchId, matchEventsTable.clientEventId] }).returning({ id: matchEventsTable.id });
     if (inserted && lockedMatch.liveStatus === "full_time") {
+      if (eventType === "goal") {
+        const beforeRed = scoreEventsBefore.filter(event => event.team === "red").length;
+        const beforeBlue = scoreEventsBefore.filter(event => event.team === "blue").length;
+        const afterRed = beforeRed + Number(team === "red");
+        const afterBlue = beforeBlue + Number(team === "blue");
+        const players = await tx.select({ userId: registrationsTable.userId, pitchSlot: registrationsTable.pitchSlot }).from(registrationsTable)
+          .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
+          .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
+        for (const [index, player] of players.entries()) {
+          const playerTeam = teamForRegistration(player, index, players, match.capacity);
+          const previous = resultForTeam(playerTeam, beforeRed, beforeBlue);
+          const next = resultForTeam(playerTeam, afterRed, afterBlue);
+          if (previous === next) continue;
+          const deltas = { wins: Number(next === "wins") - Number(previous === "wins"), draws: Number(next === "draws") - Number(previous === "draws"), losses: Number(next === "losses") - Number(previous === "losses") };
+          await tx.update(playerCareerStatsTable).set({
+            wins: sql`${playerCareerStatsTable.wins} + ${deltas.wins}`,
+            draws: sql`${playerCareerStatsTable.draws} + ${deltas.draws}`,
+            losses: sql`${playerCareerStatsTable.losses} + ${deltas.losses}`,
+            updatedAt: now,
+          }).where(eq(playerCareerStatsTable.userId, player.userId));
+        }
+      }
       let fairPlayDelta = 0;
       if (eventType === "yellow_card" || eventType === "red_card") {
         const oldCards = await tx.select({ type: matchEventsTable.type }).from(matchEventsTable)
@@ -541,6 +590,9 @@ router.delete("/matches/:id/live/events/:eventId", requireMatchStaff, async (req
     if (!lockedMatch) return null;
     const [current] = await tx.select().from(matchEventsTable).where(and(eq(matchEventsTable.id, eventId), eq(matchEventsTable.matchId, match.id), isNull(matchEventsTable.voidedAt))).for("update").limit(1);
     if (!current) return null;
+    const scoreEventsBefore = lockedMatch.liveStatus === "full_time" && current.type === "goal"
+      ? await tx.select({ team: matchEventsTable.team }).from(matchEventsTable).where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.type, "goal"), isNull(matchEventsTable.voidedAt)))
+      : [];
     let fairPlayDelta = 0;
     if (lockedMatch.liveStatus === "full_time" && (current.type === "yellow_card" || current.type === "red_card")) {
       const cards = await tx.select({ type: matchEventsTable.type }).from(matchEventsTable)
@@ -552,6 +604,28 @@ router.delete("/matches/:id/live/events/:eventId", requireMatchStaff, async (req
     const [removed] = await tx.update(matchEventsTable).set({ voidedAt, voidedByUserId: userId })
       .where(eq(matchEventsTable.id, current.id)).returning({ id: matchEventsTable.id });
     if (removed && lockedMatch.liveStatus === "full_time") {
+      if (current.type === "goal") {
+        const beforeRed = scoreEventsBefore.filter(entry => entry.team === "red").length;
+        const beforeBlue = scoreEventsBefore.filter(entry => entry.team === "blue").length;
+        const afterRed = beforeRed - Number(current.team === "red");
+        const afterBlue = beforeBlue - Number(current.team === "blue");
+        const players = await tx.select({ userId: registrationsTable.userId, pitchSlot: registrationsTable.pitchSlot }).from(registrationsTable)
+          .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
+          .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
+        for (const [index, player] of players.entries()) {
+          const playerTeam = teamForRegistration(player, index, players, match.capacity);
+          const previous = resultForTeam(playerTeam, beforeRed, beforeBlue);
+          const next = resultForTeam(playerTeam, afterRed, afterBlue);
+          if (previous === next) continue;
+          const deltas = { wins: Number(next === "wins") - Number(previous === "wins"), draws: Number(next === "draws") - Number(previous === "draws"), losses: Number(next === "losses") - Number(previous === "losses") };
+          await tx.update(playerCareerStatsTable).set({
+            wins: sql`${playerCareerStatsTable.wins} + ${deltas.wins}`,
+            draws: sql`${playerCareerStatsTable.draws} + ${deltas.draws}`,
+            losses: sql`${playerCareerStatsTable.losses} + ${deltas.losses}`,
+            updatedAt: voidedAt,
+          }).where(eq(playerCareerStatsTable.userId, player.userId));
+        }
+      }
       await tx.update(playerCareerStatsTable).set({
         goals: sql`${playerCareerStatsTable.goals} - ${Number(current.type === "goal")}`,
         yellowCards: sql`${playerCareerStatsTable.yellowCards} - ${Number(current.type === "yellow_card")}`,
@@ -1122,3 +1196,4 @@ router.delete(
 );
 
 export default router;
+

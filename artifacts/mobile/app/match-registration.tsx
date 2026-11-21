@@ -149,7 +149,7 @@ export default function MatchRegistrationScreen() {
   const [joinButtonFocused, setJoinButtonFocused] = useState(false);
   const [liveSnapshot, setLiveSnapshot] = useState<LiveView | null>(null);
   const [profileParticipant, setProfileParticipant] = useState<RegistrationParticipant | null>(null);
-  const [profileStats, setProfileStats] = useState<{ firstName: string; avatarUrl: string | null; matchesPlayed: number; goals: number; assists: number; yellowCards: number; redCards: number; fairPlayScore: number | null } | null>(null);
+  const [profileStats, setProfileStats] = useState<{ firstName: string; avatarUrl: string | null; matchesPlayed: number; wins: number; draws: number; losses: number; goals: number; assists: number; yellowCards: number; redCards: number; fairPlayScore: number | null } | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
 
@@ -874,7 +874,7 @@ function PlayerPortrait({
 
 function PlayerProfileModal({ participant, stats, loading, error, colors, onClose }: {
   participant: RegistrationParticipant | null;
-  stats: { firstName: string; avatarUrl: string | null; matchesPlayed: number; goals: number; assists: number; yellowCards: number; redCards: number; fairPlayScore: number | null } | null;
+  stats: { firstName: string; avatarUrl: string | null; matchesPlayed: number; wins: number; draws: number; losses: number; goals: number; assists: number; yellowCards: number; redCards: number; fairPlayScore: number | null } | null;
   loading: boolean;
   error: string;
   colors: Palette;
@@ -892,7 +892,7 @@ function PlayerProfileModal({ participant, stats, loading, error, colors, onClos
   </Modal>;
 }
 
-function profileDetails(stats: { matchesPlayed: number; goals: number; assists: number; yellowCards: number; redCards: number; fairPlayScore: number | null } | null, loading: boolean, error: string, colors: Palette) {
+function profileDetails(stats: { matchesPlayed: number; wins: number; draws: number; losses: number; goals: number; assists: number; yellowCards: number; redCards: number; fairPlayScore: number | null } | null, loading: boolean, error: string, colors: Palette) {
   const statTiles = [
     { label: 'MATCHES', value: stats?.matchesPlayed ?? '—', icon: 'users' },
     { label: 'GOALS', value: stats?.goals ?? '—', icon: 'target' },
@@ -904,7 +904,17 @@ function profileDetails(stats: { matchesPlayed: number; goals: number; assists: 
   return <>
     {loading ? <ActivityIndicator color={colors.primary} style={{ marginVertical: 18 }} /> : null}
     {error ? <Text style={[styles.profileError, { color: colors.mutedForeground }]}>{error}</Text> : null}
-    {stats ? <View style={styles.profileGrid}>{statTiles.map(tile => <View key={tile.label} style={[styles.profileStat, { backgroundColor: colors.background, borderColor: colors.border }]}><Feather name={tile.icon as never} size={14} color={tile.label === 'YELLOW' ? '#F4C542' : tile.label === 'RED' ? '#EF4444' : colors.primary} /><Text style={[styles.profileStatValue, { color: colors.foreground }]}>{tile.value}</Text><Text style={[styles.profileStatLabel, { color: colors.mutedForeground }]}>{tile.label}</Text></View>)}</View> : null}
+    {stats ? <>
+      <View accessibilityLabel={`Match record: ${stats.wins} wins, ${stats.draws} draws, ${stats.losses} losses`} style={[styles.profileRecord, { backgroundColor: colors.background, borderColor: colors.border }]}>
+        <Text style={[styles.profileRecordTitle, { color: colors.mutedForeground }]}>MATCH RECORD</Text>
+        <View style={styles.profileRecordValues}>
+          <Text style={[styles.profileRecordValue, { color: colors.foreground }]}><Text style={{ color: colors.primary }}>W</Text> {stats.wins}</Text>
+          <Text style={[styles.profileRecordValue, { color: colors.foreground }]}><Text style={{ color: colors.mutedForeground }}>D</Text> {stats.draws}</Text>
+          <Text style={[styles.profileRecordValue, { color: colors.foreground }]}><Text style={{ color: '#EF4444' }}>L</Text> {stats.losses}</Text>
+        </View>
+      </View>
+      <View style={styles.profileGrid}>{statTiles.map(tile => <View key={tile.label} style={[styles.profileStat, { backgroundColor: colors.background, borderColor: colors.border }]}><Feather name={tile.icon as never} size={14} color={tile.label === 'YELLOW' ? '#F4C542' : tile.label === 'RED' ? '#EF4444' : colors.primary} /><Text style={[styles.profileStatValue, { color: colors.foreground }]}>{tile.value}</Text><Text style={[styles.profileStatLabel, { color: colors.mutedForeground }]}>{tile.label}</Text></View>)}</View>
+    </> : null}
     <Text style={[styles.profileFootnote, { color: colors.mutedForeground }]}>Fair play is an app score out of 100, reduced by cards and averaged across completed matches. Stats remain after the match archive expires.</Text>
   </>;
 }
@@ -1126,9 +1136,14 @@ const styles = StyleSheet.create({
   profileInitial: { fontSize: 24, fontWeight: '900' },
   profileName: { fontFamily: 'Georgia', fontSize: 23, fontWeight: '700', marginTop: 10, marginBottom: 16 },
   profileGrid: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  profileRecord: { width: '100%', minHeight: 68, borderWidth: 1, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  profileRecordTitle: { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  profileRecordValues: { flexDirection: 'row', alignItems: 'center', gap: 18 },
+  profileRecordValue: { fontSize: 14, fontWeight: '900', fontVariant: ['tabular-nums'] },
   profileStat: { width: '31.5%', minHeight: 90, borderWidth: 1, borderRadius: 13, alignItems: 'center', justifyContent: 'center', gap: 4 },
   profileStatValue: { fontSize: 19, fontWeight: '900', fontVariant: ['tabular-nums'] },
   profileStatLabel: { fontSize: 8, fontWeight: '900', letterSpacing: .5 },
   profileFootnote: { fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 13 },
   profileError: { fontSize: 11, textAlign: 'center', marginTop: 12 },
 });
+

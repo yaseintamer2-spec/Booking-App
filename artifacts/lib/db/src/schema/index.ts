@@ -177,9 +177,13 @@ export const notificationsTable = pgTable(
     kind: text("kind").notNull(),
     message: text("message").notNull(),
     readAt: timestamp("read_at", { withTimezone: true }),
+    pushSentAt: timestamp("push_sent_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("player_notifications_user_created_idx").on(table.userId, table.createdAt)],
+  (table) => [
+    index("player_notifications_user_created_idx").on(table.userId, table.createdAt),
+    uniqueIndex("player_notifications_match_reminder_unique").on(table.userId, table.matchId).where(sql`${table.kind} = 'match_reminder' AND ${table.matchId} IS NOT NULL`),
+  ],
 );
 
 export const matchAlertSubscriptionsTable = pgTable(
@@ -212,6 +216,9 @@ export const playerCareerStatsTable = pgTable(
   {
     userId: text("user_id").primaryKey(),
     matchesPlayed: integer("matches_played").notNull().default(0),
+    wins: integer("wins").notNull().default(0),
+    draws: integer("draws").notNull().default(0),
+    losses: integer("losses").notNull().default(0),
     goals: integer("goals").notNull().default(0),
     assists: integer("assists").notNull().default(0),
     yellowCards: integer("yellow_cards").notNull().default(0),
@@ -221,3 +228,4 @@ export const playerCareerStatsTable = pgTable(
   },
   (table) => [index("player_career_stats_goals_idx").on(table.goals)],
 );
+
