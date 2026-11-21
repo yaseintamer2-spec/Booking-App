@@ -1,9 +1,13 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { useAuth } from '@clerk/expo';
+import Constants from 'expo-constants';
+import * as Notifications from 'expo-notifications';
 import { getGetCurrentUserQueryKey, getListMatchesQueryKey, useGetCurrentUser, useListMatches } from '@workspace/api-client-react';
 import { BrandHeader, EmptyState, LoadingState, MatchCard, Screen } from '@/components/KickoffUI';
+import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
 
 type DayFilter = 'Any day' | 'Today' | 'Tomorrow' | 'This week';
@@ -39,9 +43,89 @@ export default function MatchesScreen() {
   const [priceFilter, setPriceFilter] = useState<PriceFilter>('any');
   const [spotFilter, setSpotFilter] = useState<SpotFilter>(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const { getToken, isSignedIn } = useAuth();
+  const [matchAlertsEnabled, setMatchAlertsEnabled] = useState(false);
+  const [matchAlertsLoading, setMatchAlertsLoading] = useState(true);
+  const [matchAlertsBusy, setMatchAlertsBusy] = useState(false);
+  const [matchAlertsMessage, setMatchAlertsMessage] = useState('');
 
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey() } });
+  const request = useCallback(async (path: string, init: RequestInit = {}) => {
+    const token = await getToken();
+    const response = await fetch(`${apiBaseUrl}/api${path}`, {
+      ...init,
+      headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers },
+    });
+    const payload = response.status === 204 ? null : await response.json();
+    if (!response.ok) throw new Error(payload?.error || 'Could not update match alerts.');
+    return payload;
+  }, [getToken]);
+  const loadMatchAlertPreference = useCallback(async () => {
+    if (!isSignedIn) {
+      setMatchAlertsEnabled(false);
+      setMatchAlertsLoading(false);
+      return;
+    }
+    setMatchAlertsLoading(true);
+    try {
+      const result = await request('/me/match-alerts');
+      setMatchAlertsEnabled(result.enabled === true);
+      setMatchAlertsMessage('');
+    } catch (error) {
+      setMatchAlertsMessage(error instanceof Error ? error.message : 'Could not load alert settings.');
+    } finally {
+      setMatchAlertsLoading(false);
+    }
+  }, [isSignedIn, request]);
+  useEffect(() => { void loadMatchAlertPreference(); }, [loadMatchAlertPreference]);
+
+  const toggleMatchAlerts = async () => {
+    if (!isSignedIn) {
+      setMatchAlertsMessage('Sign in to get new-match alerts.');
+      router.push('/(auth)/welcome');
+      return;
+    }
+    if (matchAlertsBusy || matchAlertsLoading) return;
+    setMatchAlertsBusy(true);
+    setMatchAlertsMessage('');
+    try {
+      if (matchAlertsEnabled) {
+        await request('/me/match-alerts', { method: 'DELETE' });
+        setMatchAlertsEnabled(false);
+        setMatchAlertsMessage('New-match alerts are off. You can turn them back on anytime.');
+        return;
+      }
+
+      await request('/me/match-alerts', { method: 'POST' });
+      setMatchAlertsEnabled(true);
+      let message = 'In-app alerts are on. We’ll notify you when a new match is published.';
+      if (Platform.OS === 'ios' || Platform.OS === 'android') {
+        try {
+          if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync('match-updates', { name: 'Match updates', importance: Notifications.AndroidImportance.HIGH, vibrationPattern: [0, 250, 250, 250] });
+          let permission = await Notifications.getPermissionsAsync();
+          if (!permission.granted) permission = await Notifications.requestPermissionsAsync();
+          const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID || Constants.easConfig?.projectId || Constants.expoConfig?.extra?.eas?.projectId;
+          if (permission.granted && projectId) {
+            const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+            await request('/me/push-token', { method: 'POST', body: JSON.stringify({ token, platform: Platform.OS }) });
+            message = 'Push and in-app alerts are on. We’ll let you know when a new match is published.';
+          } else if (!permission.granted) {
+            message = 'In-app alerts are on. Push alerts stay off unless you allow notifications in your device settings.';
+          } else {
+            message = 'In-app alerts are on. Push alerts need a configured app build.';
+          }
+        } catch {
+          message = 'In-app alerts are on. Push alert setup did not finish; you can still see new matches in Notifications.';
+        }
+      }
+      setMatchAlertsMessage(message);
+    } catch (error) {
+      setMatchAlertsMessage(error instanceof Error ? error.message : 'Could not update match alerts. Try again.');
+    } finally {
+      setMatchAlertsBusy(false);
+    }
+  };
   const neighborhoods = useMemo(() => ['All games', ...Array.from(new Set((matches.data || []).map(match => match.neighborhood)))], [matches.data]);
   const visible = useMemo(() => {
     const now = new Date();
@@ -97,6 +181,18 @@ export default function MatchesScreen() {
       <Feather name="search" size={17} color={colors.mutedForeground} />
       <TextInput accessibilityLabel="Search matches by venue, area, or address" value={query} onChangeText={setQuery} autoCapitalize="none" autoCorrect={false} placeholder="Venue, area, or address" placeholderTextColor={colors.mutedForeground} style={[styles.searchInput, { color: colors.foreground }]} />
     </View>
+
+    <View style={[styles.alertRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.alertIcon, { backgroundColor: colors.secondary }]}><Feather name="bell" size={16} color={colors.primary} /></View>
+      <View style={styles.alertCopy}>
+        <Text style={[styles.alertTitle, { color: colors.foreground }]}>New match alerts</Text>
+        <Text numberOfLines={2} style={[styles.alertDescription, { color: colors.mutedForeground }]}>{matchAlertsMessage || (matchAlertsEnabled ? 'You’ll get an in-app alert when a match is published.' : 'Get notified when a new game is posted.')}</Text>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={matchAlertsEnabled ? 'Turn off new match alerts' : 'Alert me when a new match is available'} accessibilityState={{ disabled: matchAlertsLoading || matchAlertsBusy, selected: matchAlertsEnabled, busy: matchAlertsBusy }} disabled={matchAlertsLoading || matchAlertsBusy} onPress={() => void toggleMatchAlerts()} style={[styles.alertButton, { backgroundColor: matchAlertsEnabled ? colors.secondary : colors.primary, borderColor: matchAlertsEnabled ? colors.border : colors.primary, opacity: matchAlertsLoading || matchAlertsBusy ? 0.6 : 1 }]}>
+        <Text style={[styles.alertButtonText, { color: matchAlertsEnabled ? colors.foreground : colors.primaryForeground }]}>{matchAlertsLoading ? 'Loading…' : matchAlertsBusy ? 'Saving…' : matchAlertsEnabled ? 'Alerts on' : 'Alert me'}</Text>
+      </Pressable>
+    </View>
+    {matchAlertsMessage ? <Text accessibilityRole="status" style={[styles.alertStatus, { color: matchAlertsEnabled ? colors.primary : colors.mutedForeground }]}>{matchAlertsMessage}</Text> : null}
 
     <View style={styles.controlHeader}>
       <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>SORT BY</Text>
@@ -154,6 +250,14 @@ const styles = StyleSheet.create({
   sub: { fontSize: 13, marginTop: 6, marginBottom: 22 },
   searchBox: { height: 50, borderWidth: 1, borderRadius: 14, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 10 },
   searchInput: { flex: 1, fontSize: 13 },
+  alertRow: { minHeight: 76, borderWidth: 1, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
+  alertIcon: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  alertCopy: { flex: 1, gap: 4 },
+  alertTitle: { fontSize: 12, fontWeight: '800' },
+  alertDescription: { fontSize: 10, lineHeight: 14 },
+  alertButton: { minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  alertButtonText: { fontSize: 11, fontWeight: '800' },
+  alertStatus: { fontSize: 11, lineHeight: 16, marginTop: 6, marginHorizontal: 4 },
   controlHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
   filterLabel: { fontSize: 9, letterSpacing: 1.4, fontWeight: '700' },
   filterToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, borderWidth: 1, borderRadius: 13 },

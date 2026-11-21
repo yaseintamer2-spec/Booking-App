@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { clerkClient } from "@clerk/express";
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, desc, eq, gt, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import {
   CreateAdminMatchBody,
   CreateAdminMatchResponse,
@@ -15,7 +15,7 @@ import {
   UpdateAdminMatchParams,
   UpdateAdminMatchResponse,
 } from "@workspace/api-zod";
-import { db, matchesTable, notificationsTable, pushTokensTable, registrationsTable } from "@workspace/db";
+import { db, matchAlertSubscriptionsTable, matchesTable, notificationsTable, pushTokensTable, registrationsTable } from "@workspace/db";
 import { isAdminUser, isMatchStaffUser, requireAdmin, requireAuth, requireMatchStaff } from "../middlewares/auth";
 import { getMatchEndAt, WAITLIST_OFFER_TTL_MS, canConfirmPaidRegistration, canReserveSeat, isCheckInTokenValid, isOfferExpired, isValidMatchImageList } from "../lib/registration-rules";
 
@@ -36,8 +36,9 @@ function toMatch(row: typeof matchesTable.$inferSelect) {
   };
 }
 
-async function sendPushToUser(userId: string, title: string, body: string, data: Record<string, string>): Promise<void> {
-  const tokens = await db.select().from(pushTokensTable).where(eq(pushTokensTable.userId, userId));
+async function sendPushToUsers(userIds: string[], title: string, body: string, data: Record<string, string>): Promise<void> {
+  if (!userIds.length) return;
+  const tokens = await db.select().from(pushTokensTable).where(inArray(pushTokensTable.userId, userIds));
   if (!tokens.length) return;
   for (let offset = 0; offset < tokens.length; offset += 100) {
     const batch = tokens.slice(offset, offset + 100);
@@ -58,15 +59,13 @@ async function sendPushToUser(userId: string, title: string, body: string, data:
   }
 }
 
-async function getNotificationRecipientIds(): Promise<string[]> {
-  const userIds: string[] = [];
-  let offset = 0;
-  while (true) {
-    const page = await clerkClient.users.getUserList({ limit: 100, offset });
-    userIds.push(...page.data.map((user) => user.id));
-    if (page.data.length < 100) return userIds;
-    offset += page.data.length;
-  }
+async function sendPushToUser(userId: string, title: string, body: string, data: Record<string, string>): Promise<void> {
+  await sendPushToUsers([userId], title, body, data);
+}
+
+async function getMatchAlertRecipientIds(): Promise<string[]> {
+  const subscriptions = await db.select({ userId: matchAlertSubscriptionsTable.userId }).from(matchAlertSubscriptionsTable);
+  return subscriptions.map(({ userId }) => userId);
 }
 
 function getNewMatchMessage(match: { venueName: string; neighborhood: string; startsAt: Date; priceHalalas: number }): string {
@@ -136,6 +135,29 @@ router.post("/me/push-token", requireAuth, async (req, res): Promise<void> => {
   const userId = res.locals.userId as string;
   await db.insert(pushTokensTable).values({ userId, expoPushToken: token, platform }).onConflictDoUpdate({ target: pushTokensTable.expoPushToken, set: { userId, platform, updatedAt: new Date() } });
   res.status(201).json({ registered: true });
+});
+
+router.get("/me/match-alerts", requireAuth, async (_req, res): Promise<void> => {
+  const userId = res.locals.userId as string;
+  const [subscription] = await db.select({ userId: matchAlertSubscriptionsTable.userId })
+    .from(matchAlertSubscriptionsTable)
+    .where(eq(matchAlertSubscriptionsTable.userId, userId))
+    .limit(1);
+  res.json({ enabled: Boolean(subscription) });
+});
+
+router.post("/me/match-alerts", requireAuth, async (_req, res): Promise<void> => {
+  const userId = res.locals.userId as string;
+  await db.insert(matchAlertSubscriptionsTable)
+    .values({ userId })
+    .onConflictDoNothing({ target: matchAlertSubscriptionsTable.userId });
+  res.status(201).json({ enabled: true });
+});
+
+router.delete("/me/match-alerts", requireAuth, async (_req, res): Promise<void> => {
+  const userId = res.locals.userId as string;
+  await db.delete(matchAlertSubscriptionsTable).where(eq(matchAlertSubscriptionsTable.userId, userId));
+  res.sendStatus(204);
 });
 
 router.delete("/me/push-token", requireAuth, async (req, res): Promise<void> => {
@@ -542,7 +564,7 @@ router.post(
       return;
     }
 
-    const recipients = parsed.data.status === "published" ? await getNotificationRecipientIds() : [];
+    const recipients = parsed.data.status === "published" ? await getMatchAlertRecipientIds() : [];
     const [row] = await db.transaction(async (tx) => {
       const [created] = await tx
         .insert(matchesTable)
@@ -559,6 +581,8 @@ router.post(
       }
       return [created] as const;
     });
+
+    if (recipients.length) void sendPushToUsers(recipients, "A new match is available", getNewMatchMessage(row), { matchId: row.id, screen: "matches" }).catch(() => undefined);
 
     res
       .status(201)
@@ -613,7 +637,7 @@ router.patch(
     }
 
     const shouldAnnounce = existing.status !== "published" && parsed.data.status === "published";
-    const recipients = shouldAnnounce ? await getNotificationRecipientIds() : [];
+    const recipients = shouldAnnounce ? await getMatchAlertRecipientIds() : [];
     const [row] = await db.transaction(async (tx) => {
       const [updated] = await tx
         .update(matchesTable)
@@ -637,6 +661,8 @@ router.patch(
       }
       return [updated] as const;
     });
+
+    if (shouldAnnounce && recipients.length) void sendPushToUsers(recipients, "A new match is available", getNewMatchMessage(row), { matchId: row.id, screen: "matches" }).catch(() => undefined);
 
     res.json(UpdateAdminMatchResponse.parse(toMatch(row)));
   },

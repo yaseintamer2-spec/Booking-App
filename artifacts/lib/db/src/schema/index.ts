@@ -124,6 +124,14 @@ export const notificationsTable = pgTable(
   (table) => [index("player_notifications_user_created_idx").on(table.userId, table.createdAt)],
 );
 
+export const matchAlertSubscriptionsTable = pgTable(
+  "match_alert_subscriptions",
+  {
+    userId: text("user_id").primaryKey(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
 export const pushTokensTable = pgTable(
   "player_push_tokens",
   {
