@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 6100)
-Total output lines: 324
-
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -182,7 +179,49 @@ export default function MatchesScreen() {
     }).sort((a, b) => {
       if (sortBy === 'lowest-price') return a.priceHalalas - b.priceHalalas || Date.parse(a.startsAt) - Date.parse(b.startsAt);
       if (sortBy === 'highest-price') return b.priceHalalas - a.priceHalalas || Date.parse(a.startsAt) - Date.parse(b.startsAt);
-      if (sortBy === 'most-spots') return b.spotsRemaining - a.spotsRemain…1100 tokens truncated…ors.card }]}>
+      if (sortBy === 'most-spots') return b.spotsRemaining - a.spotsRemaining || Date.parse(a.startsAt) - Date.parse(b.startsAt);
+      return Date.parse(a.startsAt) - Date.parse(b.startsAt);
+    });
+  }, [matches.data, areaFilter, query, dayFilter, priceFilter, spotFilter, sortBy]);
+
+  const activeFilterCount = Number(areaFilter !== 'All games') + Number(dayFilter !== 'Any day') + Number(priceFilter !== 'any') + Number(spotFilter !== 0);
+  const hasActiveFilters = activeFilterCount > 0 || query.trim().length > 0;
+  const clearFilters = () => {
+    setQuery('');
+    setAreaFilter('All games');
+    setDayFilter('Any day');
+    setPriceFilter('any');
+    setSpotFilter(0);
+    setSortBy('soonest');
+  };
+
+  return <Screen refreshing={matches.isRefetching} onRefresh={() => { void matches.refetch(); }}>
+    <BrandHeader user={user.data} subtitle="FIND YOUR GAME" />
+    <Text style={[styles.kicker, { color: colors.primary }]}>MADE FOR THE GAME</Text>
+    <Text style={[styles.title, { color: colors.foreground }]}>Discover matches.</Text>
+    <Text style={[styles.sub, { color: colors.mutedForeground }]}>Organized 7v7 football, across Riyadh.</Text>
+    <Pressable accessibilityRole="button" onPress={() => router.push('/player-age' as never)} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.secondary, marginTop: 10 }}><Feather name="user" size={14} color={colors.primary} /><Text style={{ fontSize: 11, fontWeight: '700', color: colors.foreground }}>{playerAge == null ? 'Add your age for match recommendations' : `Age ${playerAge} · ${recommendedAgeGroup ? `recommended group ${recommendedAgeGroup.replace('-', '–')}` : 'edit age'}`}</Text></Pressable>
+
+    <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Feather name="search" size={17} color={colors.mutedForeground} />
+      <TextInput accessibilityLabel="Search matches by venue, area, or address" value={query} onChangeText={setQuery} autoCapitalize="none" autoCorrect={false} placeholder="Venue, area, or address" placeholderTextColor={colors.mutedForeground} style={[styles.searchInput, { color: colors.foreground }]} />
+    </View>
+
+    <View style={[styles.alertRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.alertIcon, { backgroundColor: colors.secondary }]}><Feather name="bell" size={16} color={colors.primary} /></View>
+      <View style={styles.alertCopy}>
+        <Text style={[styles.alertTitle, { color: colors.foreground }]}>New match alerts</Text>
+        <Text numberOfLines={2} style={[styles.alertDescription, { color: colors.mutedForeground }]}>{matchAlertsMessage || (matchAlertsEnabled ? 'Get reminders before kickoff and an alert when a new game is posted.' : 'Get reminders before kickoff and an alert when a new game is posted.')}</Text>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={matchAlertsEnabled ? 'Turn off new match alerts' : 'Alert me when a new match is available'} accessibilityState={{ disabled: matchAlertsLoading || matchAlertsBusy, selected: matchAlertsEnabled, busy: matchAlertsBusy }} disabled={matchAlertsLoading || matchAlertsBusy} onPress={() => void toggleMatchAlerts()} style={[styles.alertButton, { backgroundColor: matchAlertsEnabled ? colors.secondary : colors.primary, borderColor: matchAlertsEnabled ? colors.border : colors.primary, opacity: matchAlertsLoading || matchAlertsBusy ? 0.6 : 1 }]}>
+        <Text style={[styles.alertButtonText, { color: matchAlertsEnabled ? colors.foreground : colors.primaryForeground }]}>{matchAlertsLoading ? 'Loading…' : matchAlertsBusy ? 'Saving…' : matchAlertsEnabled ? 'Alerts on' : 'Alert me'}</Text>
+      </Pressable>
+    </View>
+    {matchAlertsMessage ? <Text accessibilityRole="status" style={[styles.alertStatus, { color: matchAlertsEnabled ? colors.primary : colors.mutedForeground }]}>{matchAlertsMessage}</Text> : null}
+
+    <View style={styles.controlHeader}>
+      <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>SORT BY</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={filtersOpen ? 'Hide match filters' : 'Show match filters'} accessibilityState={{ expanded: filtersOpen }} onPress={() => setFiltersOpen(open => !open)} style={[styles.filterToggle, { borderColor: colors.border, backgroundColor: colors.card }]}>
         <Feather name="sliders" size={14} color={colors.primary} />
         <Text style={[styles.filterToggleText, { color: colors.foreground }]}>Filters{activeFilterCount ? ` · ${activeFilterCount}` : ''}</Text>
         <Feather name={filtersOpen ? 'chevron-up' : 'chevron-down'} size={14} color={colors.mutedForeground} />
