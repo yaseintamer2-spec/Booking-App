@@ -7,11 +7,14 @@ import { BrandHeader, EmptyState, LoadingState, MatchCard, Screen, SectionTitle 
 import { homeHeroImage } from '@/components/KickoffUI';
 import { useColors } from '@/hooks/useColors';
 import { sampleMatchListing } from '@/data/matchRegistrationMock';
+import { isLocalPreviewMode } from '@/lib/localPreview';
 
 export default function HomeScreen() {
   const colors = useColors(); const router = useRouter();
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey(), retry: false, staleTime: 20_000 } });
+  const listedMatches = matches.data?.length ? matches.data.slice(0, 2) : isLocalPreviewMode ? [sampleMatchListing] : [];
+  const openMatch = (id: string) => router.push(id === sampleMatchListing.id ? '/match-registration' : { pathname: '/match-registration', params: { id } });
   return <Screen refreshing={matches.isRefetching} onRefresh={() => { void matches.refetch(); }}>
     <BrandHeader user={user.data} subtitle="RIYADH, SA" />
     <View style={styles.greeting}><Text style={[styles.hello, { color: colors.mutedForeground }]}>GOOD EVENING{user.data?.name ? `, ${user.data.name.split(' ')[0].toUpperCase()}` : ''}</Text><Text style={[styles.headline, { color: colors.foreground }]}>Find your{'\n'}next match.</Text></View>
@@ -21,11 +24,8 @@ export default function HomeScreen() {
       <View style={styles.featureBottom}><View><Text style={[styles.featureTitle, { color: colors.foreground }]}>All game.{'\n'}No group chat.</Text><Text style={[styles.featureCaption, { color: colors.secondaryForeground }]}>7v7, set up and ready to play.</Text></View><Pressable onPress={() => router.push('/(tabs)/matches')} style={[styles.roundArrow, { backgroundColor: colors.primary }]}><Feather name="arrow-up-right" size={19} color={colors.primaryForeground} /></Pressable></View>
     </ImageBackground>
     <SectionTitle kicker="OPEN GAMES" title="On the calendar" action="See all" onAction={() => router.push('/(tabs)/matches')} />
-    {matches.isLoading ? <LoadingState /> : matches.isError ? <EmptyState icon="wifi-off" title="Live matches are unavailable" body="You can still open the local sample below. Reconnect the match service to see published games." action="Retry" onAction={() => matches.refetch()} /> :
-      matches.data?.length ? matches.data.slice(0, 2).map(match => <MatchCard key={match.id} match={match} onPress={() => router.push({ pathname: '/match-registration', params: { id: match.id } })} />) :
+    {matches.isLoading && !isLocalPreviewMode ? <LoadingState /> : listedMatches.length ? listedMatches.map(match => <MatchCard key={match.id} match={match} onPress={() => openMatch(match.id)} />) :
         <EmptyState icon="sunset" title="A little calm before kickoff." body="There are no published matches right now. Check back soon for organized 7v7 games around Riyadh." />}
-    <SectionTitle kicker="LOCAL PREVIEW" title="Try the sample match" />
-    <MatchCard match={sampleMatchListing} onPress={() => router.push('/match-registration')} />
     <View style={[styles.note, { borderColor: colors.border, backgroundColor: colors.card }]}><Feather name="shield" size={16} color={colors.primary} /><Text style={[styles.noteText, { color: colors.mutedForeground }]}>Match format, timing, player capacity, and referee and water inclusions are shown before you choose.</Text></View>
   </Screen>;
 }

@@ -7,6 +7,8 @@ import { BrandHeader, EmptyState, LoadingState, Screen, formatRiyadhDateTime } f
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { useColors } from '@/hooks/useColors';
+import { isLocalPreviewMode } from '@/lib/localPreview';
+import { matchRegistrationMock } from '@/data/matchRegistrationMock';
 
 type RefereeMatch = {
   id: string; venueName: string; neighborhood: string; startsAt: string; durationMinutes: number; liveStatus: string;
@@ -19,6 +21,25 @@ export default function RefereeMatchesScreen() {
   const [matches, setMatches] = useState<RefereeMatch[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState('');
   const [busyId, setBusyId] = useState('');
   const load = useCallback(async () => {
+    if (isLocalPreviewMode) {
+      setMatches([{
+        id: matchRegistrationMock.match.id,
+        venueName: matchRegistrationMock.match.pitchName,
+        neighborhood: matchRegistrationMock.match.area,
+        startsAt: matchRegistrationMock.match.startsAt,
+        durationMinutes: matchRegistrationMock.match.durationHours * 60,
+        liveStatus: 'scheduled',
+        refereeName: 'Owner preview',
+        assignmentStatus: 'accepted',
+        canRespond: false,
+        canApply: false,
+        applicationStatus: null,
+        kind: 'assignment',
+      }]);
+      setError('');
+      setLoading(false);
+      return;
+    }
     try {
       const token = await getToken();
       const response = await fetchWithTimeout(`${apiBaseUrl}/api/me/referee-matches`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }, 10_000);

@@ -26,6 +26,7 @@ import { LiveScoreboard, type LiveView } from '@/components/LiveScoreboard';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { useColors } from '@/hooks/useColors';
+import { isLocalPreviewMode } from '@/lib/localPreview';
 import {
   matchRegistrationMock,
   loadSampleParticipants,
@@ -36,7 +37,7 @@ import {
   type RegistrationParticipant,
 } from '@/data/matchRegistrationMock';
 
-const SHOW_PREVIEW_NOTICE = true;
+const SHOW_PREVIEW_NOTICE = !isLocalPreviewMode;
 const PREVIEW_COPY =
   "For illustrative purposes only. This isn't the final result: the match shown is a sample, and the design and prices may change.";
 const POSITION_OPTIONS: { label: string; value: PositionPreference }[] = [
@@ -146,11 +147,13 @@ export default function MatchRegistrationScreen() {
   } : matchRegistrationMock.currentUser;
   const [noticeVisible, setNoticeVisible] = useState(SHOW_PREVIEW_NOTICE);
   const [activePitchPhoto, setActivePitchPhoto] = useState(0);
+  const [failedPitchPhotos, setFailedPitchPhotos] = useState<Record<number, boolean>>({});
   const [pitchPhotoWidth, setPitchPhotoWidth] = useState(320);
   const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const pitchPhotoScroll = useRef<ScrollViewInstance | null>(null);
   useEffect(() => {
     setActivePitchPhoto(0);
+    setFailedPitchPhotos({});
     pitchPhotoScroll.current?.scrollTo({ x: 0, animated: false });
   }, [match.id]);
   useEffect(() => {
@@ -441,10 +444,11 @@ export default function MatchRegistrationScreen() {
                     onPress={() => { setActivePitchPhoto(index); setPhotoViewerOpen(true); }}
                   >
                     <ImageBackground
-                      source={pitchPhotoSource(photo)}
+                      source={failedPitchPhotos[index] ? require('../assets/images/football-match-card.jpg') : pitchPhotoSource(photo)}
                       resizeMode="cover"
                       imageStyle={styles.registrationHeroImage}
-                      style={styles.registrationHeroSlideImage}
+                      style={[styles.registrationHeroSlideImage, { width: pitchPhotoWidth }]}
+                      onError={() => setFailedPitchPhotos((current) => ({ ...current, [index]: true }))}
                       accessibilityLabel={`${match.pitchName} pitch photo ${index + 1} of ${pitchPhotos.length}`}
                     />
                   </Pressable>
@@ -490,7 +494,7 @@ export default function MatchRegistrationScreen() {
             <View style={[styles.trustRating, { backgroundColor: colors.secondary }]}><Feather name="star" size={15} color={colors.amber} /><View><Text accessibilityLabel={match.pitchRatingAverage == null ? 'Pitch rating: no reviews yet' : `Pitch rating ${match.pitchRatingAverage.toFixed(1)} out of 5 from ${match.pitchRatingCount || 0} reviews`} style={[styles.trustValue, { color: colors.foreground }]}>{match.pitchRatingAverage == null ? 'New pitch' : `${match.pitchRatingAverage.toFixed(1)} / 5`}</Text><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>{match.pitchRatingCount ? `${match.pitchRatingCount} player ratings` : 'No player ratings yet'}</Text></View></View>
             {match.refereeName ? <View style={styles.assignedReferee}>{match.refereeAvatarUrl ? <Image accessibilityLabel={`${match.refereeName}, assigned referee`} source={{ uri: match.refereeAvatarUrl }} style={styles.assignedRefereePhoto} /> : <View style={[styles.assignedRefereePhoto, styles.assignedRefereeFallback, { backgroundColor: colors.secondary }]}><Feather name="user" size={15} color={colors.mutedForeground} /></View>}<View style={{ flexShrink: 1 }}><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>REFEREE</Text><Text numberOfLines={1} style={[styles.trustValue, { color: colors.foreground }]}>{match.refereeName}</Text></View></View> : <View style={styles.assignedReferee}><Feather name="shield" size={17} color={colors.mutedForeground} /><Text style={[styles.trustCaption, { color: colors.mutedForeground }]}>Referee not assigned yet</Text></View>}
           </View>
-          {liveMatchId ? <LiveScoreboard matchId={liveMatchId} showAllEvents={readOnly} onSnapshot={setLiveSnapshot} /> : null}
+          {liveMatchId || isLocalPreviewMode ? <LiveScoreboard matchId={liveMatchId || match.id} showAllEvents={readOnly} onSnapshot={setLiveSnapshot} /> : null}
 
           {liveMatchId && !readOnly ? <>
             <SectionLabel colors={colors}>BOOK FOR FRIENDS</SectionLabel>
@@ -689,7 +693,7 @@ export default function MatchRegistrationScreen() {
         <View style={styles.ticketBackdrop}>
           <View style={[styles.ticketModal, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.ticketTitle, { color: colors.foreground }]}>You’re registered</Text>
-            <Text style={[styles.ticketSubtitle, { color: colors.mutedForeground }]}>{liveMatchId ? 'No payment was collected. Your check-in QR codes are ready in My Matches.' : 'Sample booking confirmed locally. This preview QR is not connected to live check-in.'}</Text>
+            <Text style={[styles.ticketSubtitle, { color: colors.mutedForeground }]}>{liveMatchId ? 'No payment was collected. Your check-in QR codes are ready in My Matches.' : 'Your place is reserved in this preview. This QR is not connected to venue check-in.'}</Text>
             <ScrollView style={styles.ticketList} contentContainerStyle={styles.ticketListContent} showsVerticalScrollIndicator={false}>
               {confirmationTickets.map((ticket) => (
                 <View key={ticket.id} style={[styles.ticketCard, { borderColor: colors.border }]}>

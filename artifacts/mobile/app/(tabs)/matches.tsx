@@ -11,6 +11,7 @@ import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
 import { getRecommendedMatchAgeGroup } from '@/lib/matchAge';
 import { sampleMatchListing } from '@/data/matchRegistrationMock';
+import { isLocalPreviewMode } from '@/lib/localPreview';
 
 type DayFilter = 'Any day' | 'Today' | 'Tomorrow' | 'This week';
 type SortOption = 'soonest' | 'most-spots';
@@ -43,6 +44,7 @@ export default function MatchesScreen() {
 
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey(), retry: false, staleTime: 20_000 } });
+  const listedMatches = matches.data?.length ? matches.data : isLocalPreviewMode ? [sampleMatchListing] : [];
   useEffect(() => { let active = true; if (!isSignedIn) { setPlayerAge(null); return () => { active = false; }; } void (async () => { try { const token = await getToken(); const response = await fetch(`${apiBaseUrl}/api/me/age`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active && response.ok) setPlayerAge(typeof result.age === 'number' ? result.age : null); } catch { if (active) setPlayerAge(null); } })(); return () => { active = false; }; }, [getToken, isSignedIn]);
   const recommendedAgeGroup = playerAge == null ? null : getRecommendedMatchAgeGroup(playerAge);
   const request = useCallback(async (path: string, init: RequestInit = {}) => {
@@ -56,6 +58,11 @@ export default function MatchesScreen() {
     return payload;
   }, [getToken]);
   const loadMatchAlertPreference = useCallback(async () => {
+    if (isLocalPreviewMode) {
+      setMatchAlertsEnabled(false);
+      setMatchAlertsLoading(false);
+      return;
+    }
     if (!isSignedIn) {
       setMatchAlertsEnabled(false);
       setMatchAlertsLoading(false);
@@ -81,6 +88,12 @@ export default function MatchesScreen() {
       return;
     }
     if (matchAlertsBusy || matchAlertsLoading) return;
+    if (isLocalPreviewMode) {
+      const next = !matchAlertsEnabled;
+      setMatchAlertsEnabled(next);
+      setMatchAlertsMessage(next ? 'Match alerts are on for this preview.' : 'Match alerts are off.');
+      return;
+    }
     setMatchAlertsBusy(true);
     setMatchAlertsMessage('');
     try {
@@ -149,7 +162,7 @@ export default function MatchesScreen() {
     weekEnd.setDate(today.getDate() + 7);
     const needle = query.trim().toLowerCase();
 
-    return (matches.data || []).filter(match => {
+    return listedMatches.filter(match => {
       const startsAt = new Date(match.startsAt);
       const dateMatches = dayFilter === 'Any day'
         || (dayFilter === 'Today' && startsAt >= today && startsAt < tomorrow)
@@ -162,7 +175,7 @@ export default function MatchesScreen() {
       if (sortBy === 'most-spots') return b.spotsRemaining - a.spotsRemaining || Date.parse(a.startsAt) - Date.parse(b.startsAt);
       return Date.parse(a.startsAt) - Date.parse(b.startsAt);
     });
-  }, [matches.data, query, dayFilter, spotFilter, sortBy]);
+  }, [listedMatches, query, dayFilter, spotFilter, sortBy]);
 
   const activeFilterCount = Number(dayFilter !== 'Any day') + Number(spotFilter !== 0);
   const hasActiveFilters = activeFilterCount > 0 || query.trim().length > 0;
@@ -207,10 +220,8 @@ export default function MatchesScreen() {
     </View>
     {activeFilterCount || query.trim() ? <Pressable accessibilityRole="button" onPress={clearFilters} style={styles.clearButton}><Feather name="x-circle" size={14} color={colors.primary} /><Text style={[styles.clearText, { color: colors.primary }]}>Clear filters</Text></Pressable> : null}
 
-    {!matches.isLoading && !matches.isError ? <Text style={[styles.resultCount, { color: colors.mutedForeground }]}>{visible.length} {visible.length === 1 ? 'match' : 'matches'}</Text> : null}
-    {matches.isLoading ? <LoadingState /> : matches.isError ? <EmptyState title="Live matches are unavailable" body="You can still open the local sample below. Reconnect the match service to see published games." icon="wifi-off" action="Retry" onAction={() => matches.refetch()} /> : visible.length ? visible.map(match => <MatchCard key={match.id} match={match} recommended={match.ageGroup === recommendedAgeGroup} onPress={() => router.push({ pathname: '/match-registration', params: { id: match.id } })} />) : <EmptyState icon="map-pin" title={hasActiveFilters ? 'No games match those filters.' : 'No matches scheduled yet.'} body={hasActiveFilters ? 'Try widening the time or availability filters.' : 'New games will appear here as soon as they are published.'} action={hasActiveFilters ? 'Clear filters' : undefined} onAction={hasActiveFilters ? clearFilters : undefined} />}
-    <SectionTitle kicker="LOCAL PREVIEW" title="Try the sample match" />
-    <MatchCard match={sampleMatchListing} onPress={() => router.push('/match-registration')} />
+    {!matches.isLoading || isLocalPreviewMode ? <Text style={[styles.resultCount, { color: colors.mutedForeground }]}>{visible.length} {visible.length === 1 ? 'match' : 'matches'}</Text> : null}
+    {matches.isLoading && !isLocalPreviewMode ? <LoadingState /> : visible.length ? visible.map(match => <MatchCard key={match.id} match={match} recommended={match.ageGroup === recommendedAgeGroup} onPress={() => router.push(match.id === sampleMatchListing.id ? '/match-registration' : { pathname: '/match-registration', params: { id: match.id } })} />) : <EmptyState icon="map-pin" title={hasActiveFilters ? 'No games match those filters.' : 'No matches scheduled yet.'} body={hasActiveFilters ? 'Try widening the time or availability filters.' : 'New games will appear here as soon as they are published.'} action={hasActiveFilters ? 'Clear filters' : undefined} onAction={hasActiveFilters ? clearFilters : undefined} />}
     <Modal transparent visible={pushPromptOpen} animationType="fade" onRequestClose={() => setPushPromptOpen(false)}>
       <View style={styles.pushBackdrop}>
         <View style={[styles.pushCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

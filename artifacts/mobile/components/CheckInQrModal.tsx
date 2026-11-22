@@ -18,7 +18,7 @@ export function CheckInQrModal({ value, venue, expiresAt, onClose, player, pitch
         <View style={[styles.qrFrame, { borderColor: colors.primary }]}>
           <View style={styles.qrQuietZone}><QRCode value={value} size={222} color="#07120A" backgroundColor="#FFFFFF" /></View>
         </View>
-        <Text style={[styles.hint, { color: colors.mutedForeground }]}>{testOnly ? 'Sample QR only: no live check-in record is created. It expires ' : 'Show this code to a referee or admin. It works once and expires '}{new Date(expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</Text>
+        <Text style={[styles.hint, { color: colors.mutedForeground }]}>{testOnly ? 'Preview QR only: no live check-in record is created. It expires ' : 'Show this code to a referee or admin. It works once and expires '}{new Date(expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</Text>
         <Text selectable style={[styles.fallback, { color: colors.mutedForeground }]}>{value}</Text>
         <Pressable accessibilityRole="button" onPress={onClose} style={[styles.button, { backgroundColor: colors.primary }]}><Text style={[styles.buttonText, { color: colors.primaryForeground }]}>Close</Text></Pressable>
       </View>

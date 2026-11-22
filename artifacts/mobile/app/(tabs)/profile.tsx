@@ -8,12 +8,15 @@ import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-cli
 import { BrandHeader, EmptyState, Screen } from '@/components/KickoffUI';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
+import { hasVerifiedOwnerEmail } from '@/lib/roles';
+import { isLocalPreviewMode } from '@/lib/localPreview';
 import { PLAYER_POSITIONS, PositionBadge, PreferredPositionPicker, isPlayerPosition, type PlayerPosition } from '@/components/PreferredPositionPicker';
 
 export default function ProfileScreen() {
   const colors = useColors();
   const router = useRouter();
   const { user: clerkUser } = useUser();
+  const isPreviewOwner = isLocalPreviewMode && hasVerifiedOwnerEmail(clerkUser?.emailAddresses);
   const { getToken } = useAuth();
   const [isMatchStaff, setIsMatchStaff] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -25,7 +28,7 @@ export default function ProfileScreen() {
   const [savingPosition, setSavingPosition] = useState(false);
   const [positionError, setPositionError] = useState('');
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
-  useEffect(() => { let active = true; (async () => { try { const token = await getToken(); const response = await fetch(`${apiBaseUrl}/api/me/match-staff`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active) setIsMatchStaff(response.ok && result.isStaff === true); } catch { if (active) setIsMatchStaff(false); } })(); return () => { active = false; }; }, [getToken]);
+  useEffect(() => { let active = true; (async () => { if (isPreviewOwner) { setIsMatchStaff(true); return; } try { const token = await getToken(); const response = await fetch(`${apiBaseUrl}/api/me/match-staff`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active) setIsMatchStaff(response.ok && result.isStaff === true); } catch { if (active) setIsMatchStaff(false); } })(); return () => { active = false; }; }, [getToken, isPreviewOwner]);
   useEffect(() => { let active = true; (async () => { try { const token = await getToken(); const response = await fetch(`${apiBaseUrl}/api/me/preferred-position`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (response.ok && active && isPlayerPosition(result.preferredPosition)) { setPreferredPosition(result.preferredPosition); setPositionDraft(result.preferredPosition); } } catch { /* Keep the position editable if it cannot be loaded yet. */ } })(); return () => { active = false; }; }, [getToken]);
   const savePosition = async () => {
     setSavingPosition(true); setPositionError('');
@@ -162,8 +165,8 @@ export default function ProfileScreen() {
       </View>
       {isMatchStaff ? <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as Href)} style={[styles.settingsRow, { borderColor: colors.border }]}><Feather name="camera" size={17} color={colors.primary} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Staff check-in scanner</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable> : null}
       {isMatchStaff ? <Pressable accessibilityRole="button" onPress={() => router.push('/referee-matches' as Href)} style={[styles.settingsRow, { borderColor: colors.border }]}><Feather name="activity" size={17} color={colors.primary} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Live match controls</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable> : null}
-      {user.data?.isAdmin ? <Pressable accessibilityRole="button" onPress={() => router.push('/admin' as Href)} style={[styles.settingsRow, { borderColor: colors.border }]}><Feather name="shield" size={17} color={colors.primary} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Admin console</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable> : null}
-      {user.data?.isPitchOwner ? <Pressable accessibilityRole="button" onPress={() => router.push('/pitch-owner' as Href)} style={[styles.settingsRow, { borderColor: colors.border }]}><Feather name="flag" size={17} color={colors.primary} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Pitch owner desk</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable> : null}
+      {user.data?.isAdmin || isPreviewOwner ? <Pressable accessibilityRole="button" onPress={() => router.push('/admin' as Href)} style={[styles.settingsRow, { borderColor: colors.border }]}><Feather name="shield" size={17} color={colors.primary} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Admin console</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable> : null}
+      {user.data?.isPitchOwner || isPreviewOwner ? <Pressable accessibilityRole="button" onPress={() => router.push('/pitch-owner' as Href)} style={[styles.settingsRow, { borderColor: colors.border }]}><Feather name="flag" size={17} color={colors.primary} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Pitch owner desk</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable> : null}
       <Pressable onPress={() => router.push('/settings')} style={[styles.settingsRow, { borderColor: colors.border }]}>
         <Feather name="settings" size={17} color={colors.mutedForeground} />
         <Text style={[styles.settingsText, { color: colors.foreground }]}>Account settings</Text>

@@ -1,15 +1,28 @@
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
+import { isLocalPreviewMode } from '@/lib/localPreview';
+import { matchRegistrationMock } from '@/data/matchRegistrationMock';
 
 export type LiveView = { liveStatus: 'scheduled' | 'first_half' | 'halftime' | 'second_half' | 'full_time'; score: { red: number; blue: number }; events: { type: 'goal' | 'yellow_card' | 'red_card'; team: 'red' | 'blue'; period: number; minute: number; scorerUserId: string; scorerName: string; assistName: string | null; assistUserId?: string | null }[] };
 
 export function LiveScoreboard({ matchId, compact = false, showAllEvents = false, onSnapshot }: { matchId: string; compact?: boolean; showAllEvents?: boolean; onSnapshot?: (snapshot: LiveView) => void }) {
   const colors = useColors(); const [snapshot, setSnapshot] = useState<LiveView | null>(null);
   const load = useCallback(async () => {
+    if (isLocalPreviewMode && matchId === matchRegistrationMock.match.id) {
+      try {
+        const stored = await AsyncStorage.getItem('kickoff.local-preview.live-match.v1');
+        if (!stored) { setSnapshot(null); return; }
+        const local = JSON.parse(stored) as LiveView;
+        setSnapshot(local);
+        onSnapshot?.(local);
+      } catch { setSnapshot(null); }
+      return;
+    }
     try {
       const response = await fetch(`${apiBaseUrl}/api/matches/${matchId}/live`, { headers: { 'Cache-Control': 'no-cache' } });
       if (response.ok) { const next = await response.json() as LiveView; setSnapshot(next); onSnapshot?.(next); }

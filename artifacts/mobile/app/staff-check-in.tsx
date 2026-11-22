@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useAuth } from '@clerk/expo';
+import { useAuth, useUser } from '@clerk/expo';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { BrandHeader, EmptyState, Screen } from '@/components/KickoffUI';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
+import { isLocalPreviewMode } from '@/lib/localPreview';
+import { hasVerifiedOwnerEmail } from '@/lib/roles';
+import { matchRegistrationMock } from '@/data/matchRegistrationMock';
 
 function readCheckInCode(value: string): { matchId: string; token: string } | null {
   try {
@@ -18,11 +21,11 @@ function readCheckInCode(value: string): { matchId: string; token: string } | nu
 }
 
 export default function StaffCheckInScreen() {
-  const colors = useColors(); const router = useRouter(); const { getToken } = useAuth();
+  const colors = useColors(); const router = useRouter(); const { getToken } = useAuth(); const { user } = useUser();
   const [permission, requestPermission] = useCameraPermissions();
   const [staff, setStaff] = useState<boolean | null>(null); const [manualCode, setManualCode] = useState(''); const [busy, setBusy] = useState(false); const [cameraActive, setCameraActive] = useState(false); const [message, setMessage] = useState(''); const [success, setSuccess] = useState(false); const [ageChecked, setAgeChecked] = useState(false); const [pendingCode, setPendingCode] = useState(''); const [ageGroup, setAgeGroup] = useState('');
   const apiBase = apiBaseUrl;
-  useEffect(() => { let active = true; (async () => { try { const token = await getToken(); const response = await fetch(`${apiBase}/api/me/match-staff`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active) setStaff(response.ok && result.isStaff === true); } catch { if (active) setStaff(false); } })(); return () => { active = false; }; }, [apiBase, getToken]);
+  useEffect(() => { let active = true; (async () => { if (isLocalPreviewMode && hasVerifiedOwnerEmail(user?.emailAddresses)) { setStaff(true); return; } try { const token = await getToken(); const response = await fetch(`${apiBase}/api/me/match-staff`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active) setStaff(response.ok && result.isStaff === true); } catch { if (active) setStaff(false); } })(); return () => { active = false; }; }, [apiBase, getToken, user?.emailAddresses]);
   useEffect(() => { if (staff && permission?.granted) setCameraActive(true); }, [staff, permission?.granted]);
   const leaveScanner = () => { setCameraActive(false); if (router.canGoBack()) router.back(); else router.replace('/referee-matches'); };
   const checkIn = async (rawCode: string) => {
@@ -32,6 +35,19 @@ export default function StaffCheckInScreen() {
     setCameraActive(false);
     setBusy(true); setCameraActive(false); setMessage('');
     try {
+      if (isLocalPreviewMode && parsed.matchId === matchRegistrationMock.match.id) {
+        setAgeGroup(matchRegistrationMock.match.ageGroup);
+        setPendingCode(rawCode);
+        if (!ageChecked) {
+          setSuccess(false);
+          setMessage(`This match is for ages ${matchRegistrationMock.match.ageGroup.replace('-', '–')}. Check the player’s age, tick the confirmation, then check them in.`);
+          return;
+        }
+        setSuccess(true);
+        setMessage('Player checked in for this local match preview.');
+        setManualCode(''); setPendingCode(''); setAgeChecked(false);
+        return;
+      }
       const token = await getToken();
       const matchResponse = await fetch(`${apiBase}/api/matches/${encodeURIComponent(parsed.matchId)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       const match = await matchResponse.json(); if (!matchResponse.ok) throw new Error(match.error || 'Could not load this match age group.');

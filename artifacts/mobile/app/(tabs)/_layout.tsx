@@ -14,6 +14,7 @@ import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { clearLocalAcceptance, hasCurrentLocalAcceptance } from '@/lib/legalAcceptance';
 import { LEGAL_PRIVACY_VERSION, LEGAL_TERMS_VERSION } from '@/data/legalDocuments';
 import { useRouter } from 'expo-router';
+import { isLocalPreviewMode } from '@/lib/localPreview';
 
 export default function TabsLayout() {
   const colors = useColors();
@@ -28,6 +29,7 @@ export default function TabsLayout() {
   useEffect(() => {
     let active = true;
     (async () => {
+      if (isLocalPreviewMode) { setLegalStatus('accepted'); return; }
       const locallyAccepted = userId ? await hasCurrentLocalAcceptance(userId) : false;
       if (active && locallyAccepted) setLegalStatus('accepted');
       try {

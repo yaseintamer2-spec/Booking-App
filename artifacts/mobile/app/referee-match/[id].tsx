@@ -8,6 +8,8 @@ import * as Crypto from 'expo-crypto';
 import { BrandHeader, EmptyState, Screen } from '@/components/KickoffUI';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
+import { isLocalPreviewMode } from '@/lib/localPreview';
+import { loadSampleParticipants, matchRegistrationMock } from '@/data/matchRegistrationMock';
 
 type Team = 'red' | 'blue';
 type Player = { userId: string; firstName: string; avatarUrl: string | null; pitchSlot: number | null; team: Team };
@@ -17,11 +19,40 @@ type PendingEvent = { clientEventId: string; type: EventType; team: Team; scorer
 type LiveSnapshot = { id: string; venueName: string; neighborhood: string; durationMinutes: number; refereeUserId: string | null; refereeName: string | null; liveStatus: 'scheduled' | 'first_half' | 'halftime' | 'second_half' | 'full_time'; liveStartedAt: string | null; livePhaseStartedAt: string | null; liveFirstHalfEndedAt: string | null; liveSecondHalfStartedAt: string | null; liveEndedAt: string | null; score: { red: number; blue: number }; players: Player[]; events: MatchEvent[] };
 const RED = '#FF5364';
 const BLUE = '#579BFF';
+const LOCAL_LIVE_MATCH_KEY = 'kickoff.local-preview.live-match.v1';
+
+function createLocalLiveSnapshot(matchId: string, players: Awaited<ReturnType<typeof loadSampleParticipants>>): LiveSnapshot {
+  const now = new Date().toISOString();
+  return {
+    id: matchId,
+    venueName: matchRegistrationMock.match.pitchName,
+    neighborhood: matchRegistrationMock.match.area,
+    durationMinutes: matchRegistrationMock.match.durationHours * 60,
+    refereeUserId: 'local-owner',
+    refereeName: 'Owner preview',
+    liveStatus: 'scheduled',
+    liveStartedAt: null,
+    livePhaseStartedAt: null,
+    liveFirstHalfEndedAt: null,
+    liveSecondHalfStartedAt: null,
+    liveEndedAt: null,
+    score: { red: 0, blue: 0 },
+    players: players.map((player, index) => ({
+      userId: player.userId,
+      firstName: player.firstName,
+      avatarUrl: player.avatarUrl,
+      pitchSlot: player.pitchSlot ?? index,
+      team: index % 2 === 0 ? 'red' : 'blue',
+    })),
+    events: [],
+  };
+}
 
 export default function RefereeMatchScreen() {
   const colors = useColors(); const { getToken } = useAuth();
   const { id: routeId } = useLocalSearchParams<{ id: string }>();
   const matchId = Array.isArray(routeId) ? routeId[0] : routeId;
+  const localPreview = isLocalPreviewMode && matchId === matchRegistrationMock.match.id;
   const queueKey = `kickoff:match-live-events:${matchId}`;
   const [match, setMatch] = useState<LiveSnapshot | null>(null);
   const [queue, setQueue] = useState<PendingEvent[]>([]);
@@ -48,6 +79,16 @@ export default function RefereeMatchScreen() {
     if (!matchId || syncing.current) return;
     syncing.current = true;
     try {
+      if (localPreview) {
+        const stored = await AsyncStorage.getItem(LOCAL_LIVE_MATCH_KEY);
+        const snapshot = stored ? JSON.parse(stored) as LiveSnapshot : createLocalLiveSnapshot(matchId, await loadSampleParticipants());
+        if (!stored) await AsyncStorage.setItem(LOCAL_LIVE_MATCH_KEY, JSON.stringify(snapshot));
+        setMatch(snapshot);
+        setQueue([]);
+        hasSnapshot.current = true;
+        setError('');
+        return;
+      }
       const storedQueue = (JSON.parse(await AsyncStorage.getItem(queueKey) || '[]') as PendingEvent[]).map(event => ({ ...event, type: event.type ?? 'goal' }));
       setQueue(storedQueue);
       const snapshot = await request(`/matches/${matchId}/live`) as LiveSnapshot;
@@ -71,13 +112,14 @@ export default function RefereeMatchScreen() {
       if (!hasSnapshot.current) setError(cause instanceof Error ? cause.message : 'Could not load this match.');
       else setNotice('Trying to reconnect. New changes will sync when the connection returns.');
     } finally { setLoading(false); syncing.current = false; }
-  }, [matchId, queueKey, request]);
+  }, [matchId, queueKey, request, localPreview]);
 
   useFocusEffect(useCallback(() => {
     void syncLive();
+    if (localPreview) return;
     const timer = setInterval(() => { void syncLive(); }, 3000);
     return () => clearInterval(timer);
-  }, [syncLive]));
+  }, [syncLive, localPreview]));
 
   const roster = useMemo(() => match?.players.filter(player => player.team === team) ?? [], [match?.players, team]);
   const scorer = roster.find(player => player.userId === scorerId);
@@ -99,6 +141,26 @@ export default function RefereeMatchScreen() {
     if (!match || !phaseAction || busy) return;
     setBusy(true); setNotice('');
     try {
+      if (localPreview) {
+        const now = new Date().toISOString();
+        const nextStatus = phaseAction.action === 'start_first_half' ? 'first_half'
+          : phaseAction.action === 'start_halftime' ? 'halftime'
+            : phaseAction.action === 'start_second_half' ? 'second_half' : 'full_time';
+        const latest: LiveSnapshot = {
+          ...match,
+          liveStatus: nextStatus,
+          liveStartedAt: match.liveStartedAt || now,
+          livePhaseStartedAt: nextStatus === 'first_half' || nextStatus === 'second_half' ? now : match.livePhaseStartedAt,
+          liveFirstHalfEndedAt: nextStatus === 'halftime' ? now : match.liveFirstHalfEndedAt,
+          liveSecondHalfStartedAt: nextStatus === 'second_half' ? now : match.liveSecondHalfStartedAt,
+          liveEndedAt: nextStatus === 'full_time' ? now : match.liveEndedAt,
+        };
+        await AsyncStorage.setItem(LOCAL_LIVE_MATCH_KEY, JSON.stringify(latest));
+        setMatch(latest);
+        hasSnapshot.current = true;
+        setNotice(phaseAction.action === 'finish_match' ? 'Full time. Final score saved on this device.' : `${phaseAction.label} recorded on this device.`);
+        return;
+      }
       const latest = await request(`/matches/${match.id}/live/state`, { method: 'POST', body: JSON.stringify({ action: phaseAction.action }) }) as LiveSnapshot;
       setMatch(latest); hasSnapshot.current = true; setNotice(phaseAction.action === 'finish_match' ? 'Full time. Final score saved.' : `${phaseAction.label} recorded.`);
     } catch (cause) { setNotice(cause instanceof Error ? cause.message : 'Could not update the match phase. Check your connection.'); }
@@ -112,6 +174,34 @@ export default function RefereeMatchScreen() {
     const event: PendingEvent = { clientEventId: Crypto.randomUUID(), type, team: eventTeam, scorerUserId: player.userId, assistUserId: type === 'goal' ? assistant?.userId ?? null : null, occurredAt: new Date().toISOString() };
     const pending = [...queue, event];
     try {
+      if (localPreview) {
+        const scorerPlayer = match.players.find(item => item.userId === event.scorerUserId)!;
+        const assistPlayer = event.assistUserId ? match.players.find(item => item.userId === event.assistUserId) : null;
+        const elapsed = Math.max(0, Math.floor((Date.now() - new Date(match.livePhaseStartedAt || event.occurredAt).getTime()) / 60_000));
+        const period = match.liveStatus === 'second_half' ? 2 : 1;
+        const eventRow: MatchEvent = {
+          id: event.clientEventId,
+          clientEventId: event.clientEventId,
+          type: event.type,
+          team: event.team,
+          period,
+          minute: (period === 2 ? Math.ceil(match.durationMinutes / 2) : 0) + elapsed,
+          scorerUserId: event.scorerUserId,
+          scorerName: scorerPlayer.firstName,
+          assistUserId: event.assistUserId,
+          assistName: assistPlayer?.firstName ?? null,
+          createdAt: event.occurredAt,
+        };
+        const latest: LiveSnapshot = {
+          ...match,
+          score: event.type === 'goal' ? { ...match.score, [event.team]: match.score[event.team] + 1 } : match.score,
+          events: [...match.events, eventRow],
+        };
+        await AsyncStorage.setItem(LOCAL_LIVE_MATCH_KEY, JSON.stringify(latest));
+        setMatch(latest); setQueue([]); setNotice(event.type === 'goal' ? 'Goal added. The preview score is updated.' : `${event.type === 'yellow_card' ? 'Yellow' : 'Red'} card recorded in the preview.`);
+        setScorerId(''); setAssistId(''); setCardConfirmation(null);
+        return;
+      }
       await AsyncStorage.setItem(queueKey, JSON.stringify(pending)); setQueue(pending);
     } catch {
       setNotice('Could not save this event on the phone. Please try again.'); setBusy(false); return;
@@ -133,6 +223,15 @@ export default function RefereeMatchScreen() {
     if (!match || busy) return;
     setBusy(true); setNotice('');
     try {
+      if (localPreview) {
+        const events = match.events.filter(item => item.id !== event.id);
+        const score = events.filter(item => item.type === 'goal').reduce((current, item) => ({ ...current, [item.team]: current[item.team] + 1 }), { red: 0, blue: 0 });
+        const latest = { ...match, events, score };
+        await AsyncStorage.setItem(LOCAL_LIVE_MATCH_KEY, JSON.stringify(latest));
+        setMatch(latest);
+        setNotice(event.type === 'goal' ? 'Goal removed and the preview score corrected.' : 'Card removed from the preview timeline.');
+        return;
+      }
       const latest = await request(`/matches/${match.id}/live/events/${event.id}`, { method: 'DELETE' }) as LiveSnapshot;
       setMatch(latest); hasSnapshot.current = true; setNotice(event.type === 'goal' ? 'Goal removed and the score corrected.' : 'Card removed from the timeline.');
     } catch (cause) { setNotice(cause instanceof Error ? cause.message : 'Could not correct that goal.'); }

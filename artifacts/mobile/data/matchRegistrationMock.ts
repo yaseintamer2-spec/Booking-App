@@ -55,7 +55,7 @@ export const matchRegistrationMock: {
   currentUser: RegistrationCurrentUser;
 } = {
   match: {
-    id: 'riyadh-demo-match',
+    id: 'riyadh-thursday-7v7',
     startsAt: '2026-11-26T18:00:00.000Z',
     pitchName: 'Al Malqa Arena',
     area: 'Al Malqa, Riyadh',
@@ -71,6 +71,7 @@ export const matchRegistrationMock: {
     maxPlayers: 14,
     ageGroup: '13-16',
     status: 'open',
+    refereeName: 'Omar Al-Harbi',
   },
   participants: [
     { userId: 'u1', firstName: 'Marcus', avatarUrl: 'https://i.pravatar.cc/120?img=12', positionPreference: 'goalkeeper' },
@@ -86,7 +87,7 @@ export const matchRegistrationMock: {
   currentUser: { userId: 'me', firstName: 'Yasein', avatarUrl: null },
 };
 
-/** Local sample listing shown in Home and Discover so the registration preview stays reachable without a running API. */
+/** Local match listing used in offline web development previews. */
 export const sampleMatchListing: Match = {
   id: matchRegistrationMock.match.id,
   venueName: matchRegistrationMock.match.pitchName,
@@ -104,14 +105,14 @@ export const sampleMatchListing: Match = {
   status: 'published',
   refereeIncluded: true,
   refereeUserId: null,
-  refereeName: null,
+  refereeName: matchRegistrationMock.match.refereeName ?? null,
   refereeAvatarUrl: null,
   pitchRatingAverage: null,
   pitchRatingCount: 0,
   waterIncluded: true,
   imageUrl: matchRegistrationMock.match.imageUrl || '',
   imageUrls: ['local:football-match-card', 'local:home-pitch-hero', 'local:home-stadium-sunset'],
-  isDemo: true,
+  isDemo: false,
   createdAt: matchRegistrationMock.match.startsAt,
 };
 
