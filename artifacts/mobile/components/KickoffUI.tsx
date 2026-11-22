@@ -274,7 +274,7 @@ export function MatchCard({ match, compact = false, recommended = false, onPress
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingTop: 12 }}><Text style={[styles.ageGroupPill, { color: colors.violet, backgroundColor: `${colors.violet}20` }]}>AGES {match.ageGroup.replace('-', '–')}</Text>{recommended ? <Text style={[styles.ageGroupPill, { color: colors.primaryForeground, backgroundColor: colors.primary }]}>RECOMMENDED FOR YOU</Text> : null}</View>
     <View style={styles.matchInfo}>
       <View style={styles.matchTitleLocation}><Text numberOfLines={1} style={[styles.venueName, { color: colors.foreground }]}>{match.venueName}</Text><View style={styles.cardLocation}><IconBadge name="map-pin" tone="pink" size="small" /><Text numberOfLines={1} style={[styles.venueLocation, { color: colors.mutedForeground }]}>{match.neighborhood} · {match.address}</Text></View><View style={styles.matchMetaRow}><View accessibilityLabel={match.pitchRatingAverage === null ? 'Pitch has no ratings yet' : `Pitch rating ${match.pitchRatingAverage.toFixed(1)} out of 5, ${match.pitchRatingCount} ratings`} style={[styles.pitchRating, { backgroundColor: `${colors.yellow}20` }]}><Feather name="star" size={13} color={colors.yellow} /><Text style={[styles.pitchRatingText, { color: colors.foreground }]}>{match.pitchRatingAverage === null ? 'New pitch' : `${match.pitchRatingAverage.toFixed(1)} · ${match.pitchRatingCount}`}</Text></View>{match.refereeName ? <View style={styles.refereeBadge}>{match.refereeAvatarUrl ? <Image accessibilityLabel={`${match.refereeName}, assigned referee`} source={{ uri: match.refereeAvatarUrl }} style={styles.refereePhoto} /> : <View style={[styles.refereePhoto, { backgroundColor: colors.secondary, alignItems: 'center', justifyContent: 'center' }]}><Feather name="user" size={11} color={colors.mutedForeground} /></View>}<Text numberOfLines={1} style={[styles.refereeText, { color: colors.mutedForeground }]}>{match.refereeName}</Text></View> : null}</View></View>
-      <View style={styles.matchInfoRight}><View style={styles.matchFacts}><IconBadge name="clock" tone="cyan" size="small" /><Text style={[styles.factText, { color: colors.foreground }]}>{time}</Text><View style={[styles.factDot, { backgroundColor: colors.border }]} /><Text style={[styles.factText, { color: colors.mutedForeground }]}>{match.durationMinutes} min</Text></View><View style={styles.priceBlock}><Text style={[styles.priceCaption, { color: colors.mutedForeground }]}>PER PLAYER</Text><Text style={[styles.oldPrice, { color: colors.destructive }]}>{compare}</Text><Text style={[styles.price, { color: colors.orange }]}>{price}</Text></View></View>
+      <View style={styles.matchInfoRight}><View style={styles.matchFacts}><IconBadge name="clock" tone="cyan" size="small" /><Text style={[styles.factText, { color: colors.foreground }]}>{time}</Text><View style={[styles.factDot, { backgroundColor: colors.border }]} /><Text style={[styles.factText, { color: colors.mutedForeground }]}>{match.durationMinutes} min</Text></View><View style={styles.priceBlock}><Text style={[styles.priceCaption, { color: colors.mutedForeground }]}>PER PLAYER</Text><Text style={[styles.oldPrice, { color: colors.destructive }]}>{compare}</Text><View style={styles.priceValue}><IconBadge name="credit-card" tone="orange" size="small" /><Text style={[styles.price, { color: colors.orange }]}>{price}</Text></View></View></View>
     </View>
     <View style={[styles.perksRow, { borderTopColor: colors.border }]}>
       <Perk icon="check-circle" label={match.refereeIncluded ? 'Referee included' : 'No referee'} active={match.refereeIncluded} />
@@ -385,6 +385,7 @@ const styles = StyleSheet.create({
   factText: { fontSize: 12, fontWeight: '600' },
   factDot: { width: 3, height: 3, borderRadius: 3, marginHorizontal: 1 },
   priceBlock: { alignItems: 'flex-end', gap: 1 },
+  priceValue: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   priceCaption: { fontSize: 8, letterSpacing: 0.9, fontWeight: '700' },
   oldPrice: { fontSize: 10, textDecorationLine: 'line-through' },
   price: { fontSize: 16, fontWeight: '700' },
@@ -413,4 +414,5 @@ const styles = StyleSheet.create({
   googleText: { color: '#3C4043', textAlign: 'center', fontSize: 14, fontWeight: '600', letterSpacing: 0.1 },
   googleError: { fontSize: 11, lineHeight: 16, marginTop: 9 },
 });
+
 
