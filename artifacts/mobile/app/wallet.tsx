@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
 import { BrandHeader, Screen } from '@/components/KickoffUI';
 import { useColors } from '@/hooks/useColors';
+import { IconBadge } from '@/components/IconBadge';
 
 export default function WalletScreen() {
   const colors = useColors(); const router = useRouter();
@@ -14,15 +15,14 @@ export default function WalletScreen() {
 
   return <Screen>
     <BrandHeader back user={user.data} subtitle="YOUR WALLET" />
-    <Text style={[styles.kicker, { color: colors.primary }]}>KICKOFF PAY</Text>
-    <Text style={[styles.title, { color: colors.foreground }]}>Your wallet.</Text>
+    <View style={styles.pageTitleRow}><View><Text style={[styles.kicker, { color: colors.cyan }]}>KICKOFF PAY</Text><Text style={[styles.title, { color: colors.foreground }]}>Your wallet.</Text></View><IconBadge name="credit-card" tone="pink" size="large" /></View>
     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Match payments, receipts, and refunds together in one place.</Text>
 
-    <LinearGradient colors={['#167951', '#155C61', '#163849']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.walletCard}>
+    <LinearGradient colors={['#29145B', '#27205F', '#145C68']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.walletCard}>
       <View style={styles.glowOne} /><View style={styles.glowTwo} />
       <View style={styles.cardTop}>
-        <View style={styles.brandLockup}><View style={styles.mark}><Feather name="activity" size={14} color="#0B2118" /></View><View><Text style={styles.brand}>KICKOFF</Text><Text style={styles.cardEyebrow}>DIGITAL WALLET</Text></View></View>
-        <View style={styles.previewBadge}><Text style={styles.previewBadgeText}>PREVIEW</Text></View>
+        <View style={styles.brandLockup}><IconBadge name="activity" tone="primary" size="medium" /><View><Text style={styles.brand}>KICKOFF</Text><Text style={styles.cardEyebrow}>DIGITAL WALLET</Text></View></View>
+        <View style={[styles.previewBadge, { borderColor: `${colors.yellow}66`, backgroundColor: `${colors.yellow}20` }]}><Text style={[styles.previewBadgeText, { color: colors.yellow }]}>PREVIEW</Text></View>
       </View>
       <View style={styles.cardBalance}>
         <Text style={styles.cardLabel}>AVAILABLE BALANCE</Text>
@@ -31,27 +31,27 @@ export default function WalletScreen() {
       <View style={styles.cardBottom}>
         <View style={styles.chip}><View style={styles.chipLine} /><View style={styles.chipLine} /><View style={styles.chipVertical} /></View>
         <View style={styles.cardFootCopy}><Text style={styles.cardFootTitle}>WALLET PREVIEW</Text><Text style={styles.cardFootSub}>Secure payments are being set up</Text></View>
-        <Feather name="shield" size={20} color="rgba(240,255,247,0.88)" />
+        <IconBadge name="shield" tone="cyan" size="small" />
       </View>
     </LinearGradient>
 
     <View style={styles.actions}>
       <Pressable accessibilityRole="button" onPress={explainSetup} style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.primary, opacity: pressed ? .78 : 1 }]}>
-        <Feather name="plus" size={18} color={colors.primaryForeground} /><Text style={[styles.primaryActionText, { color: colors.primaryForeground }]}>Add a payment method</Text><Feather name="arrow-up-right" size={16} color={colors.primaryForeground} />
+        <IconBadge name="plus" tone="primary" size="small" /><Text style={[styles.primaryActionText, { color: colors.primaryForeground }]}>Add a payment method</Text><Feather name="arrow-up-right" size={16} color={colors.primaryForeground} />
       </Pressable>
       <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/my-matches')} style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border, opacity: pressed ? .72 : 1 }]}>
-        <Feather name="calendar" size={16} color={colors.primary} /><Text style={[styles.secondaryActionText, { color: colors.foreground }]}>My matches</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} />
+        <IconBadge name="calendar" tone="cyan" size="small" /><Text style={[styles.secondaryActionText, { color: colors.foreground }]}>My matches</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} />
       </Pressable>
     </View>
 
-    <View style={styles.sectionHeading}><View><Text style={[styles.sectionKicker, { color: colors.primary }]}>WHAT’S NEXT</Text><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Made for match day</Text></View><Feather name="lock" size={16} color={colors.mutedForeground} /></View>
+    <View style={styles.sectionHeading}><View><Text style={[styles.sectionKicker, { color: colors.pink }]}>WHAT’S NEXT</Text><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Made for match day</Text></View><IconBadge name="lock" tone="violet" size="small" /></View>
     <View style={[styles.featuresCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      {[
-        { icon: 'zap', title: 'Quick match checkout', copy: 'Book and pay securely once a provider is connected.' },
-        { icon: 'file-text', title: 'Receipts in one place', copy: 'Keep match charges and receipts together.' },
-        { icon: 'rotate-ccw', title: 'Refund tracking', copy: 'See refund updates from your wallet timeline.' },
+      {[ 
+        { icon: 'zap' as const, tone: 'yellow' as const, title: 'Quick match checkout', copy: 'Book and pay securely once a provider is connected.' },
+        { icon: 'file-text' as const, tone: 'cyan' as const, title: 'Receipts in one place', copy: 'Keep match charges and receipts together.' },
+        { icon: 'rotate-ccw' as const, tone: 'pink' as const, title: 'Refund tracking', copy: 'See refund updates from your wallet timeline.' },
       ].map((feature, index) => <View key={feature.title} style={[styles.featureRow, index < 2 ? { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth } : null]}>
-        <View style={[styles.featureIcon, { backgroundColor: colors.secondary }]}><Feather name={feature.icon as 'zap'} size={16} color={colors.primary} /></View>
+        <IconBadge name={feature.icon} tone={feature.tone} size="medium" />
         <View style={styles.featureCopy}><Text style={[styles.methodTitle, { color: colors.foreground }]}>{feature.title}</Text><Text style={[styles.methodBody, { color: colors.mutedForeground }]}>{feature.copy}</Text></View>
         <Text style={[styles.comingSoon, { color: colors.mutedForeground }]}>SOON</Text>
       </View>)}
@@ -59,23 +59,24 @@ export default function WalletScreen() {
 
     <View style={styles.sectionHeading}><View><Text style={[styles.sectionKicker, { color: colors.primary }]}>ACTIVITY</Text><Text style={[styles.sectionTitle, { color: colors.foreground }]}>Your wallet timeline</Text></View></View>
     <View style={[styles.activityCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.activityIcon, { backgroundColor: colors.secondary }]}><Feather name="clock" size={18} color={colors.primary} /></View>
+      <IconBadge name="clock" tone="orange" size="medium" />
       <View style={{ flex: 1 }}><Text style={[styles.methodTitle, { color: colors.foreground }]}>No wallet activity yet</Text><Text style={[styles.methodBody, { color: colors.mutedForeground }]}>When checkout is live, match payments, refunds, and receipts will appear here.</Text></View>
     </View>
 
     <Pressable accessibilityRole="button" onPress={explainSetup} style={styles.securityNote}>
-      <Feather name="shield" size={15} color={colors.primary} /><Text style={[styles.securityText, { color: colors.mutedForeground }]}>No card details are collected here. Secure payment setup will be handled through a payment provider.</Text><Feather name="info" size={14} color={colors.mutedForeground} />
+      <IconBadge name="shield" tone="primary" size="small" /><Text style={[styles.securityText, { color: colors.mutedForeground }]}>No card details are collected here. Secure payment setup will be handled through a payment provider.</Text><IconBadge name="info" tone="violet" size="small" />
     </Pressable>
   </Screen>;
 }
 
 const styles = StyleSheet.create({
-  kicker: { fontSize: 9, letterSpacing: 1.7, fontWeight: '900', marginTop: 18 },
-  title: { fontSize: 34, fontFamily: 'Georgia', marginTop: 7 },
+  pageTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 },
+  kicker: { fontSize: 9, letterSpacing: 1.7, fontWeight: '900', marginTop: 0 },
+  title: { fontSize: 32, fontFamily: 'Georgia', marginTop: 6 },
   subtitle: { fontSize: 12, lineHeight: 18, marginTop: 6, marginBottom: 18 },
-  walletCard: { minHeight: 218, borderRadius: 23, padding: 20, overflow: 'hidden', justifyContent: 'space-between', shadowColor: '#07110D', shadowOffset: { width: 0, height: 14 }, shadowOpacity: .28, shadowRadius: 20, elevation: 7 },
-  glowOne: { position: 'absolute', width: 210, height: 210, borderRadius: 105, right: -65, top: -110, backgroundColor: 'rgba(137,255,199,0.12)' },
-  glowTwo: { position: 'absolute', width: 185, height: 185, borderRadius: 93, right: -65, bottom: -116, backgroundColor: 'rgba(85,174,255,0.12)' },
+  walletCard: { minHeight: 230, borderRadius: 25, padding: 20, overflow: 'hidden', justifyContent: 'space-between', shadowColor: '#07031C', shadowOffset: { width: 0, height: 14 }, shadowOpacity: .35, shadowRadius: 20, elevation: 8 },
+  glowOne: { position: 'absolute', width: 210, height: 210, borderRadius: 105, right: -65, top: -110, backgroundColor: 'rgba(255,79,168,0.20)' },
+  glowTwo: { position: 'absolute', width: 185, height: 185, borderRadius: 93, right: -65, bottom: -116, backgroundColor: 'rgba(53,216,255,0.18)' },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   brandLockup: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   mark: { height: 31, width: 31, borderRadius: 11, backgroundColor: '#B8F3D0', alignItems: 'center', justifyContent: 'center' },
@@ -103,7 +104,7 @@ const styles = StyleSheet.create({
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 25, marginBottom: 11 },
   sectionKicker: { fontSize: 8, fontWeight: '900', letterSpacing: 1.3 },
   sectionTitle: { fontSize: 16, fontWeight: '800', marginTop: 4 },
-  featuresCard: { borderWidth: 1, borderRadius: 17, paddingHorizontal: 12 },
+  featuresCard: { borderWidth: 1, borderRadius: 21, paddingHorizontal: 13 },
   featureRow: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   featureIcon: { width: 35, height: 35, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   featureCopy: { flex: 1 },
@@ -113,8 +114,9 @@ const styles = StyleSheet.create({
   statusPill: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 9, minHeight: 25, borderRadius: 20, marginTop: 11 },
   statusDot: { height: 6, width: 6, borderRadius: 3 },
   statusText: { fontSize: 7, fontWeight: '900', letterSpacing: .8 },
-  activityCard: { borderWidth: 1, borderRadius: 17, padding: 13, flexDirection: 'row', gap: 11, alignItems: 'flex-start' },
+  activityCard: { borderWidth: 1, borderRadius: 20, padding: 14, flexDirection: 'row', gap: 11, alignItems: 'flex-start' },
   activityIcon: { width: 37, height: 37, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   securityNote: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 13, paddingHorizontal: 3 },
   securityText: { flex: 1, fontSize: 9, lineHeight: 14 },
 });
+
