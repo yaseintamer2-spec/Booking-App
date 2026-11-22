@@ -21,7 +21,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import { useColors } from '@/hooks/useColors';
-import { ThemeProvider, useAppTheme } from '@/providers/ThemeProvider';
+import { ThemeProvider } from '@/providers/ThemeProvider';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -43,7 +43,6 @@ if (apiBaseUrl) setBaseUrl(apiBaseUrl);
 
 function RootLayoutNav() {
   const colors = useColors();
-  const { theme } = useAppTheme();
   const router = useRouter();
   const lastNotificationResponse = useRef<string | null>(null);
   useEffect(() => {
@@ -72,7 +71,7 @@ function RootLayoutNav() {
   }, []);
   return (
     <>
-    <StatusBar style={theme === 'light' ? 'dark' : 'light'} />
+    <StatusBar style="light" />
     <Stack screenOptions={{ headerBackTitle: 'Back', headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" />

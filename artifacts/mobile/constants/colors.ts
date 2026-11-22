@@ -1,64 +1,32 @@
-/**
- * Semantic design tokens for the mobile app.
- *
- * These tokens mirror the naming conventions used in web artifacts (index.css)
- * so that multi-artifact projects share a cohesive visual identity.
- *
- * Replace the placeholder values below with values that match the project's
- * brand. If a sibling web artifact exists, read its index.css and convert the
- * HSL values to hex so both artifacts use the same palette.
- *
- * To add dark mode, add a `dark` key with the same token names.
- * The useColors() hook will automatically pick it up.
- */
-
 const colors = {
-  light: {
-    text: '#17251D',
-    tint: '#16834D',
-    background: '#F4F7F4',
-    foreground: '#17251D',
-    card: '#FFFFFF',
-    cardForeground: '#17251D',
-    primary: '#16834D',
-    primaryForeground: '#FFFFFF',
-    secondary: '#E8F0EA',
-    secondaryForeground: '#31493B',
-    muted: '#EEF3EF',
-    mutedForeground: '#52645A',
-    accent: '#DDF2E4',
-    accentForeground: '#1D6038',
-    destructive: '#B42318',
-    destructiveForeground: '#FFFFFF',
-    googleBlue: '#4285F4',
-    border: '#D4E0D7',
-    input: '#F8FBF8',
-  },
-  dark: {
-    text: '#E8EEE9',
-    tint: '#34D399',
-    background: '#0A100E',
-    foreground: '#E8EEE9',
-    card: '#121B17',
-    cardForeground: '#E8EEE9',
-    primary: '#39D98A',
-    primaryForeground: '#07120D',
-    secondary: '#1A2821',
-    secondaryForeground: '#D3DED6',
-    muted: '#17211C',
-    mutedForeground: '#91A198',
-    accent: '#20352A',
-    accentForeground: '#C4F5D8',
-    destructive: '#E16C65',
-    destructiveForeground: '#FFF5F3',
-    googleBlue: '#4285F4',
-    border: '#26352D',
-    input: '#1B2821',
-  },
-
-  // Border radius (in px). Sync from the sibling web artifact's --radius
-  // CSS variable. This value applies to cards, buttons, inputs, and modals.
-  radius: 8,
-};
+  text: '#F7F4FF',
+  tint: '#2BEA8F',
+  background: '#120A33',
+  foreground: '#F7F4FF',
+  card: '#1E1450',
+  cardForeground: '#F7F4FF',
+  primary: '#2BEA8F',
+  primaryForeground: '#10213A',
+  secondary: '#291D61',
+  secondaryForeground: '#D7D0F5',
+  muted: '#241A54',
+  mutedForeground: '#B1A8D6',
+  accent: '#203D67',
+  accentForeground: '#F7F4FF',
+  destructive: '#FF5B72',
+  destructiveForeground: '#170D35',
+  googleBlue: '#35D8FF',
+  border: '#3A2D70',
+  input: '#1A1244',
+  pink: '#FF4FA8',
+  orange: '#FF9A3D',
+  yellow: '#FFD84D',
+  cyan: '#35D8FF',
+  violet: '#9B7BFF',
+  // Semantic aliases make colorful UI accents available to every screen.
+  success: '#2BEA8F',
+  warning: '#FFD84D',
+  radius: 18,
+} as const;
 
 export default colors;

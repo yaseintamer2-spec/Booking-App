@@ -6,7 +6,6 @@ import { BlurView } from 'expo-blur';
 import { useAuth, useUser } from '@clerk/expo';
 import { AccountMenu } from '@/components/AccountMenu';
 import { useColors } from '@/hooks/useColors';
-import { useAppTheme } from '@/providers/ThemeProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PositionBadge } from '@/components/PreferredPositionPicker';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
@@ -18,7 +17,6 @@ import { isLocalPreviewMode } from '@/lib/localPreview';
 
 export default function TabsLayout() {
   const colors = useColors();
-  const { theme } = useAppTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useUser();
@@ -62,7 +60,7 @@ export default function TabsLayout() {
     tabBarActiveTintColor: colors.primary,
     tabBarInactiveTintColor: colors.mutedForeground,
     tabBarStyle: { position: 'absolute', backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.background, borderTopColor: colors.border, borderTopWidth: 1, height: Platform.OS === 'web' ? 84 : 58 + insets.bottom, paddingTop: 8, paddingBottom: Math.max(4, insets.bottom), elevation: 0 },
-    tabBarBackground: () => Platform.OS === 'ios' ? <BlurView intensity={72} tint={theme === 'light' ? 'light' : 'dark'} style={StyleSheet.absoluteFill} /> : <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />,
+    tabBarBackground: () => Platform.OS === 'ios' ? <BlurView intensity={72} tint="dark" style={StyleSheet.absoluteFill} /> : <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />,
     tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
   }}>
     <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <Feather name="home" size={19} color={typeof color === 'string' ? color : colors.primary} /> }} />
