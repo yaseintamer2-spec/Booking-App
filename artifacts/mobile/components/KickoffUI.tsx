@@ -237,9 +237,12 @@ export function MatchCard({ match, compact = false, recommended = false, onPress
   const compare = formatSar(match.compareAtPriceHalalas);
   const photos = match.imageUrls?.length ? match.imageUrls.slice(0, 3) : match.imageUrl && (/^https:\/\//i.test(match.imageUrl) || /^data:image\//i.test(match.imageUrl)) ? [match.imageUrl] : [];
   const gallery = photos.length ? photos : [null];
+  const galleryKey = gallery.join('|');
   const [activePhoto, setActivePhoto] = useState(0);
+  const [failedPhotos, setFailedPhotos] = useState<Record<string, boolean>>({});
   const [photoWidth, setPhotoWidth] = useState(320);
   const scrollRef = useRef<ScrollViewInstance>(null);
+  useEffect(() => { setFailedPhotos({}); setActivePhoto(0); scrollRef.current?.scrollTo({ x: 0, animated: false }); }, [match.id, galleryKey]);
   useEffect(() => {
     if (gallery.length < 2) return;
     const timer = setInterval(() => setActivePhoto(current => {
@@ -253,7 +256,7 @@ export function MatchCard({ match, compact = false, recommended = false, onPress
   return <View testID={`match-${match.id}`} style={[styles.matchCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
     <View style={[styles.gallery, compact && { height: 174 }]} onLayout={event => setPhotoWidth(event.nativeEvent.layout.width)}>
       <ScrollView ref={scrollRef} horizontal pagingEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={event => setActivePhoto(Math.min(gallery.length - 1, Math.round(event.nativeEvent.contentOffset.x / photoWidth)))}>
-        {gallery.map((photo, index) => <Pressable key={`${index}-${photo?.slice(0, 22) || 'default'}`} accessibilityRole="button" accessibilityLabel={`Open registration for ${match.venueName}, pitch photo ${index + 1} of ${gallery.length}`} onPress={onPress}><ImageBackground source={matchCardPhotoSource(photo)} resizeMode="cover" style={[styles.matchPhoto, { width: photoWidth }, compact && { height: 174 }]}>
+        {gallery.map((photo, index) => <Pressable key={`${index}-${photo?.slice(0, 22) || 'default'}`} accessibilityRole="button" accessibilityLabel={`Open registration for ${match.venueName}, pitch photo ${index + 1} of ${gallery.length}`} onPress={onPress}><ImageBackground source={failedPhotos[photo || 'default'] ? cardImage : matchCardPhotoSource(photo)} onError={() => setFailedPhotos(current => ({ ...current, [photo || 'default']: true }))} resizeMode="cover" style={[styles.matchPhoto, { width: photoWidth }, compact && { height: 174 }]}>
           <View style={styles.photoShade} />
           <View style={styles.photoPills}><Text style={[styles.photoPill, { color: match.isDemo ? colors.destructive : colors.foreground, backgroundColor: 'rgba(8,16,12,.82)' }]}>{match.isDemo ? 'DEMO LISTING' : '7V7 · RIYADH'}</Text><Text style={[styles.spotsPill, { color: colors.primaryForeground, backgroundColor: colors.primary }]}>{match.spotsRemaining} SPOTS LEFT</Text></View>
           {gallery.length === 1 ? <View style={styles.photoVenue}><Text style={[styles.venueName, { color: colors.foreground }]}>{match.venueName}</Text><Text style={[styles.venueLocation, { color: colors.secondaryForeground }]}>{match.neighborhood}  /  {day}</Text></View> : null}

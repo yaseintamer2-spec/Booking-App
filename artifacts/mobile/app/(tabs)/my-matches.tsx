@@ -7,7 +7,7 @@ import { useAuth } from '@clerk/expo';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
-import { BrandHeader, EmptyState, Screen, formatRiyadhDate, formatRiyadhTime } from '@/components/KickoffUI';
+import { BrandHeader, EmptyState, Screen, cardImage, formatRiyadhDate, formatRiyadhTime } from '@/components/KickoffUI';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { CheckInQrModal } from '@/components/CheckInQrModal';
@@ -23,12 +23,14 @@ type Notification = { id: string; kind: string; message: string; createdAt: stri
 
 function BookingPhotos({ photos, venue }: { photos: (string | number)[]; venue: string }) {
   const colors = useColors();
-  const gallery = photos.filter(photo => typeof photo === 'number' || /^https:\/\//i.test(photo) || /^data:image\//i.test(photo)).slice(0, 3);
+  const storedPhotos = photos.filter(photo => typeof photo === 'number' || /^https:\/\//i.test(photo) || /^data:image\//i.test(photo)).slice(0, 3);
+  const gallery: (string | number)[] = storedPhotos.length ? storedPhotos : [cardImage];
   const [width, setWidth] = useState(320);
   const [active, setActive] = useState(0);
+  const [failedPhotos, setFailedPhotos] = useState<Record<number, boolean>>({});
   const scrollRef = useRef<ScrollViewInstance | null>(null);
   const galleryKey = gallery.join('|');
-  useEffect(() => { setActive(0); scrollRef.current?.scrollTo({ x: 0, animated: false }); }, [galleryKey]);
+  useEffect(() => { setActive(0); setFailedPhotos({}); scrollRef.current?.scrollTo({ x: 0, animated: false }); }, [galleryKey]);
   useEffect(() => {
     if (gallery.length < 2) return;
     const timer = setInterval(() => setActive(current => {
@@ -38,10 +40,9 @@ function BookingPhotos({ photos, venue }: { photos: (string | number)[]; venue: 
     }), 5000);
     return () => clearInterval(timer);
   }, [galleryKey, width]);
-  if (!gallery.length) return null;
   return <View style={photoStyles.wrap} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
     <ScrollView ref={scrollRef} horizontal pagingEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={event => setActive(Math.min(gallery.length - 1, Math.round(event.nativeEvent.contentOffset.x / width)))}>
-      {gallery.map((photo, index) => <ImageBackground key={`${index}-${String(photo).slice(0, 32)}`} source={typeof photo === 'number' ? photo : { uri: photo }} resizeMode="cover" accessibilityLabel={`${venue} pitch photo ${index + 1} of ${gallery.length}`} style={[photoStyles.image, { width }]}><View style={photoStyles.shade} /><Text style={photoStyles.photoCount}>{index + 1} / {gallery.length}</Text></ImageBackground>)}
+      {gallery.map((photo, index) => <ImageBackground key={`${index}-${String(photo).slice(0, 32)}`} source={failedPhotos[index] || typeof photo === 'number' && photo === cardImage ? cardImage : typeof photo === 'number' ? photo : { uri: photo }} onError={() => setFailedPhotos(current => ({ ...current, [index]: true }))} resizeMode="cover" accessibilityLabel={`${venue} pitch photo ${index + 1} of ${gallery.length}`} style={[photoStyles.image, { width }]}><View style={photoStyles.shade} /><Text style={photoStyles.photoCount}>{index + 1} / {gallery.length}</Text></ImageBackground>)}
     </ScrollView>
     {gallery.length > 1 ? <View style={photoStyles.dots}>{gallery.map((_, index) => <Pressable key={index} accessibilityRole="button" accessibilityLabel={`Show pitch photo ${index + 1} of ${gallery.length}`} onPress={() => { setActive(index); scrollRef.current?.scrollTo({ x: index * width, animated: true }); }} style={photoStyles.dotHit}><View style={[photoStyles.dot, { backgroundColor: active === index ? colors.primary : 'rgba(255,255,255,.75)' }]} /></Pressable>)}</View> : null}
   </View>;
