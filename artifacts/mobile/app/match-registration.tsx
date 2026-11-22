@@ -125,13 +125,13 @@ export default function MatchRegistrationScreen() {
     status: remoteMatch.data.status === 'cancelled' ? 'cancelled' as const : remoteMatch.data.bookedCount >= remoteMatch.data.capacity ? 'full' as const : 'open' as const,
   } : matchRegistrationMock.match;
   const matchPhotoList = match.imageUrls?.filter((url) => typeof url === 'number' || (typeof url === 'string' && url.length > 0)).slice(0, 3) || [];
-  // Demo listings can have no uploaded gallery in the API. Keep their three local preview images visible.
-  const demoPhotoFallback = remoteMatch.data?.isDemo ? matchRegistrationMock.match.imageUrls || [] : [];
+  // Keep a three-photo pitch preview available for test listings without uploaded photos.
+  const previewPitchPhotos = matchRegistrationMock.match.imageUrls || [];
   const uploadedPitchPhotos = matchPhotoList.length
     ? matchPhotoList
-    : demoPhotoFallback.length
-      ? demoPhotoFallback
-    : match.imageUrl && (/^https:\/\//i.test(match.imageUrl) || /^data:image\//i.test(match.imageUrl)) ? [match.imageUrl] : [];
+    : match.imageUrl && (/^https:\/\//i.test(match.imageUrl) || /^data:image\//i.test(match.imageUrl))
+      ? [match.imageUrl]
+      : previewPitchPhotos;
   const pitchPhotos: (string | number | null)[] = uploadedPitchPhotos.length ? uploadedPitchPhotos : [null];
   const currentUser = account.data ? {
     userId: account.data.id,
@@ -1167,21 +1167,21 @@ const styles = StyleSheet.create({
   matchTitle: { fontSize: 34, lineHeight: 40, fontWeight: '800', marginTop: 8 },
   matchSubtitle: { fontSize: 14, marginTop: 3 },
   registrationLocationCard: { marginTop: 4, marginBottom: 14, borderWidth: 1, borderRadius: 22, overflow: 'hidden' },
-  registrationHero: { height: 270, overflow: 'hidden' },
+  registrationHero: { height: 270, overflow: 'hidden', position: 'relative' },
   registrationHeroScroller: { width: '100%', height: 270, flexGrow: 0 },
   registrationHeroSlides: { alignItems: 'stretch' },
-  registrationHeroSlide: { height: 270, justifyContent: 'flex-end', flexShrink: 0, overflow: 'hidden' },
-  registrationHeroSlideImage: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end' },
+  registrationHeroSlide: { height: 270, justifyContent: 'flex-end', flexShrink: 0, overflow: 'hidden', position: 'relative' },
+  registrationHeroSlideImage: { width: '100%', height: '100%', justifyContent: 'flex-end' },
   registrationHeroImage: { borderRadius: 22 },
   registrationHeroCopy: { paddingHorizontal: 18, paddingBottom: 14 },
-  registrationHeroDots: { position: 'absolute', left: 0, right: 0, bottom: 6, zIndex: 5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  registrationHeroDots: { position: 'absolute', left: 0, right: 0, bottom: 4, zIndex: 5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', minHeight: 44 },
   locationSummary: { minHeight: 112, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15, paddingVertical: 8 },
   locationSummaryCopy: { flex: 1, minWidth: 0 },
   locationNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   locationName: { fontSize: 14, fontWeight: '800', flexShrink: 1 },
   locationAddress: { fontSize: 11, lineHeight: 16, marginTop: 5 },
-  registrationGalleryDotHit: { width: 32, height: 36, alignItems: 'center', justifyContent: 'center' },
-  registrationGalleryDot: { width: 9, height: 9, borderRadius: 5 },
+  registrationGalleryDotHit: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  registrationGalleryDot: { width: 10, height: 10, borderRadius: 5 },
   photoViewer: { flex: 1, backgroundColor: 'rgba(0,0,0,.97)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   fullSizePhoto: { width: '100%', height: '82%' },
   photoViewerClose: { position: 'absolute', right: 14, width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(15,20,18,.72)', alignItems: 'center', justifyContent: 'center' },
