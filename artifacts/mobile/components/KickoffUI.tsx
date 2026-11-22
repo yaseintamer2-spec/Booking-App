@@ -251,9 +251,9 @@ export function MatchCard({ match, compact = false, recommended = false, onPress
   }, [gallery.length, photoWidth]);
   const goToPhoto = (index: number) => { setActivePhoto(index); scrollRef.current?.scrollTo({ x: index * photoWidth, animated: true }); };
   return <View testID={`match-${match.id}`} style={[styles.matchCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-    <View style={[styles.gallery, compact && { height: 126 }]} onLayout={event => setPhotoWidth(event.nativeEvent.layout.width)}>
+    <View style={[styles.gallery, compact && { height: 158 }]} onLayout={event => setPhotoWidth(event.nativeEvent.layout.width)}>
       <ScrollView ref={scrollRef} horizontal pagingEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={event => setActivePhoto(Math.min(gallery.length - 1, Math.round(event.nativeEvent.contentOffset.x / photoWidth)))}>
-        {gallery.map((photo, index) => <Pressable key={`${index}-${photo?.slice(0, 22) || 'default'}`} accessibilityRole="button" accessibilityLabel={`Open registration for ${match.venueName}, pitch photo ${index + 1} of ${gallery.length}`} onPress={onPress}><ImageBackground source={matchCardPhotoSource(photo)} resizeMode="cover" style={[styles.matchPhoto, { width: photoWidth }, compact && { height: 126 }]}>
+        {gallery.map((photo, index) => <Pressable key={`${index}-${photo?.slice(0, 22) || 'default'}`} accessibilityRole="button" accessibilityLabel={`Open registration for ${match.venueName}, pitch photo ${index + 1} of ${gallery.length}`} onPress={onPress}><ImageBackground source={matchCardPhotoSource(photo)} resizeMode="cover" style={[styles.matchPhoto, { width: photoWidth }, compact && { height: 158 }]}>
           <View style={styles.photoShade} />
           <View style={styles.photoPills}><Text style={[styles.photoPill, { color: match.isDemo ? colors.destructive : colors.foreground, backgroundColor: 'rgba(8,16,12,.82)' }]}>{match.isDemo ? 'DEMO LISTING' : '7V7 · RIYADH'}</Text><Text style={[styles.spotsPill, { color: colors.primaryForeground, backgroundColor: colors.primary }]}>{match.spotsRemaining} SPOTS LEFT</Text></View>
           {gallery.length === 1 ? <View style={styles.photoVenue}><Text style={[styles.venueName, { color: colors.foreground }]}>{match.venueName}</Text><Text style={[styles.venueLocation, { color: colors.secondaryForeground }]}>{match.neighborhood}  /  {day}</Text></View> : null}
@@ -348,8 +348,8 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 23, fontFamily: 'Georgia', marginTop: 4 },
   actionText: { fontSize: 12, fontWeight: '700', marginBottom: 3 },
   matchCard: { borderWidth: 1, borderRadius: 18, overflow: 'hidden', marginBottom: 16 },
-  gallery: { height: 188, overflow: 'hidden' },
-  matchPhoto: { height: 188, justifyContent: 'space-between', padding: 14 },
+  gallery: { height: 244, overflow: 'hidden' },
+  matchPhoto: { height: 244, justifyContent: 'space-between', padding: 16 },
   galleryDots: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   galleryDotHit: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   galleryDot: { width: 7, height: 7, borderRadius: 4 },

@@ -82,6 +82,14 @@ type RegistrationTicket = {
   expiresAt: string;
 };
 
+function pitchPhotoSource(photo: string | number | null) {
+  return typeof photo === 'number'
+    ? photo
+    : photo
+      ? { uri: photo }
+      : require('../assets/images/football-match-card.jpg');
+}
+
 export default function MatchRegistrationScreen() {
   const colors: Palette = {
     ...useColors(),
@@ -129,20 +137,21 @@ export default function MatchRegistrationScreen() {
   const [noticeVisible, setNoticeVisible] = useState(SHOW_PREVIEW_NOTICE);
   const [activePitchPhoto, setActivePitchPhoto] = useState(0);
   const [pitchPhotoWidth, setPitchPhotoWidth] = useState(320);
+  const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const pitchPhotoScroll = useRef<ScrollViewInstance | null>(null);
   useEffect(() => {
     setActivePitchPhoto(0);
     pitchPhotoScroll.current?.scrollTo({ x: 0, animated: false });
   }, [match.id]);
   useEffect(() => {
-    if (pitchPhotos.length < 2) return;
+    if (pitchPhotos.length < 2 || photoViewerOpen) return;
     const timer = setInterval(() => setActivePitchPhoto((current) => {
       const next = (current + 1) % pitchPhotos.length;
       pitchPhotoScroll.current?.scrollTo({ x: next * pitchPhotoWidth, animated: true });
       return next;
     }), 5000);
     return () => clearInterval(timer);
-  }, [pitchPhotos.length, pitchPhotoWidth]);
+  }, [pitchPhotos.length, pitchPhotoWidth, photoViewerOpen]);
   const [participants, setParticipants] = useState(
     matchRegistrationMock.participants,
   );
@@ -376,28 +385,51 @@ export default function MatchRegistrationScreen() {
             />
           ) : null}
           <View style={[styles.registrationLocationCard, { borderColor: colors.border, backgroundColor: colors.card }]}>
-            <ImageBackground
-              source={typeof pitchPhotos[activePitchPhoto] === 'number' ? pitchPhotos[activePitchPhoto] : pitchPhotos[activePitchPhoto] ? { uri: pitchPhotos[activePitchPhoto] as string } : require('../assets/images/football-match-card.jpg')}
-              resizeMode="cover"
-              imageStyle={styles.registrationHeroImage}
+            <View
               style={[styles.registrationHero, { backgroundColor: colors.card }]}
-              accessibilityLabel={`${match.pitchName} pitch photo ${activePitchPhoto + 1} of ${pitchPhotos.length}`}
+              onLayout={(event) => setPitchPhotoWidth(event.nativeEvent.layout.width)}
             >
-              <LinearGradient
-                pointerEvents="none"
-                colors={['rgba(5,17,26,0.08)', 'rgba(5,17,26,0.35)', 'rgba(5,17,26,0.94)']}
-                locations={[0, 0.42, 1]}
-                style={StyleSheet.absoluteFill}
-              />
-              <View style={styles.registrationHeroCopy}>
-                <Text style={[styles.matchKicker, { color: colors.primary }]}>
-                  {`7x7 · ${match.durationHours} HOURS · REFEREE INCLUDED`}
-                </Text>
-                <Text style={[styles.matchTitle, { color: colors.foreground }]}>{dateTitle}</Text>
-                <Text style={[styles.matchSubtitle, { color: colors.foreground }]}>{match.pitchName}</Text>
-              </View>
+              <ScrollView
+                ref={pitchPhotoScroll}
+                horizontal
+                pagingEnabled
+                nestedScrollEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(event) => setActivePitchPhoto(Math.min(pitchPhotos.length - 1, Math.round(event.nativeEvent.contentOffset.x / pitchPhotoWidth)))}
+              >
+                {pitchPhotos.map((photo, index) => (
+                  <Pressable
+                    key={`${match.id}-hero-photo-${index}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open pitch photo ${index + 1} of ${pitchPhotos.length} full size`}
+                    onPress={() => { setActivePitchPhoto(index); setPhotoViewerOpen(true); }}
+                  >
+                    <ImageBackground
+                      source={pitchPhotoSource(photo)}
+                      resizeMode="cover"
+                      imageStyle={styles.registrationHeroImage}
+                      style={[styles.registrationHeroSlide, { width: pitchPhotoWidth }]}
+                      accessibilityLabel={`${match.pitchName} pitch photo ${index + 1} of ${pitchPhotos.length}`}
+                    >
+                      <LinearGradient
+                        pointerEvents="none"
+                        colors={['rgba(5,17,26,0.08)', 'rgba(5,17,26,0.35)', 'rgba(5,17,26,0.94)']}
+                        locations={[0, 0.42, 1]}
+                        style={StyleSheet.absoluteFill}
+                      />
+                      <View style={styles.registrationHeroCopy}>
+                        <Text style={[styles.matchKicker, { color: colors.primary }]}>
+                          {`7x7 · ${match.durationHours} HOURS · REFEREE INCLUDED`}
+                        </Text>
+                        <Text style={[styles.matchTitle, { color: colors.foreground }]}>{dateTitle}</Text>
+                        <Text style={[styles.matchSubtitle, { color: colors.foreground }]}>{match.pitchName}</Text>
+                      </View>
+                    </ImageBackground>
+                  </Pressable>
+                ))}
+              </ScrollView>
               {pitchPhotos.length > 1 ? <View style={styles.registrationHeroDots}>{pitchPhotos.map((_, index) => <Pressable key={index} accessibilityRole="button" accessibilityLabel={`Show pitch photo ${index + 1} of ${pitchPhotos.length}`} onPress={() => { setActivePitchPhoto(index); pitchPhotoScroll.current?.scrollTo({ x: index * pitchPhotoWidth, animated: true }); }} style={styles.registrationGalleryDotHit}><View style={[styles.registrationGalleryDot, { backgroundColor: index === activePitchPhoto ? colors.googleBlue : 'rgba(232,238,233,.78)' }]} /></Pressable>)}</View> : null}
-            </ImageBackground>
+            </View>
             <View style={styles.locationSummary}>
               <View style={styles.locationSummaryCopy}>
                 <View style={styles.locationNameRow}><Feather name="map-pin" size={15} color={colors.primary} /><Text numberOfLines={1} style={[styles.locationName, { color: colors.foreground }]}>{match.area}</Text></View>
@@ -415,26 +447,6 @@ export default function MatchRegistrationScreen() {
                   <Feather name="arrow-up-right" size={13} color={colors.primary} />
                 </Pressable>
               </View>
-            </View>
-            <View style={styles.expandedPitchGallery} onLayout={(event) => setPitchPhotoWidth(event.nativeEvent.layout.width)}>
-              <ScrollView
-                ref={pitchPhotoScroll}
-                horizontal
-                pagingEnabled
-                nestedScrollEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={(event) => setActivePitchPhoto(Math.min(pitchPhotos.length - 1, Math.round(event.nativeEvent.contentOffset.x / pitchPhotoWidth)))}
-              >
-                {pitchPhotos.map((photo, index) => (
-                  <ImageBackground
-                    key={`${match.id}-pitch-photo-${index}`}
-                    source={typeof photo === 'number' ? photo : photo ? { uri: photo } : require('../assets/images/football-match-card.jpg')}
-                    resizeMode="cover"
-                    style={[styles.expandedPitchPhoto, { width: pitchPhotoWidth }]}
-                    accessibilityLabel={`${match.pitchName} pitch photo ${index + 1} of ${pitchPhotos.length}`}
-                  />
-                ))}
-              </ScrollView>
             </View>
           </View>
           <View accessibilityRole="alert" style={[styles.agePolicy, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="shield" size={16} color={colors.primary} /><Text style={[styles.agePolicyText, { color: colors.mutedForeground }]}>Age group: <Text style={{ color: colors.foreground, fontWeight: '800' }}>{match.ageGroup.replace('-', '–')}</Text>. The referee checks age at the venue and may refuse entry if you do not meet this group, even if you have paid.</Text></View>
@@ -619,6 +631,24 @@ export default function MatchRegistrationScreen() {
           ) : null}
         </View>
       </View> : null}
+      <Modal transparent visible={photoViewerOpen} animationType="fade" onRequestClose={() => setPhotoViewerOpen(false)}>
+        <View style={styles.photoViewer}>
+          <Image
+            source={pitchPhotoSource(pitchPhotos[activePitchPhoto] ?? null)}
+            resizeMode="contain"
+            accessibilityLabel={`${match.pitchName} pitch photo ${activePitchPhoto + 1} of ${pitchPhotos.length}`}
+            style={styles.fullSizePhoto}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close full-size pitch photo"
+            onPress={() => setPhotoViewerOpen(false)}
+            style={[styles.photoViewerClose, { top: Math.max(insets.top, 14) + 8 }]}
+          >
+            <Feather name="x" size={22} color="#FFFFFF" />
+          </Pressable>
+        </View>
+      </Modal>
       <Modal visible={confirmationTickets.length > 0} transparent animationType="fade" onRequestClose={() => setConfirmationTickets([])}>
         <View style={styles.ticketBackdrop}>
           <View style={[styles.ticketModal, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -1123,7 +1153,8 @@ const styles = StyleSheet.create({
   matchTitle: { fontSize: 34, lineHeight: 40, fontWeight: '800', marginTop: 8 },
   matchSubtitle: { fontSize: 14, marginTop: 3 },
   registrationLocationCard: { marginTop: 4, marginBottom: 14, borderWidth: 1, borderRadius: 22, overflow: 'hidden' },
-  registrationHero: { height: 226, justifyContent: 'flex-end' },
+  registrationHero: { height: 270, overflow: 'hidden' },
+  registrationHeroSlide: { height: 270, justifyContent: 'flex-end' },
   registrationHeroImage: { borderRadius: 22 },
   registrationHeroCopy: { paddingHorizontal: 18, paddingBottom: 14 },
   registrationHeroDots: { position: 'absolute', top: 8, right: 7, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, borderRadius: 18, backgroundColor: 'rgba(5,17,26,.56)' },
@@ -1132,12 +1163,12 @@ const styles = StyleSheet.create({
   locationNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   locationName: { fontSize: 14, fontWeight: '800', flexShrink: 1 },
   locationAddress: { fontSize: 11, lineHeight: 16, marginTop: 5 },
-  expandPitchPhotos: { width: 46, height: 46, borderWidth: 1, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  expandedPitchGallery: { height: 168, overflow: 'hidden', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,.08)' },
-  expandedPitchPhoto: { height: 168, justifyContent: 'flex-end' },
   registrationGalleryDots: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 2 },
   registrationGalleryDotHit: { width: 28, minHeight: 42, alignItems: 'center', justifyContent: 'center' },
   registrationGalleryDot: { width: 7, height: 7, borderRadius: 4 },
+  photoViewer: { flex: 1, backgroundColor: 'rgba(0,0,0,.97)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
+  fullSizePhoto: { width: '100%', height: '82%' },
+  photoViewerClose: { position: 'absolute', right: 14, width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(15,20,18,.72)', alignItems: 'center', justifyContent: 'center' },
   mapsLink: { minHeight: 40, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingRight: 8, marginTop: 1 },
   mapsLinkText: { fontSize: 11, fontWeight: '700', textDecorationLine: 'underline' },
   agePolicy: { flexDirection: 'row', gap: 9, alignItems: 'flex-start', borderWidth: 1, borderRadius: 13, padding: 11, marginBottom: 8 },
