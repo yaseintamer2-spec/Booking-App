@@ -125,8 +125,12 @@ export default function MatchRegistrationScreen() {
     status: remoteMatch.data.status === 'cancelled' ? 'cancelled' as const : remoteMatch.data.bookedCount >= remoteMatch.data.capacity ? 'full' as const : 'open' as const,
   } : matchRegistrationMock.match;
   const matchPhotoList = match.imageUrls?.filter((url) => typeof url === 'number' || (typeof url === 'string' && url.length > 0)).slice(0, 3) || [];
+  // Demo listings can have no uploaded gallery in the API. Keep their three local preview images visible.
+  const demoPhotoFallback = remoteMatch.data?.isDemo ? matchRegistrationMock.match.imageUrls || [] : [];
   const uploadedPitchPhotos = matchPhotoList.length
     ? matchPhotoList
+    : demoPhotoFallback.length
+      ? demoPhotoFallback
     : match.imageUrl && (/^https:\/\//i.test(match.imageUrl) || /^data:image\//i.test(match.imageUrl)) ? [match.imageUrl] : [];
   const pitchPhotos: (string | number | null)[] = uploadedPitchPhotos.length ? uploadedPitchPhotos : [null];
   const currentUser = account.data ? {
@@ -1170,7 +1174,7 @@ const styles = StyleSheet.create({
   registrationHeroSlideImage: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end' },
   registrationHeroImage: { borderRadius: 22 },
   registrationHeroCopy: { paddingHorizontal: 18, paddingBottom: 14 },
-  registrationHeroDots: { position: 'absolute', bottom: 7, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, borderRadius: 18, backgroundColor: 'rgba(5,17,26,.78)' },
+  registrationHeroDots: { position: 'absolute', left: 0, right: 0, bottom: 6, zIndex: 5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   locationSummary: { minHeight: 112, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15, paddingVertical: 8 },
   locationSummaryCopy: { flex: 1, minWidth: 0 },
   locationNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
