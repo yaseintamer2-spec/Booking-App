@@ -41,7 +41,7 @@ export default function SignUpScreen() {
   const errorsText = errors.fields.emailAddress?.message || errors.fields.password?.message || errors.fields.code?.message;
   return <ImageBackground source={heroImage} resizeMode="cover" style={styles.background}>
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop]} />
-    <BrandHeader back hideMenu />
+    <BrandHeader back backFallback="/(auth)/welcome" hideMenu />
     <KeyboardAwareScrollViewCompat bottomOffset={72} contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 28 }]}>
       <Text style={[styles.eyebrow, { color: colors.primary }]}>{verifyStep ? 'ONE LAST STEP' : 'MAKE ROOM FOR GAME NIGHT'}</Text>
       <Text style={[styles.title, { color: colors.foreground }]}>{verifyStep ? 'Check your inbox.' : 'Join the\nline-up.'}</Text>

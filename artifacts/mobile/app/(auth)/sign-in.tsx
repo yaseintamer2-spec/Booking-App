@@ -31,7 +31,7 @@ export default function SignInScreen() {
   const errorField = errors.fields.identifier?.message || errors.fields.password?.message;
   return <ImageBackground source={heroImage} resizeMode="cover" style={styles.background}>
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop]} />
-    <BrandHeader title="KICKOFF" back hideMenu />
+    <BrandHeader title="KICKOFF" back backFallback="/(auth)/welcome" hideMenu />
     <KeyboardAwareScrollViewCompat bottomOffset={72} contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 28 }]}>
       <Text style={[styles.eyebrow, { color: colors.primary }]}>GOOD TO HAVE YOU BACK</Text><Text style={[styles.title, { color: colors.foreground }]}>Pick up where{'\n'}you left off.</Text><Text style={[styles.copy, { color: colors.mutedForeground }]}>Sign in to find your next match in Riyadh.</Text>
       <View style={{ marginTop: 28 }}><Field label="EMAIL ADDRESS" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoComplete="email" /><Field label="PASSWORD" value={password} onChangeText={setPassword} placeholder="Your password" secureTextEntry autoComplete="current-password" /></View>

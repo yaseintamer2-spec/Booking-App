@@ -244,8 +244,8 @@ export default function RefereeMatchScreen() {
     setQueue(pending); setNotice('Unsynced goal removed from this phone.');
   };
 
-  if (loading && !match) return <Screen><BrandHeader back subtitle="LIVE MATCH CONTROL" /><ActivityIndicator color={colors.primary} /></Screen>;
-  if (error && !match) return <Screen><BrandHeader back subtitle="LIVE MATCH CONTROL" /><EmptyState icon="alert-circle" title="Could not open match controls." body={error} action="Try again" onAction={() => void syncLive()} /></Screen>;
+  if (loading && !match) return <Screen><BrandHeader back backFallback="/referee-matches" subtitle="LIVE MATCH CONTROL" /><ActivityIndicator color={colors.primary} /></Screen>;
+  if (error && !match) return <Screen><BrandHeader back backFallback="/referee-matches" subtitle="LIVE MATCH CONTROL" /><EmptyState icon="alert-circle" title="Could not open match controls." body={error} action="Try again" onAction={() => void syncLive()} /></Screen>;
   if (!match) return null;
   const redScore = match.score.red + pendingRed; const blueScore = match.score.blue + pendingBlue;
   const activePhase = match.liveStatus === 'first_half' || match.liveStatus === 'second_half';
@@ -253,7 +253,7 @@ export default function RefereeMatchScreen() {
   const cardsByPlayer = (playerId: string) => match.events.filter(event => event.scorerUserId === playerId && (event.type === 'yellow_card' || event.type === 'red_card'));
 
   return <Screen refreshing={false} onRefresh={() => { void syncLive(); }}>
-    <BrandHeader back subtitle="LIVE MATCH CONTROL" />
+    <BrandHeader back backFallback="/referee-matches" subtitle="LIVE MATCH CONTROL" />
     <View style={styles.titleRow}><View style={{ flex: 1 }}><Text style={[styles.kicker, { color: colors.primary }]}>REFEREE DESK</Text><Text style={[styles.title, { color: colors.foreground }]}>{match.venueName}</Text><Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{match.neighborhood}{match.refereeName ? ` · ${match.refereeName}` : ''}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Refresh live match" onPress={() => void syncLive()} style={[styles.refresh, { borderColor: colors.border }]}><Feather name="refresh-cw" size={17} color={colors.primary} /></Pressable></View>
 
     <View style={[styles.scoreCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

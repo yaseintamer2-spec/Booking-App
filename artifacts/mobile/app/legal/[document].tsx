@@ -10,9 +10,9 @@ export default function LegalDocumentScreen() {
   const colors = useColors();
   const { document } = useLocalSearchParams<{ document: string }>();
   const content = legalDocuments[document ?? ''];
-  if (!content) return <Screen><BrandHeader back /><Text style={{ color: colors.foreground }}>This page could not be found.</Text></Screen>;
+  if (!content) return <Screen><BrandHeader back backFallback="/settings" /><Text style={{ color: colors.foreground }}>This page could not be found.</Text></Screen>;
   return <Screen>
-    <BrandHeader back hideMenu />
+    <BrandHeader back backFallback="/settings" hideMenu />
     <Text style={[styles.eyebrow, { color: colors.primary }]}>{content.eyebrow}</Text>
     <Text style={[styles.title, { color: colors.foreground }]}>{content.title}</Text>
     <Text style={[styles.updated, { color: colors.mutedForeground }]}>Version 1 · Updated {content.updated}</Text>

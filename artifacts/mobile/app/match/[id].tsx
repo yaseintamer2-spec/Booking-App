@@ -40,7 +40,7 @@ export default function MatchDetailScreen() {
     setActivePhoto(index);
     scrollRef.current?.scrollTo({ x: index * photoWidth, animated: true });
   };
-  return <Screen><BrandHeader back user={user.data} subtitle="MATCH DETAILS" />
+  return <Screen><BrandHeader back backFallback="/(tabs)/matches" user={user.data} subtitle="MATCH DETAILS" />
     {match.isLoading ? <LoadingState /> : match.isError || !match.data ? <EmptyState icon="alert-circle" title="This match isn't available." body="It may have been removed or is no longer published. Head back to Discover to see current games." action={match.isError ? 'Try again' : undefined} onAction={() => match.refetch()} /> : <>
        <View style={styles.gallery} onLayout={event => setPhotoWidth(event.nativeEvent.layout.width)}>
          <ScrollView

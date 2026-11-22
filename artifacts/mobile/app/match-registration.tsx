@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Animated,
   Image,
-  ImageBackground,
   Linking,
   Modal,
   Pressable,
@@ -397,7 +396,7 @@ export default function MatchRegistrationScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Go back"
-              onPress={() => router.back()}
+              onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/(tabs)/matches'); }}
               style={styles.headerBack}
             >
               <Feather name="arrow-left" size={21} color={colors.foreground} />
@@ -443,10 +442,9 @@ export default function MatchRegistrationScreen() {
                     accessibilityLabel={`Open pitch photo ${index + 1} of ${pitchPhotos.length} full size`}
                     onPress={() => { setActivePitchPhoto(index); setPhotoViewerOpen(true); }}
                   >
-                    <ImageBackground
+                    <Image
                       source={failedPitchPhotos[index] ? require('../assets/images/football-match-card.jpg') : pitchPhotoSource(photo)}
                       resizeMode="cover"
-                      imageStyle={styles.registrationHeroImage}
                       style={[styles.registrationHeroSlideImage, { width: pitchPhotoWidth }]}
                       onError={() => setFailedPitchPhotos((current) => ({ ...current, [index]: true }))}
                       accessibilityLabel={`${match.pitchName} pitch photo ${index + 1} of ${pitchPhotos.length}`}
@@ -1194,8 +1192,7 @@ const styles = StyleSheet.create({
   registrationHeroScroller: { width: '100%', height: 270, flexGrow: 0 },
   registrationHeroSlides: { alignItems: 'stretch' },
   registrationHeroSlide: { height: 270, justifyContent: 'flex-end', flexShrink: 0, overflow: 'hidden', position: 'relative' },
-  registrationHeroSlideImage: { width: '100%', height: '100%', justifyContent: 'flex-end' },
-  registrationHeroImage: { borderRadius: 22 },
+  registrationHeroSlideImage: { position: 'absolute', top: 0, left: 0, height: '100%' },
   registrationHeroOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, justifyContent: 'flex-end' },
   registrationHeroCopy: { paddingHorizontal: 18, paddingBottom: 14 },
   registrationHeroDots: { position: 'absolute', left: 0, right: 0, bottom: -4, zIndex: 5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', minHeight: 44 },

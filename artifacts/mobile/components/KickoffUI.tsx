@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Image, ImageBackground, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewInstance } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useClerk, useSSO, useUser } from '@clerk/expo';
 import { useQueryClient } from '@tanstack/react-query';
@@ -153,7 +153,7 @@ export function Screen({ children, scroll = true, style, refreshing, onRefresh }
   </View>;
 }
 
-export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, hideMenu = false, onBack }: { title?: string; subtitle?: string; user?: CurrentUser; back?: boolean; hideMenu?: boolean; onBack?: () => void }) {
+export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, hideMenu = false, onBack, backFallback = '/(tabs)' }: { title?: string; subtitle?: string; user?: CurrentUser; back?: boolean; hideMenu?: boolean; onBack?: () => void; backFallback?: Href }) {
   const colors = useColors();
   const router = useRouter();
   const { signOut } = useClerk();
@@ -163,6 +163,11 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState(false);
   const insets = useSafeAreaInsets();
+  const handleBack = () => {
+    if (onBack) { onBack(); return; }
+    if (router.canGoBack()) router.back();
+    else router.replace(backFallback);
+  };
   const menu = [
     ['Wallet', '/wallet', 'credit-card'],
     ['My matches', '/(tabs)/my-matches', 'calendar'],
@@ -187,8 +192,8 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
   };
   return <>
     <View style={[styles.header, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 67 : 0) + 8 }]}>
-      {back ? <Pressable onPress={onBack ?? (() => router.back())} style={styles.headerIcon} accessibilityRole="button" accessibilityLabel="Go back"><Feather name="arrow-left" size={21} color={colors.foreground} /></Pressable> :
-        <Pressable onPress={() => router.push('/(tabs)')} style={styles.brandLockup}><View style={[styles.brandMark, { backgroundColor: colors.primary }]}><Feather name="activity" size={15} color={colors.primaryForeground} /></View><Text style={[styles.brand, { color: colors.foreground }]}>{title}</Text></Pressable>}
+      {back ? <Pressable onPress={handleBack} style={styles.headerIcon} accessibilityRole="button" accessibilityLabel="Go back"><Feather name="arrow-left" size={21} color={colors.foreground} /></Pressable> :
+        <Pressable onPress={() => router.replace('/(tabs)')} style={styles.brandLockup}><View style={[styles.brandMark, { backgroundColor: colors.primary }]}><Feather name="activity" size={15} color={colors.primaryForeground} /></View><Text style={[styles.brand, { color: colors.foreground }]}>{title}</Text></Pressable>}
       <View style={styles.headerRight}>
         {subtitle ? <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{subtitle}</Text> : null}
         <NotificationsButton />
