@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useAuth, useUser } from '@clerk/expo';
 import { AccountMenu } from '@/components/AccountMenu';
 import { useColors } from '@/hooks/useColors';
+import { IconBadge } from '@/components/IconBadge';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PositionBadge } from '@/components/PreferredPositionPicker';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
@@ -63,13 +63,14 @@ export default function TabsLayout() {
     tabBarBackground: () => Platform.OS === 'ios' ? <BlurView intensity={72} tint="dark" style={StyleSheet.absoluteFill} /> : <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />,
     tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
   }}>
-    <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ color }) => <Feather name="home" size={19} color={typeof color === 'string' ? color : colors.primary} /> }} />
-    <Tabs.Screen name="matches" options={{ title: 'Discover', tabBarIcon: ({ color }) => <Feather name="search" size={19} color={typeof color === 'string' ? color : colors.primary} /> }} />
-    <Tabs.Screen name="my-matches" options={{ title: 'My matches', tabBarIcon: ({ color }) => <Feather name="calendar" size={19} color={typeof color === 'string' ? color : colors.primary} /> }} />
-    <Tabs.Screen name="rankings" options={{ title: 'Rankings', tabBarIcon: ({ color }) => <Feather name="award" size={19} color={typeof color === 'string' ? color : colors.primary} /> }} />
-    <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarButton: (props) => <Pressable accessibilityRole="button" accessibilityLabel="Open account menu" accessibilityState={props.accessibilityState} onPress={() => setAccountMenuVisible(true)} style={props.style}>{props.children}</Pressable>, tabBarIcon: ({ color }) => user?.imageUrl ? <View style={styles.profileAvatarWrap}><Image source={{ uri: user.imageUrl }} accessibilityLabel="Your profile picture" style={{ width: 31, height: 31, borderRadius: 16, borderWidth: 2, borderColor: color, marginTop: -5 }} /><PositionBadge position={preferredPosition} style={styles.profilePositionBadge} /></View> : <Feather name="user" size={19} color={typeof color === 'string' ? color : colors.primary} /> }} />
+    <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: () => <IconBadge name="home" tone="primary" size="small" /> }} />
+    <Tabs.Screen name="matches" options={{ title: 'Discover', tabBarIcon: () => <IconBadge name="search" tone="pink" size="small" /> }} />
+    <Tabs.Screen name="my-matches" options={{ title: 'My matches', tabBarIcon: () => <IconBadge name="calendar" tone="cyan" size="small" /> }} />
+    <Tabs.Screen name="rankings" options={{ title: 'Rankings', tabBarIcon: () => <IconBadge name="award" tone="yellow" size="small" /> }} />
+    <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarButton: (props) => <Pressable accessibilityRole="button" accessibilityLabel="Open account menu" accessibilityState={props.accessibilityState} onPress={() => setAccountMenuVisible(true)} style={props.style}>{props.children}</Pressable>, tabBarIcon: ({ color }) => user?.imageUrl ? <View style={styles.profileAvatarWrap}><Image source={{ uri: user.imageUrl }} accessibilityLabel="Your profile picture" style={{ width: 31, height: 31, borderRadius: 16, borderWidth: 2, borderColor: color, marginTop: -5 }} /><PositionBadge position={preferredPosition} style={styles.profilePositionBadge} /></View> : <IconBadge name="user" tone="violet" size="small" /> }} />
   </Tabs><AccountMenu visible={accountMenuVisible} onClose={() => setAccountMenuVisible(false)} /></>;
 }
 
 const styles = StyleSheet.create({ profileAvatarWrap: { position: 'relative', width: 35, height: 34 }, profilePositionBadge: { position: 'absolute', right: -4, bottom: 0 }, legalGate: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 26 }, legalGateTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center' }, legalGateCopy: { fontSize: 13, textAlign: 'center', marginTop: 8 }, legalGateButton: { minHeight: 48, minWidth: 130, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginTop: 18 } });
+
 

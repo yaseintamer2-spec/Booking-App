@@ -10,6 +10,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import { IconBadge, type AccentTone } from './IconBadge';
 import type { Match, CurrentUser } from '@workspace/api-client-react';
 import { NotificationsButton } from './NotificationsButton';
 
@@ -216,7 +217,7 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
             <View style={{ flex: 1 }}><Text style={[styles.drawerName, { color: colors.foreground }]}>{user?.name || 'Player'}</Text><Text style={[styles.small, { color: colors.mutedForeground }]}>{user?.email || 'Your football profile'}</Text></View>
           </View>
           <View style={{ gap: 5, marginTop: 20 }}>
-            {menu.map(([label, path, icon]) => <Pressable key={path} accessibilityRole="button" testID={`drawer-${label.toLowerCase().replaceAll(' ', '-')}`} style={({ pressed }) => [styles.drawerItem, { opacity: pressed ? 0.68 : 1 }]} onPress={() => { setOpen(false); router.push(path as never); }}><Feather name={icon as never} size={18} color={colors.mutedForeground} /><Text style={[styles.drawerItemText, { color: colors.foreground }]}>{label}</Text><Feather name="arrow-up-right" size={15} color={colors.mutedForeground} /></Pressable>)}
+            {menu.map(([label, path, icon], index) => { const tones: AccentTone[] = ['primary', 'pink', 'cyan', 'yellow', 'violet', 'orange']; return <Pressable key={path} accessibilityRole="button" testID={`drawer-${label.toLowerCase().replaceAll(' ', '-')}`} style={({ pressed }) => [styles.drawerItem, { opacity: pressed ? 0.68 : 1 }]} onPress={() => { setOpen(false); router.push(path as never); }}><IconBadge name={icon as never} tone={tones[index % tones.length]} size="small" /><Text style={[styles.drawerItemText, { color: colors.foreground }]}>{label}</Text><Feather name="arrow-up-right" size={15} color={colors.mutedForeground} /></Pressable>; })}
           </View>
           <View style={{ flex: 1 }} />
           <Pressable onPress={handleSignOut} disabled={signingOut} accessibilityRole="button" testID="drawer-sign-out" style={[styles.signOutButton, { borderColor: colors.border, opacity: signingOut ? 0.55 : 1 }]}><Feather name="log-out" size={16} color={colors.destructive} /><Text style={[styles.signOutText, { color: colors.destructive }]}>{signingOut ? 'Signing out…' : 'Sign out'}</Text></Pressable>
@@ -270,10 +271,10 @@ export function MatchCard({ match, compact = false, recommended = false, onPress
       {gallery.length > 1 ? <View style={styles.galleryDots}>{gallery.map((_, index) => <Pressable key={index} accessibilityRole="button" accessibilityLabel={`Show pitch photo ${index + 1} of ${gallery.length}`} onPress={() => goToPhoto(index)} style={styles.galleryDotHit}><View style={[styles.galleryDot, { backgroundColor: index === activePhoto ? colors.googleBlue : 'rgba(232,238,233,.72)' }]} /></Pressable>)}</View> : null}
     </View>
     <Pressable accessibilityRole="button" accessibilityLabel={`${match.venueName}, ${match.address}, ${formatSar(match.priceHalalas)} per player. Open match registration.`} onPress={onPress} style={styles.matchBody}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingTop: 12 }}><Text style={[styles.ageGroupPill, { color: colors.foreground, backgroundColor: colors.secondary }]}>AGES {match.ageGroup.replace('-', '–')}</Text>{recommended ? <Text style={[styles.ageGroupPill, { color: colors.primaryForeground, backgroundColor: colors.primary }]}>RECOMMENDED FOR YOU</Text> : null}</View>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingTop: 12 }}><Text style={[styles.ageGroupPill, { color: colors.violet, backgroundColor: `${colors.violet}20` }]}>AGES {match.ageGroup.replace('-', '–')}</Text>{recommended ? <Text style={[styles.ageGroupPill, { color: colors.primaryForeground, backgroundColor: colors.primary }]}>RECOMMENDED FOR YOU</Text> : null}</View>
     <View style={styles.matchInfo}>
-      <View style={styles.matchTitleLocation}><Text numberOfLines={1} style={[styles.venueName, { color: colors.foreground }]}>{match.venueName}</Text><View style={styles.cardLocation}><Feather name="map-pin" size={12} color={colors.primary} /><Text numberOfLines={1} style={[styles.venueLocation, { color: colors.mutedForeground }]}>{match.neighborhood} · {match.address}</Text></View><View style={styles.matchMetaRow}><View accessibilityLabel={match.pitchRatingAverage === null ? 'Pitch has no ratings yet' : `Pitch rating ${match.pitchRatingAverage.toFixed(1)} out of 5, ${match.pitchRatingCount} ratings`} style={[styles.pitchRating, { backgroundColor: colors.secondary }]}><Feather name="star" size={13} color="#F5C451" /><Text style={[styles.pitchRatingText, { color: colors.foreground }]}>{match.pitchRatingAverage === null ? 'New pitch' : `${match.pitchRatingAverage.toFixed(1)} · ${match.pitchRatingCount}`}</Text></View>{match.refereeName ? <View style={styles.refereeBadge}>{match.refereeAvatarUrl ? <Image accessibilityLabel={`${match.refereeName}, assigned referee`} source={{ uri: match.refereeAvatarUrl }} style={styles.refereePhoto} /> : <View style={[styles.refereePhoto, { backgroundColor: colors.secondary, alignItems: 'center', justifyContent: 'center' }]}><Feather name="user" size={11} color={colors.mutedForeground} /></View>}<Text numberOfLines={1} style={[styles.refereeText, { color: colors.mutedForeground }]}>{match.refereeName}</Text></View> : null}</View></View>
-      <View style={styles.matchInfoRight}><View style={styles.matchFacts}><Feather name="clock" size={14} color={colors.primary} /><Text style={[styles.factText, { color: colors.foreground }]}>{time}</Text><View style={[styles.factDot, { backgroundColor: colors.border }]} /><Text style={[styles.factText, { color: colors.mutedForeground }]}>{match.durationMinutes} min</Text></View><View style={styles.priceBlock}><Text style={[styles.priceCaption, { color: colors.mutedForeground }]}>PER PLAYER</Text><Text style={[styles.oldPrice, { color: colors.destructive }]}>{compare}</Text><Text style={[styles.price, { color: colors.foreground }]}>{price}</Text></View></View>
+      <View style={styles.matchTitleLocation}><Text numberOfLines={1} style={[styles.venueName, { color: colors.foreground }]}>{match.venueName}</Text><View style={styles.cardLocation}><IconBadge name="map-pin" tone="pink" size="small" /><Text numberOfLines={1} style={[styles.venueLocation, { color: colors.mutedForeground }]}>{match.neighborhood} · {match.address}</Text></View><View style={styles.matchMetaRow}><View accessibilityLabel={match.pitchRatingAverage === null ? 'Pitch has no ratings yet' : `Pitch rating ${match.pitchRatingAverage.toFixed(1)} out of 5, ${match.pitchRatingCount} ratings`} style={[styles.pitchRating, { backgroundColor: `${colors.yellow}20` }]}><Feather name="star" size={13} color={colors.yellow} /><Text style={[styles.pitchRatingText, { color: colors.foreground }]}>{match.pitchRatingAverage === null ? 'New pitch' : `${match.pitchRatingAverage.toFixed(1)} · ${match.pitchRatingCount}`}</Text></View>{match.refereeName ? <View style={styles.refereeBadge}>{match.refereeAvatarUrl ? <Image accessibilityLabel={`${match.refereeName}, assigned referee`} source={{ uri: match.refereeAvatarUrl }} style={styles.refereePhoto} /> : <View style={[styles.refereePhoto, { backgroundColor: colors.secondary, alignItems: 'center', justifyContent: 'center' }]}><Feather name="user" size={11} color={colors.mutedForeground} /></View>}<Text numberOfLines={1} style={[styles.refereeText, { color: colors.mutedForeground }]}>{match.refereeName}</Text></View> : null}</View></View>
+      <View style={styles.matchInfoRight}><View style={styles.matchFacts}><IconBadge name="clock" tone="cyan" size="small" /><Text style={[styles.factText, { color: colors.foreground }]}>{time}</Text><View style={[styles.factDot, { backgroundColor: colors.border }]} /><Text style={[styles.factText, { color: colors.mutedForeground }]}>{match.durationMinutes} min</Text></View><View style={styles.priceBlock}><Text style={[styles.priceCaption, { color: colors.mutedForeground }]}>PER PLAYER</Text><Text style={[styles.oldPrice, { color: colors.destructive }]}>{compare}</Text><Text style={[styles.price, { color: colors.orange }]}>{price}</Text></View></View>
     </View>
     <View style={[styles.perksRow, { borderTopColor: colors.border }]}>
       <Perk icon="check-circle" label={match.refereeIncluded ? 'Referee included' : 'No referee'} active={match.refereeIncluded} />
@@ -293,7 +294,7 @@ function matchCardPhotoSource(photo: string | null) {
 
 function Perk({ icon, label, active }: { icon: string; label: string; active: boolean }) {
   const colors = useColors();
-  return <View style={styles.perk}><Feather name={icon as never} size={13} color={active ? colors.primary : colors.mutedForeground} /><Text style={[styles.perkText, { color: colors.mutedForeground }]}>{label}</Text></View>;
+  return <View style={styles.perk}><IconBadge name={icon as never} tone={active ? 'primary' : 'violet'} size="small" /><Text style={[styles.perkText, { color: colors.mutedForeground }]}>{label}</Text></View>;
 }
 
 export function Field({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, multiline, autoComplete }: { label: string; value: string; onChangeText: (v: string) => void; placeholder?: string; secureTextEntry?: boolean; keyboardType?: 'default' | 'email-address' | 'numeric' | 'phone-pad'; multiline?: boolean; autoComplete?: 'email' | 'current-password' | 'new-password' | 'off' }) {
@@ -315,7 +316,7 @@ export function Button({ label, onPress, secondary = false, disabled = false, ic
 
 export function EmptyState({ title, body, icon = 'flag', action, onAction }: { title: string; body: string; icon?: string; action?: string; onAction?: () => void }) {
   const colors = useColors();
-  return <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={[styles.emptyIcon, { backgroundColor: colors.accent }]}><Feather name={icon as never} size={22} color={colors.primary} /></View><Text style={[styles.emptyTitle, { color: colors.foreground }]}>{title}</Text><Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>{body}</Text>{action && onAction ? <Pressable onPress={onAction} style={styles.emptyAction}><Text style={[styles.actionText, { color: colors.primary }]}>{action}</Text><Feather name="refresh-cw" size={14} color={colors.primary} /></Pressable> : null}</View>;
+  return <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}><ImageBackground source={cardImage} resizeMode="cover" style={styles.emptyArt}><View style={styles.emptyArtShade} /><IconBadge name={icon as never} tone="pink" size="large" /></ImageBackground><Text style={[styles.emptyTitle, { color: colors.foreground }]}>{title}</Text><Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>{body}</Text>{action && onAction ? <Pressable onPress={onAction} style={styles.emptyAction}><Text style={[styles.actionText, { color: colors.cyan }]}>{action}</Text><IconBadge name="refresh-cw" tone="cyan" size="small" /></Pressable> : null}</View>;
 }
 
 export function LoadingState() {
@@ -397,7 +398,9 @@ const styles = StyleSheet.create({
   passwordToggle: { position: 'absolute', right: 4, width: 42, height: 46, alignItems: 'center', justifyContent: 'center' },
   button: { minHeight: 54, borderRadius: 15, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   buttonText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
-  emptyState: { padding: 22, borderRadius: 18, borderWidth: 1, alignItems: 'flex-start', marginTop: 10 },
+  emptyState: { padding: 14, borderRadius: 20, borderWidth: 1, alignItems: 'flex-start', marginTop: 10, overflow: 'hidden' },
+  emptyArt: { width: '100%', height: 116, borderRadius: 15, overflow: 'hidden', justifyContent: 'center', padding: 14, marginBottom: 16 },
+  emptyArtShade: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(18,10,51,0.38)' },
   emptyIcon: { width: 46, height: 46, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 17 },
   emptyTitle: { fontSize: 19, fontFamily: 'Georgia', marginBottom: 7 },
   emptyBody: { fontSize: 13, lineHeight: 20 },
@@ -410,3 +413,4 @@ const styles = StyleSheet.create({
   googleText: { color: '#3C4043', textAlign: 'center', fontSize: 14, fontWeight: '600', letterSpacing: 0.1 },
   googleError: { fontSize: 11, lineHeight: 16, marginTop: 9 },
 });
+
