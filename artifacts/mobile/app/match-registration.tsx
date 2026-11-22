@@ -47,6 +47,11 @@ const POSITION_OPTIONS: { label: string; value: PositionPreference }[] = [
   { label: 'Midfielder', value: 'midfielder' },
   { label: 'Attacker', value: 'attacker' },
 ];
+const DEFAULT_PITCH_PHOTOS: (string | number)[] = [
+  require('../assets/images/football-match-card.jpg'),
+  require('../assets/images/home-pitch-hero.jpg'),
+  require('../assets/images/home-stadium-sunset.png'),
+];
 const PITCH_HEIGHT = 700;
 const SLOT_HEIGHT = 68;
 const FORMATION_ROWS: [number, number[]][] = [
@@ -127,15 +132,10 @@ export default function MatchRegistrationScreen() {
     refereeAvatarUrl: remoteMatch.data.refereeAvatarUrl,
     status: remoteMatch.data.status === 'cancelled' ? 'cancelled' as const : remoteMatch.data.bookedCount >= remoteMatch.data.capacity ? 'full' as const : 'open' as const,
   } : matchRegistrationMock.match;
-  const matchPhotoList = match.imageUrls?.filter((url) => typeof url === 'number' || (typeof url === 'string' && url.length > 0)).slice(0, 3) || [];
-  // Keep a three-photo pitch preview available for test listings without uploaded photos.
-  const previewPitchPhotos = matchRegistrationMock.match.imageUrls || [];
-  const uploadedPitchPhotos = matchPhotoList.length
-    ? matchPhotoList
-    : match.imageUrl && (/^https:\/\//i.test(match.imageUrl) || /^data:image\//i.test(match.imageUrl))
-      ? [match.imageUrl]
-      : previewPitchPhotos;
-  const pitchPhotos: (string | number | null)[] = uploadedPitchPhotos.length ? uploadedPitchPhotos : [null];
+  const matchPhotoList = match.imageUrls?.filter((url) => typeof url === 'number' || (typeof url === 'string' && (/^https:\/\//i.test(url) || /^data:image\//i.test(url)))).slice(0, 3) || [];
+  const legacyPitchPhoto = match.imageUrl && (/^https:\/\//i.test(match.imageUrl) || /^data:image\//i.test(match.imageUrl)) ? match.imageUrl : null;
+  // Older matches without stored photos still receive a bundled gallery.
+  const pitchPhotos: (string | number)[] = matchPhotoList.length ? matchPhotoList : legacyPitchPhoto ? [legacyPitchPhoto] : DEFAULT_PITCH_PHOTOS;
   const currentUser = account.data ? {
     userId: account.data.id,
     firstName: account.data.name.split(' ')[0],
