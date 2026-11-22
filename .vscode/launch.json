@@ -1,0 +1,21 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "KICKOFF web preview",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/artifacts/mobile/node_modules/expo/bin/cli",
+      "args": ["start", "--web", "--port", "8081", "--host", "localhost"],
+      "cwd": "${workspaceFolder}/artifacts/mobile",
+      "console": "internalConsole",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": ["<node_internals>/**"],
+      "serverReadyAction": {
+        "pattern": "Waiting on (https?://localhost:\\d+)",
+        "uriFormat": "%s",
+        "action": "openExternally"
+      }
+    }
+  ]
+}
