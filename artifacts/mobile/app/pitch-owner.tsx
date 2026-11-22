@@ -12,10 +12,10 @@ import { uploadMatchImages } from '@/lib/matchImageUpload';
 import { MatchAgeGroupPicker } from '@/components/MatchAgeGroupPicker';
 import type { MatchAgeGroup } from '@/lib/matchAge';
 
-type Pitch = { email: string; venueName: string; neighborhood: string; address: string };
+type Pitch = { email: string; venueName: string; neighborhood: string; address: string; canManageAnyPitch?: boolean };
 type Submission = { id: string; venueName: string; neighborhood: string; address: string; contactPhone: string; startsAt: string; durationMinutes: number; capacity: number; ageGroup: MatchAgeGroup; priceHalalas: number; compareAtPriceHalalas: number; refereeIncluded: boolean; waterIncluded: boolean; imageUrls: string[]; status: 'pending' | 'approved' | 'rejected'; reviewNote: string | null; matchId: string | null };
-type Form = { startsAt: string; durationMinutes: string; capacity: string; ageGroup: MatchAgeGroup; price: string; compareAt: string; contactPhone: string; refereeIncluded: boolean; waterIncluded: boolean; imageUrls: string[] };
-const freshForm = (): Form => ({ startsAt: toRiyadhLocalInput(new Date(Date.now() + 2 * 86400000)), durationMinutes: '120', capacity: '14', ageGroup: '13-16', price: '30', compareAt: '35', contactPhone: '', refereeIncluded: true, waterIncluded: true, imageUrls: [] });
+type Form = { venueName: string; neighborhood: string; address: string; startsAt: string; durationMinutes: string; capacity: string; ageGroup: MatchAgeGroup; price: string; compareAt: string; contactPhone: string; refereeIncluded: boolean; waterIncluded: boolean; imageUrls: string[] };
+const freshForm = (): Form => ({ venueName: '', neighborhood: '', address: '', startsAt: toRiyadhLocalInput(new Date(Date.now() + 2 * 86400000)), durationMinutes: '120', capacity: '14', ageGroup: '13-16', price: '30', compareAt: '35', contactPhone: '', refereeIncluded: true, waterIncluded: true, imageUrls: [] });
 
 export default function PitchOwnerScreen() {
   const colors = useColors(); const router = useRouter(); const { getToken } = useAuth();
@@ -53,12 +53,13 @@ export default function PitchOwnerScreen() {
     const durationMinutes = Number(form.durationMinutes); const capacity = Number(form.capacity);
     const priceHalalas = Math.round(Number(form.price) * 100); const compareAtPriceHalalas = Math.round(Number(form.compareAt) * 100);
     if (!startsAt || startsAt.getTime() <= Date.now()) { setError('Choose a future date and time in Riyadh time.'); return; }
+    if (pitch?.canManageAnyPitch && (!form.venueName.trim() || !form.neighborhood.trim() || !form.address.trim())) { setError('Add the pitch name, area, and address.'); return; }
     if (!/^\+?[0-9][0-9 ()-]{7,18}$/.test(form.contactPhone.trim())) { setError('Enter a contact phone number so the team can reach you.'); return; }
     if (!Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > 240 || !Number.isInteger(capacity) || capacity < 2 || capacity > 30 || !Number.isFinite(priceHalalas) || priceHalalas < 0 || !Number.isFinite(compareAtPriceHalalas) || compareAtPriceHalalas < priceHalalas) { setError('Check the duration, capacity, and player prices.'); return; }
     setBusy(true);
     try {
       const imageUrls = await uploadMatchImages(form.imageUrls, getToken);
-      await request('/pitch-owner/submissions', { method: 'POST', body: JSON.stringify({ startsAt: startsAt.toISOString(), durationMinutes, capacity, ageGroup: form.ageGroup, priceHalalas, compareAtPriceHalalas, contactPhone: form.contactPhone.trim(), refereeIncluded: form.refereeIncluded, waterIncluded: form.waterIncluded, imageUrls }) });
+      await request('/pitch-owner/submissions', { method: 'POST', body: JSON.stringify({ ...(pitch?.canManageAnyPitch ? { venueName: form.venueName.trim(), neighborhood: form.neighborhood.trim(), address: form.address.trim() } : {}), startsAt: startsAt.toISOString(), durationMinutes, capacity, ageGroup: form.ageGroup, priceHalalas, compareAtPriceHalalas, contactPhone: form.contactPhone.trim(), refereeIncluded: form.refereeIncluded, waterIncluded: form.waterIncluded, imageUrls }) });
       setForm(freshForm()); await load();
       Alert.alert('Request sent', 'Your match time is now waiting for admin review. It will appear in Discover only after approval.');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not submit the match request.'); }
@@ -68,13 +69,14 @@ export default function PitchOwnerScreen() {
   if (!pitch) return <Screen><BrandHeader back subtitle="PITCH OWNER DESK" /><EmptyState icon="lock" title="Pitch owner access needed." body={error || 'Ask KICKOFF to assign your account to a pitch.'} /></Screen>;
   return <Screen refreshing={false} onRefresh={() => { void load(); }}>
     <BrandHeader back subtitle="PITCH OWNER DESK" />
-    <Text style={[styles.kicker, { color: colors.primary }]}>YOUR PITCH</Text>
-    <Text style={[styles.title, { color: colors.foreground }]}>{pitch.venueName}</Text>
-    <Text style={[styles.meta, { color: colors.mutedForeground }]}>{pitch.neighborhood} · {pitch.address}</Text>
+    <Text style={[styles.kicker, { color: colors.primary }]}>{pitch.canManageAnyPitch ? 'OWNER ACCESS' : 'YOUR PITCH'}</Text>
+    <Text style={[styles.title, { color: colors.foreground }]}>{pitch.canManageAnyPitch ? 'Pitch desk.' : pitch.venueName}</Text>
+    <Text style={[styles.meta, { color: colors.mutedForeground }]}>{pitch.canManageAnyPitch ? 'You can submit a match for any pitch. Each submission still goes to admin review.' : `${pitch.neighborhood} · ${pitch.address}`}</Text>
     <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as never)} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: 14, marginTop: 14 }}><Feather name="camera" size={16} color={colors.primaryForeground} /><Text style={{ color: colors.primaryForeground, fontSize: 12, fontWeight: '800' }}>Scan match check-in QR</Text></Pressable>
     <View style={[styles.reviewNotice, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={[styles.noticeIcon, { backgroundColor: colors.secondary }]}><Feather name="clock" size={16} color={colors.primary} /></View><Text style={[styles.noticeCopy, { color: colors.mutedForeground }]}>Choose a match time for this pitch and send us your contact number. Your request stays private until an admin reviews it.</Text></View>
     <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Propose a match</Text>
+      {pitch.canManageAnyPitch ? <><Field label="PITCH NAME" value={form.venueName} onChangeText={(value) => change('venueName', value)} placeholder="Pitch name" /><Field label="AREA" value={form.neighborhood} onChangeText={(value) => change('neighborhood', value)} placeholder="Neighborhood" /><Field label="ADDRESS OR MAP LINK" value={form.address} onChangeText={(value) => change('address', value)} placeholder="Street address or Google Maps link" /></> : null}
       <Field label="MATCH DATE AND TIME · RIYADH" value={form.startsAt} onChangeText={(value) => change('startsAt', value)} placeholder="YYYY-MM-DDTHH:mm" />
       <Field label="CONTACT PHONE" value={form.contactPhone} onChangeText={(value) => change('contactPhone', value)} placeholder="+966 5X XXX XXXX" keyboardType="phone-pad" autoComplete="off" />
       <Text style={[styles.formGroupTitle, { color: colors.primary }]}>PLAYER AGE GROUP</Text><MatchAgeGroupPicker value={form.ageGroup} onChange={(ageGroup) => change('ageGroup', ageGroup)} />

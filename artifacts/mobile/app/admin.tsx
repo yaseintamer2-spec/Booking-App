@@ -11,7 +11,7 @@ import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollV
 import { BrandHeader, Button, EmptyState, Field, LoadingState, Screen, formatRiyadhDateTime, formatSar, parseRiyadhLocalInput, toRiyadhLocalInput } from '@/components/KickoffUI';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { apiBaseUrl } from '@/lib/apiBaseUrl';
+import { apiBaseUrl, explainApiConnectionError } from '@/lib/apiBaseUrl';
 import { uploadMatchImages } from '@/lib/matchImageUpload';
 import { MatchAgeGroupPicker } from '@/components/MatchAgeGroupPicker';
 import type { MatchAgeGroup } from '@/lib/matchAge';
@@ -64,7 +64,7 @@ export default function AdminScreen() {
   const loadReferees = useCallback(async () => {
     const token = await getToken();
     const response = await fetch(`${apiBaseUrl}/api/admin/referees`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-    if (!response.ok) throw new Error('Could not load approved referee accounts.');
+    if (!response.ok) throw new Error(`Could not load approved referee accounts (HTTP ${response.status}). Check that the API server is deployed and reachable.`);
     setReferees(await response.json() as Referee[]);
     setRefereeLoadError('');
   }, [getToken]);
@@ -90,7 +90,7 @@ export default function AdminScreen() {
   useEffect(() => {
     if (!isAdmin) return;
     let active = true;
-    void loadReferees().catch(() => { if (active) setRefereeLoadError('Approved referees could not be loaded.'); });
+    void loadReferees().catch((cause) => { if (active) setRefereeLoadError(explainApiConnectionError(cause, 'Approved referees could not be loaded.')); });
     return () => { active = false; };
   }, [loadReferees, isAdmin]);
   const [formOpen, setFormOpen] = useState(false); const [editing, setEditing] = useState<Match | null>(null); const [form, setForm] = useState<FormState>(freshForm); const [formError, setFormError] = useState('');
@@ -234,7 +234,9 @@ function PitchOwnerManagement({ visible }: { visible: boolean }) {
   const request = useCallback(async (path: string, init: RequestInit = {}) => {
     const token = await getToken();
     const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
-    const body = response.status === 204 ? null : await response.json();
+    let body;
+    try { body = response.status === 204 ? null : await response.json(); }
+    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KICKOFF API server, not the static app or Supabase URL.'); }
     if (!response.ok) throw new Error(body?.error || 'Could not update pitch-owner access.');
     return body;
   }, [getToken]);
@@ -265,7 +267,9 @@ function PitchSubmissionReview({ visible }: { visible: boolean }) {
   const request = useCallback(async (path: string, init: RequestInit = {}) => {
     const token = await getToken();
     const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
-    const body = response.status === 204 ? null : await response.json();
+    let body;
+    try { body = response.status === 204 ? null : await response.json(); }
+    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KICKOFF API server, not the static app or Supabase URL.'); }
     if (!response.ok) throw new Error(body?.error || 'Could not review this match request.');
     return body;
   }, [getToken]);
@@ -299,18 +303,20 @@ function RefereeAccessManagement({ visible, onChanged }: { visible: boolean; onC
   const request = useCallback(async (path: string, init: RequestInit = {}) => {
     const token = await getToken();
     const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
-    const body = response.status === 204 ? null : await response.json();
+    let body;
+    try { body = response.status === 204 ? null : await response.json(); }
+    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KICKOFF API server, not the static app or Supabase URL.'); }
     if (!response.ok) throw new Error(body?.error || 'Could not update referee access.');
     return body;
   }, [getToken]);
-  const load = useCallback(async () => { if (!visible) return; try { setGrants(await request('/admin/referee-access') as RefereeGrant[]); setError(''); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load referee access.'); } }, [request, visible]);
+  const load = useCallback(async () => { if (!visible) return; try { setGrants(await request('/admin/referee-access') as RefereeGrant[]); setError(''); } catch (cause) { setError(explainApiConnectionError(cause, 'Could not load referee access.')); } }, [request, visible]);
   useEffect(() => { void load(); }, [load]);
   const grant = () => {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) { setError('Enter the verified email used by this referee to sign in.'); return; }
-    confirmAdminAction('Approve this referee?', `${cleanEmail} can be assigned to matches. They must accept each match invitation before using its controls.`, 'Approve referee', false, () => { void (async () => { setBusy(true); setError(''); try { await request('/admin/referee-access', { method: 'POST', body: JSON.stringify({ email: cleanEmail }) }); setEmail(''); await Promise.all([load(), onChanged()]); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not approve referee.'); } finally { setBusy(false); } })(); });
+    confirmAdminAction('Approve this referee?', `${cleanEmail} can be assigned to matches. They must accept each match invitation before using its controls.`, 'Approve referee', false, () => { void (async () => { setBusy(true); setError(''); try { await request('/admin/referee-access', { method: 'POST', body: JSON.stringify({ email: cleanEmail }) }); setEmail(''); await Promise.all([load(), onChanged()]); } catch (cause) { setError(explainApiConnectionError(cause, 'Could not approve referee.')); } finally { setBusy(false); } })(); });
   };
-  const revoke = (grantItem: RefereeGrant) => confirmAdminAction('Remove referee access?', `${grantItem.email} can no longer accept assignments or control matches.`, 'Remove access', true, () => { void (async () => { setBusy(true); setError(''); try { await request(`/admin/referee-access/${encodeURIComponent(grantItem.email)}`, { method: 'DELETE' }); await Promise.all([load(), onChanged()]); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not remove referee access.'); } finally { setBusy(false); } })(); });
+  const revoke = (grantItem: RefereeGrant) => confirmAdminAction('Remove referee access?', `${grantItem.email} can no longer accept assignments or control matches.`, 'Remove access', true, () => { void (async () => { setBusy(true); setError(''); try { await request(`/admin/referee-access/${encodeURIComponent(grantItem.email)}`, { method: 'DELETE' }); await Promise.all([load(), onChanged()]); } catch (cause) { setError(explainApiConnectionError(cause, 'Could not remove referee access.')); } finally { setBusy(false); } })(); });
   if (!visible) return null;
   return <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
     <Text style={[styles.formGroupTitle, { color: colors.primary, marginTop: 0 }]}>REFEREE ACCESS</Text>

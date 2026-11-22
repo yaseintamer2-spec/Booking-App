@@ -3,9 +3,9 @@ import { Feather } from '@expo/vector-icons';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 
-type Props = { value: string; venue: string; expiresAt: string; onClose: () => void; player?: string; pitchSlot?: number | null };
+type Props = { value: string; venue: string; expiresAt: string; onClose: () => void; player?: string; pitchSlot?: number | null; testOnly?: boolean };
 
-export function CheckInQrModal({ value, venue, expiresAt, onClose, player, pitchSlot }: Props) {
+export function CheckInQrModal({ value, venue, expiresAt, onClose, player, pitchSlot, testOnly = false }: Props) {
   const colors = useColors();
   return <Modal visible transparent animationType="fade" onRequestClose={onClose}>
     <View style={styles.backdrop}>
@@ -18,7 +18,7 @@ export function CheckInQrModal({ value, venue, expiresAt, onClose, player, pitch
         <View style={[styles.qrFrame, { borderColor: colors.primary }]}>
           <View style={styles.qrQuietZone}><QRCode value={value} size={222} color="#07120A" backgroundColor="#FFFFFF" /></View>
         </View>
-        <Text style={[styles.hint, { color: colors.mutedForeground }]}>Show this code to a referee or admin. It works once and expires {new Date(expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</Text>
+        <Text style={[styles.hint, { color: colors.mutedForeground }]}>{testOnly ? 'Sample QR only: no live check-in record is created. It expires ' : 'Show this code to a referee or admin. It works once and expires '}{new Date(expiresAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.</Text>
         <Text selectable style={[styles.fallback, { color: colors.mutedForeground }]}>{value}</Text>
         <Pressable accessibilityRole="button" onPress={onClose} style={[styles.button, { backgroundColor: colors.primary }]}><Text style={[styles.buttonText, { color: colors.primaryForeground }]}>Close</Text></Pressable>
       </View>

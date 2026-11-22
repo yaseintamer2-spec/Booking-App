@@ -10,8 +10,8 @@ test('capacity check refuses the last seat once capacity is reached', () => {
   assert.equal(canReserveSeat(-1, 14), false);
 });
 
-test('paid registrations stay blocked without a provider while free games can book', () => {
-  assert.equal(canConfirmPaidRegistration(3000, false), false);
+test('registration continues during payment test mode without collecting money', () => {
+  assert.equal(canConfirmPaidRegistration(3000, false), true);
   assert.equal(canConfirmPaidRegistration(0, false), true);
   assert.equal(canConfirmPaidRegistration(3000, true), true);
 });

@@ -1,4 +1,5 @@
 import type { Match } from '@workspace/api-client-react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type PositionPreference =
   | 'anywhere'
@@ -115,6 +116,31 @@ export const sampleMatchListing: Match = {
 };
 
 /** Local-only stand-in; replace with the app's join/payment action later. */
+const SAMPLE_PARTICIPANTS_KEY = 'kickoff.sample-match.participants.v1';
+
+/** Persist local sample bookings across app reloads. */
+export async function loadSampleParticipants(): Promise<RegistrationParticipant[]> {
+  try {
+    const stored = await AsyncStorage.getItem(SAMPLE_PARTICIPANTS_KEY);
+    if (!stored) return matchRegistrationMock.participants;
+    const parsed: unknown = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return matchRegistrationMock.participants;
+    const added = parsed.filter((row): row is RegistrationParticipant =>
+      !!row && typeof row === 'object' && typeof row.userId === 'string' && typeof row.firstName === 'string' &&
+      (typeof row.avatarUrl === 'string' || row.avatarUrl === null) &&
+      ['anywhere', 'goalkeeper', 'defender', 'midfielder', 'attacker'].includes(row.positionPreference),
+    );
+    return [...matchRegistrationMock.participants, ...added];
+  } catch {
+    return matchRegistrationMock.participants;
+  }
+}
+
+export async function saveSampleParticipants(participants: RegistrationParticipant[]): Promise<void> {
+  const fixtureIds = new Set(matchRegistrationMock.participants.map(({ userId }) => userId));
+  await AsyncStorage.setItem(SAMPLE_PARTICIPANTS_KEY, JSON.stringify(participants.filter(({ userId }) => !fixtureIds.has(userId))));
+}
+
 export function mockJoinMatch(_matchId: string, _position: PositionPreference) {
   return new Promise<void>((resolve) => setTimeout(resolve, 900));
 }

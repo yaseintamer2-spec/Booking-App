@@ -1318,9 +1318,16 @@ router.delete("/admin/referee-access/:email", requireAuth, requireAdmin, async (
 });
 
 router.get("/me/pitch-owner", requireAuth, async (_req, res): Promise<void> => {
-  const access = await getPitchOwnerAccess(res.locals.userId as string);
-  if (!access) { res.status(403).json({ error: "Pitch owner access is required." }); return; }
-  res.json({ venueName: access.venueName, neighborhood: access.neighborhood, address: access.address, email: access.email });
+  const userId = res.locals.userId as string;
+  if (await isAdminUser(userId)) {
+    const user = await clerkClient.users.getUser(userId);
+    const email = user.primaryEmailAddress?.emailAddress ?? OWNER_EMAIL;
+    res.json({ venueName: "", neighborhood: "", address: "", email, canManageAnyPitch: true });
+    return;
+  }
+  const access = await getPitchOwnerAccess(userId);
+  if (access) { res.json({ venueName: access.venueName, neighborhood: access.neighborhood, address: access.address, email: access.email, canManageAnyPitch: false }); return; }
+  res.status(403).json({ error: "Pitch owner access is required." });
 });
 
 router.get("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (_req, res): Promise<void> => {
@@ -1333,7 +1340,14 @@ router.get("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (_r
 router.post("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (req, res): Promise<void> => {
   const userId = res.locals.userId as string;
   const access = await getPitchOwnerAccess(userId);
-  if (!access) { res.status(403).json({ error: "Pitch owner access is required." }); return; }
+  const canManageAnyPitch = await isAdminUser(userId);
+  if (!access && !canManageAnyPitch) { res.status(403).json({ error: "Pitch owner access is required." }); return; }
+  const user = canManageAnyPitch ? await clerkClient.users.getUser(userId) : null;
+  const email = access?.email ?? user?.primaryEmailAddress?.emailAddress ?? OWNER_EMAIL;
+  const venueName = access?.venueName ?? (typeof req.body?.venueName === "string" ? req.body.venueName.trim() : "");
+  const neighborhood = access?.neighborhood ?? (typeof req.body?.neighborhood === "string" ? req.body.neighborhood.trim() : "");
+  const address = access?.address ?? (typeof req.body?.address === "string" ? req.body.address.trim() : "");
+  if (!venueName || venueName.length > 120 || !neighborhood || neighborhood.length > 120 || !address || address.length > 300) { res.status(400).json({ error: "Add the pitch name, area, and address." }); return; }
   const contactPhone = typeof req.body?.contactPhone === "string" ? req.body.contactPhone.trim() : "";
   const startsAt = new Date(req.body?.startsAt);
   const durationMinutes = Number(req.body?.durationMinutes);
@@ -1349,8 +1363,8 @@ router.post("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (r
   if (!isMatchAgeGroup(ageGroup)) { res.status(400).json({ error: "Choose an age group for this match." }); return; }
   if (!isStoredMatchImageList(imageUrls)) { res.status(400).json({ error: "Upload up to 3 pitch photos before submitting the match request." }); return; }
   const [submission] = await db.insert(pitchMatchSubmissionsTable).values({
-      ownerUserId: userId, ownerEmail: access.email, venueName: access.venueName, neighborhood: access.neighborhood,
-      address: access.address, contactPhone, startsAt, durationMinutes, capacity, ageGroup, priceHalalas, compareAtPriceHalalas,
+      ownerUserId: userId, ownerEmail: email, venueName, neighborhood,
+      address, contactPhone, startsAt, durationMinutes, capacity, ageGroup, priceHalalas, compareAtPriceHalalas,
       refereeIncluded: req.body?.refereeIncluded !== false, waterIncluded: req.body?.waterIncluded !== false,
       imageUrls, status: "pending",
   }).returning();

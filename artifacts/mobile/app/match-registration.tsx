@@ -28,7 +28,9 @@ import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { useColors } from '@/hooks/useColors';
 import {
   matchRegistrationMock,
+  loadSampleParticipants,
   mockJoinMatch,
+  saveSampleParticipants,
   type PositionPreference,
   type RegistrationMatch,
   type RegistrationParticipant,
@@ -101,10 +103,10 @@ export default function MatchRegistrationScreen() {
   const { id: routeId, view: routeView } = useLocalSearchParams<{ id?: string; view?: string }>();
   const liveMatchId = Array.isArray(routeId) ? routeId[0] : routeId;
   const readOnly = routeView === 'played';
-  const { getToken } = useAuth();
+  const { getToken, userId } = useAuth();
   const { user: clerkUser } = useUser();
   const remoteMatch = useGetMatch(liveMatchId || '', { query: { queryKey: getGetMatchQueryKey(liveMatchId || ''), enabled: !!liveMatchId } });
-  const account = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: !!liveMatchId, retry: false } });
+  const account = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const match = remoteMatch.data ? {
     ...matchRegistrationMock.match,
     id: remoteMatch.data.id,
@@ -137,6 +139,10 @@ export default function MatchRegistrationScreen() {
     userId: account.data.id,
     firstName: account.data.name.split(' ')[0],
     avatarUrl: clerkUser?.imageUrl ?? null,
+  } : clerkUser ? {
+    userId: userId || clerkUser.id,
+    firstName: clerkUser.firstName || clerkUser.fullName?.split(' ')[0] || 'Player',
+    avatarUrl: clerkUser.imageUrl || null,
   } : matchRegistrationMock.currentUser;
   const [noticeVisible, setNoticeVisible] = useState(SHOW_PREVIEW_NOTICE);
   const [activePitchPhoto, setActivePitchPhoto] = useState(0);
@@ -159,6 +165,22 @@ export default function MatchRegistrationScreen() {
   const [participants, setParticipants] = useState(
     matchRegistrationMock.participants,
   );
+  useFocusEffect(useCallback(() => {
+    if (liveMatchId) return;
+    let active = true;
+    void loadSampleParticipants().then((rows) => {
+      if (!active) return;
+      const refreshed = rows.map((participant) => participant.userId === currentUser.userId
+        ? { ...participant, avatarUrl: currentUser.avatarUrl }
+        : participant);
+      setParticipants(refreshed);
+      void saveSampleParticipants(refreshed);
+      const mine = refreshed.find((participant) => participant.userId === currentUser.userId);
+      setJoined(Boolean(mine));
+      setSelectedPitchSlots(mine?.pitchSlot == null ? [] : [mine.pitchSlot]);
+    });
+    return () => { active = false; };
+  }, [liveMatchId, currentUser.userId, currentUser.avatarUrl]));
   const [joinError, setJoinError] = useState<string | null>(null);
   const [positionPreference, setPositionPreference] =
     useState<PositionPreference>('anywhere');
@@ -167,11 +189,7 @@ export default function MatchRegistrationScreen() {
   const [confirmationTickets, setConfirmationTickets] = useState<ConfirmationTicket[]>([]);
   const [joining, setJoining] = useState(false);
   const [waitlisted, setWaitlisted] = useState(false);
-  const [joined, setJoined] = useState(() =>
-    matchRegistrationMock.participants.some(
-      (participant) => participant.userId === matchRegistrationMock.currentUser.userId,
-    ),
-  );
+  const [joined, setJoined] = useState(false);
   const joinLock = useRef(false);
   const [focusedPosition, setFocusedPosition] =
     useState<PositionPreference | null>(null);
@@ -211,9 +229,9 @@ export default function MatchRegistrationScreen() {
   }, [liveMatchId, currentUser.userId]));
   useEffect(() => {
     setParticipants((current) => current.map((participant) => participant.userId === currentUser.userId
-      ? { ...participant, avatarUrl: currentUser.avatarUrl }
-      : participant));
-  }, [currentUser.avatarUrl, currentUser.userId]);
+        ? { ...participant, avatarUrl: currentUser.avatarUrl }
+        : participant));
+  }, [currentUser.avatarUrl, currentUser.userId, liveMatchId]);
   const joinedCount = participants.length;
   const isFull = joinedCount >= match.maxPlayers || match.status === 'full';
   const isCancelled = match.status === 'cancelled';
@@ -303,16 +321,22 @@ export default function MatchRegistrationScreen() {
         }
       } else {
         await mockJoinMatch(match.id, positionPreference);
-        setParticipants((current) => current.some((participant) => participant.userId === currentUser.userId) ? current : [
-          ...current,
-          {
-            userId: currentUser.userId,
-            firstName: currentUser.firstName,
-            avatarUrl: currentUser.avatarUrl,
-            pitchSlot: selectedPitchSlots[0],
-            positionPreference,
-          },
-        ]);
+        const localTicket: ConfirmationTicket = {
+          id: `sample-${currentUser.userId}`,
+          firstName: currentUser.firstName,
+          pitchSlot: selectedPitchSlots[0],
+          value: `kickoff://sample-check-in?matchId=${encodeURIComponent(match.id)}&userId=${encodeURIComponent(currentUser.userId)}`,
+          expiresAt: new Date(new Date(match.startsAt).getTime() + match.durationHours * 60 * 60_000).toISOString(),
+        };
+        setParticipants((current) => {
+          const updated = current.some((participant) => participant.userId === currentUser.userId) ? current : [
+            ...current,
+            { userId: currentUser.userId, firstName: currentUser.firstName, avatarUrl: currentUser.avatarUrl, pitchSlot: selectedPitchSlots[0], positionPreference },
+          ];
+          void saveSampleParticipants(updated);
+          return updated;
+        });
+        setConfirmationTickets([localTicket]);
       }
       setJoined(true);
     } catch (error) {
@@ -341,7 +365,6 @@ export default function MatchRegistrationScreen() {
     joined,
     isFull,
     isCancelled,
-    pricePerPlayer: match.pricePerPlayer,
     hasSelectedPitchSlot: hasAllSelectedPitchSlots,
     requiredPitchSlots: expectedTicketCount,
   });
@@ -350,8 +373,7 @@ export default function MatchRegistrationScreen() {
     joined ||
     isFull ||
     isCancelled ||
-    !hasAllSelectedPitchSlots ||
-    match.pricePerPlayer > 0;
+    !hasAllSelectedPitchSlots;
   const selectedSpotSummary = selectedPitchSlots.map((slot, index) =>
     `${index === 0 ? 'You' : friendEmails[index - 1]?.trim() || `Friend ${index}`} · spot ${slot + 1}`,
   ).join('  |  ');
@@ -633,9 +655,9 @@ export default function MatchRegistrationScreen() {
             </Text>
           </Pressable>
           <Text style={[styles.paymentNote, { color: colors.mutedForeground }]}>
-            {match.pricePerPlayer > 0
-              ? 'Paid checkout is disabled. Your selected spot is not held.'
-              : 'This match is free. No payment is collected.'}
+            {liveMatchId
+              ? 'Payment is skipped during testing. Your spot is confirmed; no money is collected.'
+              : 'Sample booking · payment is skipped. Your local spot is confirmed.'}
           </Text>
           {isFull && liveMatchId ? <Pressable accessibilityRole="button" accessibilityState={{ disabled: joining || waitlisted }} disabled={joining || waitlisted} onPress={joinWaitlist} style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 8, borderWidth: 1, borderRadius: 14, borderColor: colors.border }}><Text style={{ color: colors.foreground, fontSize: 13, fontWeight: '700' }}>{waitlisted ? 'You’re on the waitlist' : 'Join waitlist'}</Text></Pressable> : null}
           {joinError ? (
@@ -667,7 +689,7 @@ export default function MatchRegistrationScreen() {
         <View style={styles.ticketBackdrop}>
           <View style={[styles.ticketModal, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.ticketTitle, { color: colors.foreground }]}>You’re registered</Text>
-            <Text style={[styles.ticketSubtitle, { color: colors.mutedForeground }]}>Your free check-in QR codes are ready. You can reopen them any time from My Matches.</Text>
+            <Text style={[styles.ticketSubtitle, { color: colors.mutedForeground }]}>{liveMatchId ? 'No payment was collected. Your check-in QR codes are ready in My Matches.' : 'Sample booking confirmed locally. This preview QR is not connected to live check-in.'}</Text>
             <ScrollView style={styles.ticketList} contentContainerStyle={styles.ticketListContent} showsVerticalScrollIndicator={false}>
               {confirmationTickets.map((ticket) => (
                 <View key={ticket.id} style={[styles.ticketCard, { borderColor: colors.border }]}>
@@ -1114,7 +1136,6 @@ function getJoinLabel({
   joined,
   isFull,
   isCancelled,
-  pricePerPlayer,
   hasSelectedPitchSlot,
   requiredPitchSlots,
 }: {
@@ -1122,7 +1143,6 @@ function getJoinLabel({
   joined: boolean;
   isFull: boolean;
   isCancelled: boolean;
-  pricePerPlayer: number;
   hasSelectedPitchSlot: boolean;
   requiredPitchSlots: number;
 }) {
@@ -1130,7 +1150,6 @@ function getJoinLabel({
   if (joined) return "You're in";
   if (isCancelled) return 'Match cancelled';
   if (isFull) return 'Match full';
-  if (pricePerPlayer > 0) return 'Payment unavailable';
   return hasSelectedPitchSlot ? 'Confirm selected spots' : `Choose ${requiredPitchSlots} pitch spot${requiredPitchSlots === 1 ? '' : 's'}`;
 }
 

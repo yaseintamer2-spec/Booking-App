@@ -27,7 +27,10 @@ export function isOfferExpired(expiresAt: Date | null, now = new Date()): boolea
 }
 
 export function canConfirmPaidRegistration(priceHalalas: number, paymentProviderConfigured: boolean): boolean {
-  return priceHalalas === 0 || paymentProviderConfigured;
+  // Temporary test mode: booking does not collect money until a provider is integrated.
+  void priceHalalas;
+  void paymentProviderConfigured;
+  return true;
 }
 
 export function canReserveSeat(bookedCount: number, capacity: number): boolean {

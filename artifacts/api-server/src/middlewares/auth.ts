@@ -51,6 +51,8 @@ export async function isMatchStaffUser(userId: string): Promise<boolean> {
 }
 
 export async function isPitchOwnerUser(userId: string): Promise<boolean> {
+  // Admins, including the permanent owner account, can use all pitch-owner tools.
+  if (await isAdminUser(userId)) return true;
   const user = await clerkClient.users.getUser(userId);
   const verifiedEmails = user.emailAddresses
     .filter((address) => address.verification?.status === "verified")
