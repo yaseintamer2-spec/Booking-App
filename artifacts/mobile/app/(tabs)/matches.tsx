@@ -36,6 +36,7 @@ export default function MatchesScreen() {
   const [dayFilter, setDayFilter] = useState<DayFilter>('Any day');
   const [sortBy, setSortBy] = useState<SortOption>('soonest');
   const [spotFilter, setSpotFilter] = useState<SpotFilter>(0);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const { getToken, isSignedIn } = useAuth();
   const [matchAlertsEnabled, setMatchAlertsEnabled] = useState(false);
   const [matchAlertsLoading, setMatchAlertsLoading] = useState(true);
@@ -214,17 +215,27 @@ export default function MatchesScreen() {
     </View>
     {matchAlertsMessage ? <Text accessibilityRole="status" style={[styles.alertStatus, { color: matchAlertsEnabled ? colors.primary : colors.mutedForeground }]}>{matchAlertsMessage}</Text> : null}
 
-    <View style={[styles.filterPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
-    <View style={styles.filterHeading}><IconBadge name="calendar" tone="pink" size="small" /><Text style={[styles.filterLabel, { color: colors.foreground }]}>WHEN</Text></View>
-    <View style={styles.filters}>{(['Any day', 'Today', 'Tomorrow', 'This week'] as DayFilter[]).map(item => <FilterChip key={item} label={item} selected={dayFilter === item} onPress={() => setDayFilter(item)} colors={colors} />)}</View>
-    <View style={[styles.filterHeading, { marginTop: 8 }]}><IconBadge name="users" tone="orange" size="small" /><Text style={[styles.filterLabel, { color: colors.foreground }]}>SPOTS AVAILABLE</Text></View>
-    <View style={styles.filters}>{SPOT_OPTIONS.map(option => <FilterChip key={option.value} label={option.label} selected={spotFilter === option.value} onPress={() => setSpotFilter(option.value)} colors={colors} />)}</View>
-    <View style={[styles.controlHeader, { marginTop: 12 }]}>
-      <View style={styles.filterHeading}><IconBadge name="sliders" tone="cyan" size="small" /><Text style={[styles.filterLabel, { color: colors.foreground }]}>SORT BY</Text></View>
-      <View style={styles.filters}>{SORT_OPTIONS.map(option => <FilterChip key={option.value} label={option.label} selected={sortBy === option.value} onPress={() => setSortBy(option.value)} colors={colors} />)}</View>
+    <View style={[styles.filterBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Open match filters${activeFilterCount ? `, ${activeFilterCount} active` : ''}`} accessibilityState={{ expanded: filtersOpen }} onPress={() => setFiltersOpen(true)} style={[styles.filterOpenButton, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+        <IconBadge name="sliders" tone="cyan" size="small" /><Text style={[styles.filterOpenText, { color: colors.foreground }]}>Filters</Text>{activeFilterCount > 0 ? <View style={[styles.filterCount, { backgroundColor: colors.pink }]}><Text style={[styles.filterCountText, { color: colors.background }]}>{activeFilterCount}</Text></View> : null}
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Sort matches by ${sortBy === 'soonest' ? 'soonest' : 'most available spots'}. Tap to change.`} onPress={() => setSortBy(value => value === 'soonest' ? 'most-spots' : 'soonest')} style={[styles.sortButton, { backgroundColor: colors.secondary, borderColor: colors.border }]}><Feather name="bar-chart-2" size={15} color={colors.violet} /><Text style={[styles.sortButtonText, { color: colors.foreground }]}>{sortBy === 'soonest' ? 'Soonest' : 'Most spots'}</Text><Feather name="chevron-down" size={14} color={colors.mutedForeground} /></Pressable>
     </View>
-    </View>
-    {activeFilterCount || query.trim() ? <Pressable accessibilityRole="button" onPress={clearFilters} style={styles.clearButton}><Feather name="x-circle" size={14} color={colors.primary} /><Text style={[styles.clearText, { color: colors.primary }]}>Clear filters</Text></Pressable> : null}
+    {activeFilterCount > 0 || query.trim() ? <View style={styles.activeFilterSummary}><View style={[styles.activeFilterDot, { backgroundColor: colors.primary }]} /><Text style={[styles.activeFilterText, { color: colors.mutedForeground }]}>{[dayFilter !== 'Any day' ? dayFilter : null, spotFilter ? SPOT_OPTIONS.find(option => option.value === spotFilter)?.label : null, query.trim() ? `“${query.trim()}”` : null].filter(Boolean).join(' · ')}</Text><Pressable accessibilityRole="button" accessibilityLabel="Clear search and match filters" onPress={clearFilters} style={styles.clearMini}><Feather name="x" size={14} color={colors.cyan} /></Pressable></View> : null}
+    <Modal transparent visible={filtersOpen} animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
+      <View style={styles.sheetBackdrop}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close filters" onPress={() => setFiltersOpen(false)} style={StyleSheet.absoluteFill} />
+        <View style={[styles.filterSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+          <View style={styles.sheetHeader}><View><Text style={[styles.sheetTitle, { color: colors.foreground }]}>Filters</Text><Text style={[styles.sheetSubtitle, { color: colors.mutedForeground }]}>Narrow down your next match</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Close filters" onPress={() => setFiltersOpen(false)} style={[styles.sheetClose, { backgroundColor: colors.secondary }]}><Feather name="x" size={18} color={colors.foreground} /></Pressable></View>
+          <Text style={[styles.sheetLabel, { color: colors.mutedForeground }]}>WHEN</Text>
+          <View style={styles.sheetOptionGrid}>{(['Any day', 'Today', 'Tomorrow', 'This week'] as DayFilter[]).map(item => <FilterChip key={item} label={item} selected={dayFilter === item} onPress={() => setDayFilter(item)} colors={colors} />)}</View>
+          <Text style={[styles.sheetLabel, { color: colors.mutedForeground, marginTop: 18 }]}>MINIMUM AVAILABLE SPOTS</Text>
+          <View style={styles.sheetSpotRow}>{SPOT_OPTIONS.map(option => <FilterChip key={option.value} compact label={option.value === 0 ? 'Any' : `${option.value}+ spots`} selected={spotFilter === option.value} onPress={() => setSpotFilter(option.value)} colors={colors} />)}</View>
+          <View style={styles.sheetActions}><Pressable accessibilityRole="button" onPress={clearFilters} style={[styles.sheetClearButton, { borderColor: colors.border }]}><Text style={[styles.sheetClearText, { color: colors.mutedForeground }]}>Clear all</Text></Pressable><Pressable accessibilityRole="button" onPress={() => setFiltersOpen(false)} style={[styles.sheetApplyButton, { backgroundColor: colors.primary }]}><Text style={[styles.sheetApplyText, { color: colors.primaryForeground }]}>Show {visible.length} {visible.length === 1 ? 'match' : 'matches'}</Text></Pressable></View>
+        </View>
+      </View>
+    </Modal>
 
     {!matches.isLoading || isLocalPreviewMode ? <Text style={[styles.resultCount, { color: colors.mutedForeground }]}>{visible.length} {visible.length === 1 ? 'match' : 'matches'}</Text> : null}
     {matches.isLoading && !isLocalPreviewMode ? <LoadingState /> : visible.length ? visible.map(match => <MatchCard key={match.id} match={match} recommended={match.ageGroup === recommendedAgeGroup} onPress={() => router.push(match.id === sampleMatchListing.id ? '/match-registration' : { pathname: '/match-registration', params: { id: match.id } })} />) : <EmptyState icon="map-pin" title={hasActiveFilters ? 'No games match those filters.' : 'No matches scheduled yet.'} body={hasActiveFilters ? 'Try widening the time or availability filters.' : 'New games will appear here as soon as they are published.'} action={hasActiveFilters ? 'Clear filters' : undefined} onAction={hasActiveFilters ? clearFilters : undefined} />}
@@ -246,12 +257,10 @@ export default function MatchesScreen() {
   </Screen>;
 }
 
-function FilterChip({ label, selected, onPress, colors }: { label: string; selected: boolean; onPress: () => void; colors: ReturnType<typeof useColors> }) {
-  const icon = label.includes('spot') ? 'users' : label === 'Soonest' ? 'clock' : label === 'Most spots' ? 'trending-up' : label === 'Today' ? 'sun' : 'calendar';
-  const tone = label.includes('spot') || label === 'Most spots' ? 'orange' : label === 'Today' ? 'yellow' : label === 'Tomorrow' ? 'cyan' : label === 'This week' ? 'violet' : label === 'Soonest' ? 'pink' : 'primary';
-  return <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[styles.filter, { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border }]}>
-    <IconBadge name={icon as React.ComponentProps<typeof Feather>['name']} tone={tone} size="small" />
-    <Text style={{ color: selected ? colors.primaryForeground : colors.mutedForeground, fontSize: 10, fontWeight: '800' }}>{label}</Text>
+function FilterChip({ label, selected, onPress, colors, compact = false }: { label: string; selected: boolean; onPress: () => void; colors: ReturnType<typeof useColors>; compact?: boolean }) {
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[styles.filter, compact && styles.filterCompact, { backgroundColor: selected ? colors.primary : colors.secondary, borderColor: selected ? colors.primary : colors.border }]}>
+    {selected ? <Feather name="check" size={14} color={colors.primaryForeground} /> : null}
+    <Text style={{ color: selected ? colors.primaryForeground : colors.foreground, fontSize: 12, fontWeight: '800' }}>{label}</Text>
   </Pressable>;
 }
 
@@ -283,17 +292,39 @@ const styles = StyleSheet.create({
   pushAllowText: { fontSize: 13, fontWeight: '800' },
   pushLater: { minHeight: 48, width: '100%', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   pushLaterText: { fontSize: 12, fontWeight: '700' },
-  controlHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
-  filterLabel: { fontSize: 9, letterSpacing: 1.4, fontWeight: '900' },
-  filterToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, borderWidth: 1, borderRadius: 13 },
-  filterToggleText: { fontSize: 11, fontWeight: '700' },
-  filters: { flexDirection: 'row', gap: 7, marginVertical: 8, flexWrap: 'wrap' },
-  filter: { paddingHorizontal: 7, paddingVertical: 5, borderRadius: 14, borderWidth: 1, minHeight: 42, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 7 },
-  filterPanel: { borderWidth: 1, borderRadius: 20, padding: 13, marginTop: 8, marginBottom: 8 }, filterHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  filterBar: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderRadius: 18, padding: 7, marginTop: 12 },
+  filterOpenButton: { flex: 1, minWidth: 0, minHeight: 46, borderWidth: 1, borderRadius: 13, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  filterOpenText: { fontSize: 12, fontWeight: '800' },
+  filterCount: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  filterCountText: { fontSize: 10, fontWeight: '900' },
+  sortButton: { flex: 1, minWidth: 0, minHeight: 46, borderWidth: 1, borderRadius: 13, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  sortButtonText: { fontSize: 11, fontWeight: '800' },
+  activeFilterSummary: { flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 35, paddingHorizontal: 5 },
+  activeFilterDot: { width: 6, height: 6, borderRadius: 3 },
+  activeFilterText: { flex: 1, fontSize: 10, fontWeight: '700' },
+  clearMini: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  sheetBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(5,3,20,.58)' },
+  filterSheet: { width: '100%', maxWidth: 560, alignSelf: 'center', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 26 },
+  sheetHandle: { width: 42, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 18 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  sheetTitle: { fontSize: 22, fontFamily: 'Georgia', fontWeight: '700' },
+  sheetSubtitle: { fontSize: 11, marginTop: 4 },
+  sheetClose: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  sheetLabel: { fontSize: 9, letterSpacing: 1.3, fontWeight: '900', marginBottom: 9 },
+  sheetOptionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  sheetSpotRow: { flexDirection: 'row', gap: 8 },
+  filter: { flexBasis: '48%', minHeight: 46, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 7 },
+  filterCompact: { flex: 1, flexBasis: 0, paddingHorizontal: 8 },
+  sheetActions: { flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 24 },
+  sheetClearButton: { minHeight: 50, minWidth: 100, borderWidth: 1, borderRadius: 14, paddingHorizontal: 15, alignItems: 'center', justifyContent: 'center' },
+  sheetClearText: { fontSize: 12, fontWeight: '800' },
+  sheetApplyButton: { flex: 1, minHeight: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  sheetApplyText: { fontSize: 13, fontWeight: '900' },
   clearButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.12)', marginTop: 2 },
   clearText: { fontSize: 12, fontWeight: '700' },
   resultCount: { fontSize: 11, fontWeight: '600', marginTop: 4, marginBottom: 8 },
 });
+
 
 
 

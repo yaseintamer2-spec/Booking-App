@@ -1,13 +1,14 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { IconBadge, type AccentTone } from '@/components/IconBadge';
 
 export const PLAYER_POSITIONS = [
-  { value: 'striker', label: 'Striker', short: 'ST', icon: 'soccer', detail: 'Lead the attack' },
-  { value: 'defender', label: 'Defender', short: 'DF', icon: 'shield-check', detail: 'Hold the back line' },
-  { value: 'midfielder', label: 'Midfielder', short: 'MF', icon: 'transfer', detail: 'Link up the play' },
-  { value: 'winger', label: 'Winger', short: 'WG', icon: 'run-fast', detail: 'Bring pace out wide' },
+  { value: 'striker', label: 'Striker', short: 'ST', icon: 'target', detail: 'Lead the attack' },
+  { value: 'defender', label: 'Defender', short: 'DF', icon: 'shield', detail: 'Hold the back line' },
+  { value: 'midfielder', label: 'Midfielder', short: 'MF', icon: 'repeat', detail: 'Link up the play' },
+  { value: 'winger', label: 'Winger', short: 'WG', icon: 'wind', detail: 'Bring pace out wide' },
 ] as const;
 
 export type PlayerPosition = typeof PLAYER_POSITIONS[number]['value'];
@@ -16,6 +17,7 @@ export const getPlayerPosition = (value: string | null | undefined) => PLAYER_PO
 
 export function PreferredPositionPicker({ selected, onSelect }: { selected: PlayerPosition; onSelect: (position: PlayerPosition) => void }) {
   const colors = useColors();
+  const tones: Record<PlayerPosition, AccentTone> = { striker: 'pink', defender: 'cyan', midfielder: 'yellow', winger: 'orange' };
   return <View style={styles.grid}>
     {PLAYER_POSITIONS.map(position => {
       const active = selected === position.value;
@@ -25,11 +27,10 @@ export function PreferredPositionPicker({ selected, onSelect }: { selected: Play
         accessibilityLabel={`${position.label}, ${position.detail}`}
         accessibilityState={{ selected: active }}
         onPress={() => onSelect(position.value)}
-        style={({ pressed }) => [styles.option, { backgroundColor: active ? colors.accent : colors.card, borderColor: active ? colors.primary : colors.border, opacity: pressed ? .78 : 1 }]}
+        style={({ pressed }) => [styles.option, { backgroundColor: active ? `${colors[tones[position.value]]}12` : colors.card, borderColor: active ? colors[tones[position.value]] : colors.border, opacity: pressed ? .78 : 1 }]}
       >
-        <View style={[styles.optionIcon, { backgroundColor: active ? colors.primary : colors.secondary }]}><MaterialCommunityIcons name={position.icon} size={22} color={active ? colors.primaryForeground : colors.primary} /></View>
+        <View style={styles.optionTop}><IconBadge name={position.icon as React.ComponentProps<typeof Feather>['name']} tone={tones[position.value]} size="medium" />{active ? <View style={[styles.selectedMark, { backgroundColor: colors[tones[position.value]] }]}><Feather name="check" size={11} color={colors.background} /></View> : <View style={[styles.unselectedMark, { borderColor: colors.border }]} />}</View>
         <View style={styles.optionCopy}><Text style={[styles.optionTitle, { color: colors.foreground }]}>{position.label}</Text><Text style={[styles.optionDetail, { color: colors.mutedForeground }]}>{position.detail}</Text></View>
-        {active ? <Feather name="check-circle" size={17} color={colors.primary} /> : null}
       </Pressable>;
     })}
   </View>;
@@ -43,12 +44,15 @@ export function PositionBadge({ position, style }: { position: string | null | u
 }
 
 const styles = StyleSheet.create({
-  grid: { gap: 9 },
-  option: { minHeight: 70, borderWidth: 1, borderRadius: 15, paddingHorizontal: 11, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  optionIcon: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  optionCopy: { flex: 1 },
-  optionTitle: { fontSize: 12, fontWeight: '800' },
-  optionDetail: { fontSize: 9, marginTop: 3 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 18 },
+  option: { minHeight: 112, flexGrow: 1, flexBasis: '47%', borderWidth: 1, borderRadius: 19, paddingHorizontal: 13, paddingVertical: 12, justifyContent: 'space-between', gap: 11 },
+  optionTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  selectedMark: { width: 23, height: 23, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  unselectedMark: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5 },
+  optionCopy: { gap: 4 },
+  optionTitle: { fontSize: 13, fontWeight: '900' },
+  optionDetail: { fontSize: 9, lineHeight: 13 },
   badge: { minWidth: 27, height: 19, borderRadius: 8, paddingHorizontal: 5, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   badgeText: { fontSize: 8, lineHeight: 11, fontWeight: '900', letterSpacing: .2 },
 });
+

@@ -25,6 +25,7 @@ import { LiveScoreboard, type LiveView } from '@/components/LiveScoreboard';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { useColors } from '@/hooks/useColors';
+import { IconBadge, type AccentTone } from '@/components/IconBadge';
 import { isLocalPreviewMode } from '@/lib/localPreview';
 import {
   matchRegistrationMock,
@@ -46,6 +47,8 @@ const POSITION_OPTIONS: { label: string; value: PositionPreference }[] = [
   { label: 'Midfielder', value: 'midfielder' },
   { label: 'Attacker', value: 'attacker' },
 ];
+const POSITION_TONES: Record<PositionPreference, AccentTone> = { anywhere: 'primary', goalkeeper: 'yellow', defender: 'cyan', midfielder: 'violet', attacker: 'pink' };
+const POSITION_ICONS: Record<PositionPreference, React.ComponentProps<typeof Feather>['name']> = { anywhere: 'move', goalkeeper: 'shield', defender: 'shield', midfielder: 'activity', attacker: 'target' };
 const DEFAULT_PITCH_PHOTOS: (string | number)[] = [
   require('../assets/images/football-match-card.jpg'),
   require('../assets/images/home-pitch-hero.jpg'),
@@ -573,19 +576,20 @@ export default function MatchRegistrationScreen() {
                   style={({ pressed }) => [
                     styles.positionPill,
                     {
-                      backgroundColor: selected ? colors.accent : colors.card,
-                      borderColor: selected ? colors.primary : colors.border,
+                      backgroundColor: selected ? `${colors[POSITION_TONES[option.value]]}20` : colors.card,
+                      borderColor: focusedPosition === option.value ? colors.foreground : selected ? colors[POSITION_TONES[option.value]] : colors.border,
                       opacity: disabled ? 0.45 : pressed ? 0.75 : 1,
                       borderWidth: focusedPosition === option.value ? 2 : 1,
                     },
                   ]}
                 >
+                  <IconBadge name={POSITION_ICONS[option.value]} tone={POSITION_TONES[option.value]} size="small" />
                   <Text
                     style={[
                       styles.positionLabel,
                       {
                         color: selected
-                          ? colors.primaryForeground
+                          ? colors[POSITION_TONES[option.value]]
                           : colors.foreground,
                       },
                     ]}
@@ -1176,7 +1180,7 @@ const styles = StyleSheet.create({
   removeFriend: { width: 42, height: 46, alignItems: 'center', justifyContent: 'center' },
   addFriendButton: { minHeight: 44, borderWidth: 1, borderStyle: 'dashed', borderRadius: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 1 },
   addFriendText: { fontSize: 12, fontWeight: '700' },
-  scrollContent: { flexGrow: 1, paddingBottom: 130 },
+  scrollContent: { flexGrow: 1, paddingBottom: 210 },
   content: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 20 },
   previewNotice: { borderWidth: 1, borderRadius: 16, padding: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 9, marginBottom: 20 },
   previewContent: { flex: 1, paddingTop: 2 },
@@ -1247,11 +1251,11 @@ const styles = StyleSheet.create({
   progressFill: { height: '100%', borderRadius: 5 },
   teamsNote: { fontSize: 13, lineHeight: 18, marginTop: 10 },
   preferenceNote: { fontSize: 13, marginTop: -5, marginBottom: 12 },
-  positionOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  positionPill: { minHeight: 44, paddingHorizontal: 14, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  positionLabel: { fontSize: 14, fontWeight: '600' },
-  goalkeeperNote: { fontSize: 11, marginTop: 9 },
-  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopWidth: 1, paddingTop: 12, paddingHorizontal: 20 },
+  positionOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8, marginBottom: 6 },
+  positionPill: { minHeight: 46, paddingHorizontal: 9, borderRadius: 15, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 },
+  positionLabel: { fontSize: 12, fontWeight: '800' },
+  goalkeeperNote: { fontSize: 11, lineHeight: 16, marginTop: 8, marginBottom: 4 },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, borderTopWidth: 1, paddingTop: 12, paddingHorizontal: 20, elevation: 10, shadowColor: '#000000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: -5 } },
   footerContent: { width: '100%', maxWidth: 520, alignSelf: 'center' },
   joinButton: { minHeight: 54, borderRadius: 15, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
   joinButtonText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
@@ -1284,4 +1288,5 @@ const styles = StyleSheet.create({
   profileFootnote: { fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 13 },
   profileError: { fontSize: 11, textAlign: 'center', marginTop: 12 },
 });
+
 
