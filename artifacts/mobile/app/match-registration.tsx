@@ -100,8 +100,8 @@ function pitchPhotoSource(photo: string | number | null) {
 export default function MatchRegistrationScreen() {
   const colors: Palette = {
     ...useColors(),
-    amber: '#F5C451', blue: '#0A62FF', red: '#FF1A2B',
-    pitch: '#3AA860', pitchDark: '#319956', pitchOutline: '#0B3A26',
+    amber: '#FFD84D', blue: '#35D8FF', red: '#FF4FA8',
+    pitch: '#2FA260', pitchDark: '#278B52', pitchOutline: '#B7FFD8',
   };
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -1218,10 +1218,10 @@ const styles = StyleSheet.create({
   assignedRefereePhoto: { width: 38, height: 38, borderRadius: 19 },
   assignedRefereeFallback: { alignItems: 'center', justifyContent: 'center' },
   sectionLabel: { fontSize: 12, letterSpacing: 1.5, fontWeight: '800', marginTop: 26, marginBottom: 12 },
-  pitch: { height: PITCH_HEIGHT, borderWidth: 3, borderRadius: 24, overflow: 'hidden', position: 'relative', backgroundColor: '#3AA860' },
+  pitch: { height: PITCH_HEIGHT, borderWidth: 3, borderRadius: 24, overflow: 'hidden', position: 'relative', backgroundColor: '#2FA260' },
   pitchStripes: { ...StyleSheet.absoluteFill, flexDirection: 'column' },
   pitchStripe: { width: '100%', flex: 1 },
-  pitchOutline: { position: 'absolute', top: 8, bottom: 8, left: 8, right: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)', borderRadius: 14 },
+  pitchOutline: { position: 'absolute', top: 8, bottom: 8, left: 8, right: 8, borderWidth: 1.5, borderColor: 'rgba(231,255,240,0.74)', borderRadius: 14 },
   pitchMidLine: { position: 'absolute', top: '50%', left: 0, right: 0, height: 2 },
   pitchCenterCircle: { position: 'absolute', top: '50%', left: '50%', width: 68, height: 68, marginLeft: -34, marginTop: -34, borderWidth: 2, borderColor: 'rgba(255,255,255,0.82)', borderRadius: 34 },
   pitchGoalBox: { position: 'absolute', left: '50%', width: 150, height: 46, marginLeft: -75, borderWidth: 2, borderColor: 'rgba(255,255,255,0.82)' },
@@ -1230,7 +1230,7 @@ const styles = StyleSheet.create({
   absoluteSlot: { position: 'absolute', width: 76, marginLeft: -38 },
   playerSlot: { width: 76, height: SLOT_HEIGHT, alignItems: 'center', justifyContent: 'flex-start' },
   openPlayerSlot: { justifyContent: 'flex-start' },
-  playerAvatar: { width: 50, height: 50, borderRadius: 25, borderWidth: 3, alignItems: 'center', justifyContent: 'center', overflow: 'visible', position: 'relative', shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+  playerAvatar: { width: 50, height: 50, borderRadius: 25, borderWidth: 3.5, alignItems: 'center', justifyContent: 'center', overflow: 'visible', position: 'relative', shadowOpacity: 0.92, shadowRadius: 9, shadowOffset: { width: 0, height: 0 }, elevation: 7 },
   matchGoalBadge: { position: 'absolute', right: -15, bottom: -2, minWidth: 24, height: 16, paddingHorizontal: 3, borderRadius: 8, backgroundColor: 'rgba(4,12,20,.94)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,.3)' },
   matchGoalBadgeText: { color: '#FFFFFF', fontSize: 8, fontWeight: '900' },
   playerImage: { width: '100%', height: '100%', borderRadius: 25 },
@@ -1284,3 +1284,4 @@ const styles = StyleSheet.create({
   profileFootnote: { fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 13 },
   profileError: { fontSize: 11, textAlign: 'center', marginTop: 12 },
 });
+
