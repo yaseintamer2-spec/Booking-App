@@ -247,8 +247,11 @@ export default function MatchesScreen() {
 }
 
 function FilterChip({ label, selected, onPress, colors }: { label: string; selected: boolean; onPress: () => void; colors: ReturnType<typeof useColors> }) {
+  const icon = label.includes('spot') ? 'users' : label === 'Soonest' ? 'clock' : label === 'Most spots' ? 'trending-up' : label === 'Today' ? 'sun' : 'calendar';
+  const tone = label.includes('spot') || label === 'Most spots' ? 'orange' : label === 'Today' ? 'yellow' : label === 'Tomorrow' ? 'cyan' : label === 'This week' ? 'violet' : label === 'Soonest' ? 'pink' : 'primary';
   return <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[styles.filter, { backgroundColor: selected ? colors.primary : colors.card, borderColor: selected ? colors.primary : colors.border }]}>
-    <Text style={{ color: selected ? colors.primaryForeground : colors.mutedForeground, fontSize: 11, fontWeight: '700' }}>{label}</Text>
+    <IconBadge name={icon as React.ComponentProps<typeof Feather>['name']} tone={tone} size="small" />
+    <Text style={{ color: selected ? colors.primaryForeground : colors.mutedForeground, fontSize: 10, fontWeight: '800' }}>{label}</Text>
   </Pressable>;
 }
 
@@ -285,11 +288,12 @@ const styles = StyleSheet.create({
   filterToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, borderWidth: 1, borderRadius: 13 },
   filterToggleText: { fontSize: 11, fontWeight: '700' },
   filters: { flexDirection: 'row', gap: 7, marginVertical: 8, flexWrap: 'wrap' },
-  filter: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: 1, minHeight: 42, justifyContent: 'center' },
+  filter: { paddingHorizontal: 7, paddingVertical: 5, borderRadius: 14, borderWidth: 1, minHeight: 42, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 7 },
   filterPanel: { borderWidth: 1, borderRadius: 20, padding: 13, marginTop: 8, marginBottom: 8 }, filterHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   clearButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.12)', marginTop: 2 },
   clearText: { fontSize: 12, fontWeight: '700' },
   resultCount: { fontSize: 11, fontWeight: '600', marginTop: 4, marginBottom: 8 },
 });
+
 
 
