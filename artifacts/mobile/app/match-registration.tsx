@@ -83,11 +83,11 @@ type RegistrationTicket = {
 };
 
 function pitchPhotoSource(photo: string | number | null) {
-  return typeof photo === 'number'
-    ? photo
-    : photo
-      ? { uri: photo }
-      : require('../assets/images/football-match-card.jpg');
+  if (typeof photo === 'number') return photo;
+  if (photo === 'local:football-match-card') return require('../assets/images/football-match-card.jpg');
+  if (photo === 'local:home-pitch-hero') return require('../assets/images/home-pitch-hero.jpg');
+  if (photo === 'local:home-stadium-sunset') return require('../assets/images/home-stadium-sunset.png');
+  return photo ? { uri: photo } : require('../assets/images/football-match-card.jpg');
 }
 
 export default function MatchRegistrationScreen() {
@@ -424,24 +424,24 @@ export default function MatchRegistrationScreen() {
                       imageStyle={styles.registrationHeroImage}
                       style={styles.registrationHeroSlideImage}
                       accessibilityLabel={`${match.pitchName} pitch photo ${index + 1} of ${pitchPhotos.length}`}
-                    >
-                      <LinearGradient
-                        pointerEvents="none"
-                        colors={['rgba(5,17,26,0.08)', 'rgba(5,17,26,0.35)', 'rgba(5,17,26,0.94)']}
-                        locations={[0, 0.42, 1]}
-                        style={StyleSheet.absoluteFill}
-                      />
-                      <View style={styles.registrationHeroCopy}>
-                        <Text style={[styles.matchKicker, { color: colors.primary }]}>
-                          {`7x7 · ${match.durationHours} HOURS · REFEREE INCLUDED`}
-                        </Text>
-                        <Text style={[styles.matchTitle, { color: colors.foreground }]}>{dateTitle}</Text>
-                        <Text style={[styles.matchSubtitle, { color: colors.foreground }]}>{match.pitchName}</Text>
-                      </View>
-                    </ImageBackground>
+                    />
                   </Pressable>
                 ))}
               </ScrollView>
+              <View pointerEvents="none" style={styles.registrationHeroOverlay}>
+                <LinearGradient
+                  colors={['rgba(5,17,26,0.08)', 'rgba(5,17,26,0.3)', 'rgba(5,17,26,0.88)']}
+                  locations={[0, 0.48, 1]}
+                  style={StyleSheet.absoluteFill}
+                />
+                <View style={styles.registrationHeroCopy}>
+                  <Text style={[styles.matchKicker, { color: colors.primary }]}>
+                    {`7x7 · ${match.durationHours} HOURS · REFEREE INCLUDED`}
+                  </Text>
+                  <Text style={[styles.matchTitle, { color: colors.foreground }]}>{dateTitle}</Text>
+                  <Text style={[styles.matchSubtitle, { color: colors.foreground }]}>{match.pitchName}</Text>
+                </View>
+              </View>
               {pitchPhotos.length > 1 ? <View style={styles.registrationHeroDots}>{pitchPhotos.map((_, index) => <Pressable key={index} accessibilityRole="button" accessibilityLabel={`Show pitch photo ${index + 1} of ${pitchPhotos.length}`} onPress={() => { setActivePitchPhoto(index); pitchPhotoScroll.current?.scrollTo({ x: index * pitchPhotoWidth, animated: true }); }} style={styles.registrationGalleryDotHit}><View style={[styles.registrationGalleryDot, { backgroundColor: index === activePitchPhoto ? colors.googleBlue : 'rgba(232,238,233,.9)' }]} /></Pressable>)}</View> : null}
             </View>
             <View style={styles.locationSummary}>
@@ -1173,15 +1173,16 @@ const styles = StyleSheet.create({
   registrationHeroSlide: { height: 270, justifyContent: 'flex-end', flexShrink: 0, overflow: 'hidden', position: 'relative' },
   registrationHeroSlideImage: { width: '100%', height: '100%', justifyContent: 'flex-end' },
   registrationHeroImage: { borderRadius: 22 },
+  registrationHeroOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, justifyContent: 'flex-end' },
   registrationHeroCopy: { paddingHorizontal: 18, paddingBottom: 14 },
-  registrationHeroDots: { position: 'absolute', left: 0, right: 0, bottom: 4, zIndex: 5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', minHeight: 44 },
+  registrationHeroDots: { position: 'absolute', left: 0, right: 0, bottom: -4, zIndex: 5, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', minHeight: 44 },
   locationSummary: { minHeight: 112, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 15, paddingVertical: 8 },
   locationSummaryCopy: { flex: 1, minWidth: 0 },
   locationNameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   locationName: { fontSize: 14, fontWeight: '800', flexShrink: 1 },
   locationAddress: { fontSize: 11, lineHeight: 16, marginTop: 5 },
   registrationGalleryDotHit: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  registrationGalleryDot: { width: 10, height: 10, borderRadius: 5 },
+  registrationGalleryDot: { width: 7, height: 7, borderRadius: 4 },
   photoViewer: { flex: 1, backgroundColor: 'rgba(0,0,0,.97)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   fullSizePhoto: { width: '100%', height: '82%' },
   photoViewerClose: { position: 'absolute', right: 14, width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(15,20,18,.72)', alignItems: 'center', justifyContent: 'center' },
