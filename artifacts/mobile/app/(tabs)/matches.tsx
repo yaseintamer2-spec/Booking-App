@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ImageBackground, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@clerk/expo';
@@ -12,6 +12,8 @@ import { useColors } from '@/hooks/useColors';
 import { getRecommendedMatchAgeGroup } from '@/lib/matchAge';
 import { sampleMatchListing } from '@/data/matchRegistrationMock';
 import { isLocalPreviewMode } from '@/lib/localPreview';
+import { IconBadge } from '@/components/IconBadge';
+import { homeHeroImage } from '@/components/KickoffUI';
 
 type DayFilter = 'Any day' | 'Today' | 'Tomorrow' | 'This week';
 type SortOption = 'soonest' | 'most-spots';
@@ -188,18 +190,20 @@ export default function MatchesScreen() {
 
   return <Screen refreshing={matches.isRefetching} onRefresh={() => { void matches.refetch(); }}>
     <BrandHeader user={user.data} subtitle="FIND YOUR GAME" />
-    <Text style={[styles.kicker, { color: colors.primary }]}>MADE FOR THE GAME</Text>
-    <Text style={[styles.title, { color: colors.foreground }]}>Discover matches.</Text>
-    <Text style={[styles.sub, { color: colors.mutedForeground }]}>Organized 7v7 football, across Riyadh.</Text>
-    <Pressable accessibilityRole="button" onPress={() => router.push('/player-age' as never)} style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start', paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.secondary, marginTop: 10 }}><Feather name="user" size={14} color={colors.primary} /><Text style={{ fontSize: 11, fontWeight: '700', color: colors.foreground }}>{playerAge == null ? 'Add your age for match recommendations' : `Age ${playerAge} · ${recommendedAgeGroup ? `recommended group ${recommendedAgeGroup.replace('-', '–')}` : 'edit age'}`}</Text></Pressable>
+    <ImageBackground source={homeHeroImage} resizeMode="cover" style={styles.discoverHero} imageStyle={styles.discoverHeroImage}>
+      <View style={[StyleSheet.absoluteFill, styles.discoverShade]} />
+      <View style={styles.discoverHeroTop}><Text style={styles.heroKicker}>KICKOFF / RIYADH</Text><IconBadge name="compass" tone="cyan" size="medium" /></View>
+      <View><Text style={styles.discoverTitle}>Find your{ '\n' }next game.</Text><Text style={styles.discoverSub}>Real pitches. Good people. Game on.</Text></View>
+    </ImageBackground>
+    <Pressable accessibilityRole="button" onPress={() => router.push('/player-age' as never)} style={[styles.ageLink, { backgroundColor: `${colors.violet}20`, borderColor: `${colors.violet}44` }]}><IconBadge name="user" tone="violet" size="small" /><Text style={{ flex: 1, fontSize: 11, fontWeight: '700', color: colors.foreground }}>{playerAge == null ? 'Add your age for match recommendations' : `Age ${playerAge} · ${recommendedAgeGroup ? `recommended group ${recommendedAgeGroup.replace('-', '–')}` : 'edit age'}`}</Text><Feather name="arrow-up-right" size={14} color={colors.violet} /></Pressable>
 
     <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <Feather name="search" size={17} color={colors.mutedForeground} />
+      <IconBadge name="search" tone="cyan" size="small" />
       <TextInput accessibilityLabel="Search matches by venue, area, or address" value={query} onChangeText={setQuery} autoCapitalize="none" autoCorrect={false} placeholder="Venue, area, or address" placeholderTextColor={colors.mutedForeground} style={[styles.searchInput, { color: colors.foreground }]} />
     </View>
 
     <View style={[styles.alertRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.alertIcon, { backgroundColor: colors.secondary }]}><Feather name="bell" size={16} color={colors.primary} /></View>
+      <IconBadge name="bell" tone="yellow" size="medium" />
       <View style={styles.alertCopy}>
         <Text style={[styles.alertTitle, { color: colors.foreground }]}>New match alerts</Text>
         <Text numberOfLines={2} style={[styles.alertDescription, { color: colors.mutedForeground }]}>{matchAlertsMessage || (matchAlertsEnabled ? 'Get reminders before kickoff and an alert when a new game is posted.' : 'Get reminders before kickoff and an alert when a new game is posted.')}</Text>
@@ -210,13 +214,15 @@ export default function MatchesScreen() {
     </View>
     {matchAlertsMessage ? <Text accessibilityRole="status" style={[styles.alertStatus, { color: matchAlertsEnabled ? colors.primary : colors.mutedForeground }]}>{matchAlertsMessage}</Text> : null}
 
-    <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>WHEN</Text>
+    <View style={[styles.filterPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={styles.filterHeading}><IconBadge name="calendar" tone="pink" size="small" /><Text style={[styles.filterLabel, { color: colors.foreground }]}>WHEN</Text></View>
     <View style={styles.filters}>{(['Any day', 'Today', 'Tomorrow', 'This week'] as DayFilter[]).map(item => <FilterChip key={item} label={item} selected={dayFilter === item} onPress={() => setDayFilter(item)} colors={colors} />)}</View>
-    <Text style={[styles.filterLabel, { color: colors.mutedForeground, marginTop: 12 }]}>SPOTS AVAILABLE</Text>
+    <View style={[styles.filterHeading, { marginTop: 8 }]}><IconBadge name="users" tone="orange" size="small" /><Text style={[styles.filterLabel, { color: colors.foreground }]}>SPOTS AVAILABLE</Text></View>
     <View style={styles.filters}>{SPOT_OPTIONS.map(option => <FilterChip key={option.value} label={option.label} selected={spotFilter === option.value} onPress={() => setSpotFilter(option.value)} colors={colors} />)}</View>
     <View style={[styles.controlHeader, { marginTop: 12 }]}>
-      <Text style={[styles.filterLabel, { color: colors.mutedForeground }]}>SORT BY</Text>
+      <View style={styles.filterHeading}><IconBadge name="sliders" tone="cyan" size="small" /><Text style={[styles.filterLabel, { color: colors.foreground }]}>SORT BY</Text></View>
       <View style={styles.filters}>{SORT_OPTIONS.map(option => <FilterChip key={option.value} label={option.label} selected={sortBy === option.value} onPress={() => setSortBy(option.value)} colors={colors} />)}</View>
+    </View>
     </View>
     {activeFilterCount || query.trim() ? <Pressable accessibilityRole="button" onPress={clearFilters} style={styles.clearButton}><Feather name="x-circle" size={14} color={colors.primary} /><Text style={[styles.clearText, { color: colors.primary }]}>Clear filters</Text></Pressable> : null}
 
@@ -225,7 +231,7 @@ export default function MatchesScreen() {
     <Modal transparent visible={pushPromptOpen} animationType="fade" onRequestClose={() => setPushPromptOpen(false)}>
       <View style={styles.pushBackdrop}>
         <View style={[styles.pushCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.pushIcon, { backgroundColor: colors.secondary }]}><Feather name="bell" size={22} color={colors.primary} /></View>
+          <IconBadge name="bell" tone="yellow" size="large" />
           <Text style={[styles.pushTitle, { color: colors.foreground }]}>Never miss kickoff.</Text>
           <Text style={[styles.pushDescription, { color: colors.mutedForeground }]}>Allow notifications for a heads-up before your match and when new games are ready to join. You can change this anytime.</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Allow notifications" accessibilityState={{ busy: matchAlertsBusy }} disabled={matchAlertsBusy} onPress={() => void allowMatchPush()} style={[styles.pushAllow, { backgroundColor: colors.primary, opacity: matchAlertsBusy ? .65 : 1 }]}>
@@ -247,6 +253,11 @@ function FilterChip({ label, selected, onPress, colors }: { label: string; selec
 }
 
 const styles = StyleSheet.create({
+  discoverHero: { minHeight: 220, borderRadius: 23, overflow: 'hidden', padding: 17, justifyContent: 'space-between', marginTop: 8 },
+  discoverHeroImage: { borderRadius: 23 }, discoverShade: { backgroundColor: 'rgba(18,10,51,.56)' },
+  discoverHeroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, heroKicker: { color: '#E8E1FF', fontSize: 9, letterSpacing: 1.5, fontWeight: '900' },
+  discoverTitle: { color: 'white', fontSize: 32, fontFamily: 'Georgia', lineHeight: 35, fontWeight: '700' }, discoverSub: { color: '#E8E1FF', fontSize: 11, marginTop: 7 },
+  ageLink: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderRadius: 15, marginTop: 10, marginBottom: 15 },
   kicker: { fontSize: 10, letterSpacing: 1.8, fontWeight: '700', marginTop: 12 },
   title: { fontSize: 31, fontFamily: 'Georgia', marginTop: 8 },
   sub: { fontSize: 13, marginTop: 6, marginBottom: 22 },
@@ -270,14 +281,15 @@ const styles = StyleSheet.create({
   pushLater: { minHeight: 48, width: '100%', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   pushLaterText: { fontSize: 12, fontWeight: '700' },
   controlHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
-  filterLabel: { fontSize: 9, letterSpacing: 1.4, fontWeight: '700' },
+  filterLabel: { fontSize: 9, letterSpacing: 1.4, fontWeight: '900' },
   filterToggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, borderWidth: 1, borderRadius: 13 },
   filterToggleText: { fontSize: 11, fontWeight: '700' },
-  filters: { flexDirection: 'row', gap: 8, marginVertical: 9, flexWrap: 'wrap' },
-  filter: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 20, borderWidth: 1, minHeight: 40, justifyContent: 'center' },
-  filterPanel: { borderWidth: 1, borderRadius: 16, padding: 13, marginTop: 4, marginBottom: 10 },
+  filters: { flexDirection: 'row', gap: 7, marginVertical: 8, flexWrap: 'wrap' },
+  filter: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: 1, minHeight: 42, justifyContent: 'center' },
+  filterPanel: { borderWidth: 1, borderRadius: 20, padding: 13, marginTop: 8, marginBottom: 8 }, filterHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   clearButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.12)', marginTop: 2 },
   clearText: { fontSize: 12, fontWeight: '700' },
   resultCount: { fontSize: 11, fontWeight: '600', marginTop: 4, marginBottom: 8 },
 });
+
 
