@@ -579,14 +579,14 @@ router.get("/me/recent-matches", requireAuth, async (_req, res): Promise<void> =
     ))
     .orderBy(desc(matchesTable.liveEndedAt)).limit(12);
   const ids = rows.map(row => row.matchId);
-  const matchRows = ids.length ? await db.select({ id: matchesTable.id, venueName: matchesTable.venueName, neighborhood: matchesTable.neighborhood, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, liveEndedAt: matchesTable.liveEndedAt })
+  const matchRows = ids.length ? await db.select({ id: matchesTable.id, venueName: matchesTable.venueName, neighborhood: matchesTable.neighborhood, imageUrl: matchesTable.imageUrl, imageUrls: matchesTable.imageUrls, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, liveEndedAt: matchesTable.liveEndedAt })
     .from(matchesTable).where(inArray(matchesTable.id, ids)) : [];
   const matchesById = new Map(matchRows.map(match => [match.id, match]));
   const orderedMatches = rows.map(row => matchesById.get(row.matchId)).filter((match): match is NonNullable<typeof match> => Boolean(match));
   const snapshots = await Promise.all(orderedMatches.map(async (match) => {
     const live = await getLiveMatchSnapshot(match.id);
     return live && match.liveEndedAt ? {
-      match: { id: match.id, venueName: match.venueName, neighborhood: match.neighborhood, startsAt: match.startsAt, durationMinutes: match.durationMinutes },
+      match: { id: match.id, venueName: match.venueName, neighborhood: match.neighborhood, imageUrl: match.imageUrl, imageUrls: match.imageUrls, startsAt: match.startsAt, durationMinutes: match.durationMinutes },
       live,
       endedAt: match.liveEndedAt,
       expiresAt: new Date(match.liveEndedAt.getTime() + MATCH_ARCHIVE_HOURS * 60 * 60_000),
@@ -610,7 +610,7 @@ router.get("/me/match-history", requireAuth, async (_req, res): Promise<void> =>
     ))
     .orderBy(desc(matchesTable.liveEndedAt)).limit(pageSize).offset(offset);
   const ids = rows.map(row => row.matchId);
-  const matchRows = ids.length ? await db.select({ id: matchesTable.id, venueName: matchesTable.venueName, neighborhood: matchesTable.neighborhood, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, liveEndedAt: matchesTable.liveEndedAt })
+  const matchRows = ids.length ? await db.select({ id: matchesTable.id, venueName: matchesTable.venueName, neighborhood: matchesTable.neighborhood, imageUrl: matchesTable.imageUrl, imageUrls: matchesTable.imageUrls, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, liveEndedAt: matchesTable.liveEndedAt })
     .from(matchesTable).where(inArray(matchesTable.id, ids)) : [];
   const matchesById = new Map(matchRows.map(match => [match.id, match]));
   const uniqueMatches = rows.map(row => matchesById.get(row.matchId)).filter((match): match is NonNullable<typeof match> => Boolean(match));
@@ -624,7 +624,7 @@ router.get("/me/match-history", requireAuth, async (_req, res): Promise<void> =>
   }
   res.setHeader("Cache-Control", "no-store");
   res.json({ items: uniqueMatches.map(match => ({
-    match: { id: match.id, venueName: match.venueName, neighborhood: match.neighborhood, startsAt: match.startsAt, durationMinutes: match.durationMinutes },
+    match: { id: match.id, venueName: match.venueName, neighborhood: match.neighborhood, imageUrl: match.imageUrl, imageUrls: match.imageUrls, startsAt: match.startsAt, durationMinutes: match.durationMinutes },
     score: scores.get(match.id) ?? { red: 0, blue: 0, goals: 0 },
     endedAt: match.liveEndedAt,
   })), nextOffset: rows.length === pageSize ? offset + pageSize : null });
@@ -1082,6 +1082,8 @@ router.get("/me/registrations", requireAuth, async (_req, res): Promise<void> =>
       venueName: matchesTable.venueName,
       neighborhood: matchesTable.neighborhood,
       address: matchesTable.address,
+      imageUrl: matchesTable.imageUrl,
+      imageUrls: matchesTable.imageUrls,
       startsAt: matchesTable.startsAt,
       durationMinutes: matchesTable.durationMinutes,
       bookedCount: matchesTable.bookedCount,
