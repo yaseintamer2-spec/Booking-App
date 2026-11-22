@@ -206,7 +206,7 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
     {!hideMenu ? <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
       <View style={styles.drawerBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
-        <View style={[styles.drawer, { backgroundColor: colors.card, paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 67 : 0) + 20, paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 34 : 0) + 24 }]}>
+        <ScrollView showsVerticalScrollIndicator={false} style={[styles.drawer, { backgroundColor: colors.card }]} contentContainerStyle={[styles.drawerContent, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 67 : 0) + 20, paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 34 : 0) + 24 }]}>
           <View style={styles.drawerTop}><View><Text style={[styles.eyebrow, { color: colors.primary }]}>RIYADH · 7V7</Text><Text style={[styles.drawerTitle, { color: colors.foreground }]}>Your game,{'\n'}already organized.</Text></View><Pressable onPress={() => setOpen(false)} style={styles.closeButton}><Feather name="x" size={20} color={colors.foreground} /></Pressable></View>
           <View style={[styles.drawerProfile, { borderColor: colors.border }]}>
             <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
@@ -219,11 +219,11 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
           <View style={{ gap: 5, marginTop: 20 }}>
             {menu.map(([label, path, icon], index) => { const tones: AccentTone[] = ['primary', 'pink', 'cyan', 'yellow', 'violet', 'orange']; return <Pressable key={path} accessibilityRole="button" testID={`drawer-${label.toLowerCase().replaceAll(' ', '-')}`} style={({ pressed }) => [styles.drawerItem, { opacity: pressed ? 0.68 : 1 }]} onPress={() => { setOpen(false); router.push(path as never); }}><IconBadge name={icon as never} tone={tones[index % tones.length]} size="small" /><Text style={[styles.drawerItemText, { color: colors.foreground }]}>{label}</Text><Feather name="arrow-up-right" size={15} color={colors.mutedForeground} /></Pressable>; })}
           </View>
-          <View style={{ flex: 1 }} />
+          <View style={styles.drawerSpacer} />
           <Pressable onPress={handleSignOut} disabled={signingOut} accessibilityRole="button" testID="drawer-sign-out" style={[styles.signOutButton, { borderColor: colors.border, opacity: signingOut ? 0.55 : 1 }]}><Feather name="log-out" size={16} color={colors.destructive} /><Text style={[styles.signOutText, { color: colors.destructive }]}>{signingOut ? 'Signing out…' : 'Sign out'}</Text></Pressable>
           {signOutError ? <Text style={[styles.small, { color: colors.destructive, marginTop: 8 }]}>Could not sign out. Please try again.</Text> : null}
           <View style={[styles.drawerFoot, { borderColor: colors.border }]}><Text style={[styles.small, { color: colors.mutedForeground }]}>KICKOFF / RIYADH</Text><Text style={[styles.small, { color: colors.mutedForeground }]}>The pitch is waiting.</Text></View>
-        </View>
+        </ScrollView>
       </View>
     </Modal> : null}
   </>;
@@ -337,7 +337,9 @@ const styles = StyleSheet.create({
   menuLine: { height: 1.5, width: 17, borderRadius: 1 },
   headerIcon: { width: 42, height: 42, justifyContent: 'center' },
   drawerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.62)', flexDirection: 'row', justifyContent: 'flex-end' },
-  drawer: { width: '86%', maxWidth: 370, height: '100%', paddingHorizontal: 24, paddingBottom: 32 },
+  drawer: { width: '86%', maxWidth: 370, height: '100%' },
+  drawerContent: { flexGrow: 1, paddingHorizontal: 24 },
+  drawerSpacer: { flexGrow: 1, minHeight: 24 },
   drawerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingTop: 18 },
   closeButton: { padding: 8 },
   drawerTitle: { fontSize: 28, lineHeight: 34, fontWeight: '600', fontFamily: 'Georgia', marginTop: 8 },
@@ -414,5 +416,6 @@ const styles = StyleSheet.create({
   googleText: { color: '#3C4043', textAlign: 'center', fontSize: 14, fontWeight: '600', letterSpacing: 0.1 },
   googleError: { fontSize: 11, lineHeight: 16, marginTop: 9 },
 });
+
 
 
