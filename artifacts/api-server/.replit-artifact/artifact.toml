@@ -9,6 +9,11 @@ localPort = 8080
 name = "API Server"
 paths = ["/api"]
 
+[services.env]
+# Preview traffic for this service is routed to port 8080. The development
+# launcher otherwise falls back to 5000, leaving every /api request unreachable.
+PORT = "8080"
+
 [services.development]
 run = "pnpm --filter @workspace/api-server run dev"
 
