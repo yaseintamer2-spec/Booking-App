@@ -55,6 +55,7 @@ export const matchesTable = pgTable(
     refereeAvatarUrl: text("referee_avatar_url"),
     refereeAssignmentStatus: text("referee_assignment_status"),
     liveStatus: text("live_status").notNull().default("scheduled"),
+    teamsGeneratedAt: timestamp("teams_generated_at", { withTimezone: true }),
     liveStartedAt: timestamp("live_started_at", { withTimezone: true }),
     livePhaseStartedAt: timestamp("live_phase_started_at", { withTimezone: true }),
     liveFirstHalfEndedAt: timestamp("live_first_half_ended_at", { withTimezone: true }),

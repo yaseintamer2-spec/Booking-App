@@ -15,7 +15,7 @@ export function LiveScoreboard({ matchId, compact = false, showAllEvents = false
   const load = useCallback(async () => {
     if (isLocalPreviewMode && matchId === matchRegistrationMock.match.id) {
       try {
-        const stored = await AsyncStorage.getItem('kickoff.local-preview.live-match.v1');
+        const stored = await AsyncStorage.getItem('kickoff.local-preview.live-match.v2');
         if (!stored) { setSnapshot(null); return; }
         const local = JSON.parse(stored) as LiveView;
         setSnapshot(local);

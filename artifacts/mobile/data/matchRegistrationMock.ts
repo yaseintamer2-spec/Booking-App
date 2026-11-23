@@ -18,6 +18,8 @@ export type RegistrationParticipant = {
   userId: string;
   firstName: string;
   avatarUrl: string | null;
+  /** Sample-only age used to demonstrate referee age-balanced team draws. */
+  age?: number;
   pitchSlot?: number | null;
   positionPreference: PositionPreference;
 };
@@ -74,15 +76,15 @@ export const matchRegistrationMock: {
     refereeName: 'Omar Al-Harbi',
   },
   participants: [
-    { userId: 'u1', firstName: 'Marcus', avatarUrl: 'https://i.pravatar.cc/120?img=12', positionPreference: 'goalkeeper' },
-    { userId: 'u2', firstName: 'Jamie', avatarUrl: 'https://i.pravatar.cc/120?img=33', positionPreference: 'defender' },
-    { userId: 'u3', firstName: 'Alexandre', avatarUrl: 'https://i.pravatar.cc/120?img=15', positionPreference: 'midfielder' },
-    { userId: 'u4', firstName: 'Noah', avatarUrl: 'https://i.pravatar.cc/120?img=52', positionPreference: 'anywhere' },
-    { userId: 'u5', firstName: 'Theo', avatarUrl: 'https://i.pravatar.cc/120?img=60', positionPreference: 'attacker' },
-    { userId: 'u6', firstName: 'Sam', avatarUrl: 'https://i.pravatar.cc/120?img=68', positionPreference: 'anywhere' },
-    { userId: 'u7', firstName: 'Abdulrahman', avatarUrl: 'https://i.pravatar.cc/120?img=8', positionPreference: 'defender' },
-    { userId: 'u8', firstName: 'Turki', avatarUrl: null, positionPreference: 'midfielder' },
-    { userId: 'u9', firstName: 'Daniel', avatarUrl: 'https://i.pravatar.cc/120?img=14', positionPreference: 'attacker' },
+    { userId: 'u1', firstName: 'Marcus', avatarUrl: 'https://i.pravatar.cc/120?img=12', age: 14, positionPreference: 'goalkeeper' },
+    { userId: 'u2', firstName: 'Jamie', avatarUrl: 'https://i.pravatar.cc/120?img=33', age: 15, positionPreference: 'defender' },
+    { userId: 'u3', firstName: 'Alexandre', avatarUrl: 'https://i.pravatar.cc/120?img=15', age: 16, positionPreference: 'midfielder' },
+    { userId: 'u4', firstName: 'Noah', avatarUrl: 'https://i.pravatar.cc/120?img=52', age: 13, positionPreference: 'anywhere' },
+    { userId: 'u5', firstName: 'Theo', avatarUrl: 'https://i.pravatar.cc/120?img=60', age: 14, positionPreference: 'attacker' },
+    { userId: 'u6', firstName: 'Sam', avatarUrl: 'https://i.pravatar.cc/120?img=68', age: 15, positionPreference: 'anywhere' },
+    { userId: 'u7', firstName: 'Abdulrahman', avatarUrl: 'https://i.pravatar.cc/120?img=8', age: 16, positionPreference: 'defender' },
+    { userId: 'u8', firstName: 'Turki', avatarUrl: null, age: 13, positionPreference: 'midfielder' },
+    { userId: 'u9', firstName: 'Daniel', avatarUrl: 'https://i.pravatar.cc/120?img=14', age: 14, positionPreference: 'attacker' },
   ],
   currentUser: { userId: 'me', firstName: 'Yasein', avatarUrl: null },
 };

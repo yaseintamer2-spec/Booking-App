@@ -179,6 +179,7 @@ async function getLiveMatchSnapshot(matchId: string) {
     refereeName: matchesTable.refereeName,
     refereeAvatarUrl: matchesTable.refereeAvatarUrl,
     liveStatus: matchesTable.liveStatus,
+    teamsGeneratedAt: matchesTable.teamsGeneratedAt,
     liveStartedAt: matchesTable.liveStartedAt,
     livePhaseStartedAt: matchesTable.livePhaseStartedAt,
     liveFirstHalfEndedAt: matchesTable.liveFirstHalfEndedAt,
@@ -190,10 +191,11 @@ async function getLiveMatchSnapshot(matchId: string) {
   const events = await db.select().from(matchEventsTable)
     .where(and(eq(matchEventsTable.matchId, matchId), isNull(matchEventsTable.voidedAt)))
     .orderBy(asc(matchEventsTable.createdAt));
-  const players = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, avatarUrl: registrationsTable.avatarUrl, pitchSlot: registrationsTable.pitchSlot, liveTeam: registrationsTable.liveTeam })
+  const registrations = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, avatarUrl: registrationsTable.avatarUrl, pitchSlot: registrationsTable.pitchSlot, liveTeam: registrationsTable.liveTeam, status: registrationsTable.status })
     .from(registrationsTable)
     .where(and(eq(registrationsTable.matchId, matchId), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
     .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
+  const players = registrations.filter(player => player.status === "checked_in");
   const goals = events.filter((event) => event.type === "goal");
   const redScore = goals.filter((event) => event.team === "red").length;
   const blueScore = goals.filter((event) => event.team === "blue").length;
@@ -209,11 +211,14 @@ async function getLiveMatchSnapshot(matchId: string) {
     refereeName: match.refereeName,
     refereeAvatarUrl: match.refereeAvatarUrl,
     liveStatus: match.liveStatus,
+    teamsGeneratedAt: match.teamsGeneratedAt,
     liveStartedAt: match.liveStartedAt,
     livePhaseStartedAt: match.livePhaseStartedAt,
     liveFirstHalfEndedAt: match.liveFirstHalfEndedAt,
     liveSecondHalfStartedAt: match.liveSecondHalfStartedAt,
     liveEndedAt: match.liveEndedAt,
+    registeredCount: registrations.length,
+    checkedInCount: players.length,
     score: { red: redScore, blue: blueScore },
     players: players.map((player, index) => ({ ...player, team: teamForRegistration(player, index, players, match.capacity) })),
     events: events.map((event) => ({ id: event.id, clientEventId: event.clientEventId, type: event.type, team: event.team, period: event.period, minute: event.minute, scorerUserId: event.scorerUserId, scorerName: event.scorerName, assistUserId: event.assistUserId, assistName: event.assistName, suspensionMinutes: event.suspensionMinutes, occurredAt: event.occurredAt, createdAt: event.createdAt })),
@@ -390,7 +395,7 @@ router.patch("/me/age", requireAuth, async (req, res): Promise<void> => {
 
 router.get("/me/match-staff", requireAuth, async (_req, res): Promise<void> => {
   const userId = res.locals.userId as string;
-  res.json({ isStaff: (await isMatchStaffUser(userId)) || (await isPitchOwnerUser(userId)) });
+  res.json({ isStaff: (await isAdminUser(userId)) || (await isMatchStaffUser(userId)) || (await isPitchOwnerUser(userId)) });
 });
 
 router.post("/me/push-token", requireAuth, async (req, res): Promise<void> => {
@@ -610,23 +615,36 @@ router.post("/matches/:id/live/teams/generate", requireAuth, async (req, res): P
   const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
   if (!match) { res.status(404).json({ error: "Match not found." }); return; }
   if (!(await canControlLiveMatch(userId, match.refereeUserId, match.refereeAssignmentStatus))) { res.status(403).json({ error: "Only the assigned referee or an admin can balance teams." }); return; }
-  if (match.liveStatus !== "scheduled") { res.status(409).json({ error: "Generate or shuffle teams before kick-off. During the match, move players individually." }); return; }
-  const participants = await db.select({ userId: registrationsTable.userId, age: playerProfilesTable.age })
-    .from(registrationsTable)
-    .leftJoin(playerProfilesTable, eq(playerProfilesTable.userId, registrationsTable.userId))
-    .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`));
-  if (participants.length < 2) { res.status(409).json({ error: "At least two registered players are needed to make teams." }); return; }
-  const assignments = balancePlayersByAge(participants);
+  if (match.liveStatus !== "scheduled") { res.status(409).json({ error: "Teams can only be generated before kick-off." }); return; }
+  if (match.teamsGeneratedAt) { res.status(409).json({ error: "Teams have already been generated for this match." }); return; }
   const generated = await db.transaction(async tx => {
-    const [lockedMatch] = await tx.select({ liveStatus: matchesTable.liveStatus }).from(matchesTable).where(eq(matchesTable.id, match.id)).for("update").limit(1);
-    if (!lockedMatch || lockedMatch.liveStatus !== "scheduled") return false;
+    const [lockedMatch] = await tx.select({ liveStatus: matchesTable.liveStatus, teamsGeneratedAt: matchesTable.teamsGeneratedAt }).from(matchesTable).where(eq(matchesTable.id, match.id)).for("update").limit(1);
+    if (!lockedMatch || lockedMatch.liveStatus !== "scheduled") return "closed" as const;
+    if (lockedMatch.teamsGeneratedAt) return "already_generated" as const;
+    // Older referee sessions could have stored team assignments before the one-time lock existed.
+    // Preserve those assignments and close the draw instead of silently reshuffling them.
+    const [existingAssignment] = await tx.select({ userId: registrationsTable.userId }).from(registrationsTable)
+      .where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.status, "checked_in"), isNotNull(registrationsTable.liveTeam))).limit(1);
+    if (existingAssignment) {
+      await tx.update(matchesTable).set({ teamsGeneratedAt: new Date(), updatedAt: new Date() }).where(eq(matchesTable.id, match.id));
+      return "already_generated" as const;
+    }
+    const participants = await tx.select({ userId: registrationsTable.userId, age: playerProfilesTable.age })
+      .from(registrationsTable)
+      .leftJoin(playerProfilesTable, eq(playerProfilesTable.userId, registrationsTable.userId))
+      .where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.status, "checked_in")));
+    if (participants.length < 2) return "not_enough_players" as const;
+    const assignments = balancePlayersByAge(participants);
     for (const assignment of assignments) {
       await tx.update(registrationsTable).set({ liveTeam: assignment.team, updatedAt: new Date() })
         .where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.userId, assignment.userId)));
     }
-    return true;
+    await tx.update(matchesTable).set({ teamsGeneratedAt: new Date(), updatedAt: new Date() }).where(eq(matchesTable.id, match.id));
+    return "generated" as const;
   });
-  if (!generated) { res.status(409).json({ error: "Generate or shuffle teams before kick-off." }); return; }
+  if (generated === "already_generated") { res.status(409).json({ error: "Teams have already been generated for this match." }); return; }
+  if (generated === "closed") { res.status(409).json({ error: "Teams can only be generated before kick-off." }); return; }
+  if (generated === "not_enough_players") { res.status(409).json({ error: "Admit at least two players by QR before generating teams." }); return; }
   res.json(await getLiveMatchSnapshot(match.id));
 });
 
@@ -639,9 +657,9 @@ router.patch("/matches/:id/live/teams/:playerId", requireAuth, async (req, res):
   const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
   if (!match) { res.status(404).json({ error: "Match not found." }); return; }
   if (!(await canControlLiveMatch(userId, match.refereeUserId, match.refereeAssignmentStatus))) { res.status(403).json({ error: "Only the assigned referee or an admin can move players." }); return; }
-  if (match.liveStatus === "full_time") { res.status(409).json({ error: "Teams are locked after full time." }); return; }
+  if (match.liveStatus === "full_time" || !match.teamsGeneratedAt) { res.status(409).json({ error: "Generate teams before moving an admitted player." }); return; }
   const [player] = await db.update(registrationsTable).set({ liveTeam: team, updatedAt: new Date() })
-    .where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.userId, playerId), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
+    .where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.userId, playerId), eq(registrationsTable.status, "checked_in")))
     .returning({ userId: registrationsTable.userId });
   if (!player) { res.status(404).json({ error: "That player is not registered for this match." }); return; }
   res.json(await getLiveMatchSnapshot(match.id));
@@ -655,7 +673,7 @@ router.get("/me/recent-matches", requireAuth, async (_req, res): Promise<void> =
     .where(and(
       eq(matchesTable.liveStatus, "full_time"),
       gt(matchesTable.liveEndedAt, archiveAfter),
-      sql`${registrationsTable.status} IN ('joined', 'checked_in')`,
+      eq(registrationsTable.status, "checked_in"),
       or(eq(registrationsTable.userId, userId), eq(registrationsTable.bookedByUserId, userId)),
     ))
     .orderBy(desc(matchesTable.liveEndedAt)).limit(12);
@@ -686,7 +704,7 @@ router.get("/me/match-history", requireAuth, async (_req, res): Promise<void> =>
     .innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id))
     .where(and(
       eq(matchesTable.liveStatus, "full_time"),
-      sql`${registrationsTable.status} IN ('joined', 'checked_in')`,
+      eq(registrationsTable.status, "checked_in"),
       or(eq(registrationsTable.userId, userId), eq(registrationsTable.bookedByUserId, userId)),
     ))
     .orderBy(desc(matchesTable.liveEndedAt)).limit(pageSize).offset(offset);
@@ -748,8 +766,8 @@ router.post("/matches/:id/live/state", requireAuth, async (req, res): Promise<vo
   const now = new Date();
   if (action === "start_first_half") {
     const participants = await db.select({ userId: registrationsTable.userId, liveTeam: registrationsTable.liveTeam }).from(registrationsTable)
-      .where(and(eq(registrationsTable.matchId, current.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`));
-    if (participants.length < 2 || participants.some(player => player.liveTeam == null)) { res.status(409).json({ error: "Generate balanced teams for at least two players before starting the first half." }); return; }
+      .where(and(eq(registrationsTable.matchId, current.id), eq(registrationsTable.status, "checked_in")));
+    if (!current.teamsGeneratedAt || participants.length < 2 || participants.some(player => player.liveTeam == null)) { res.status(409).json({ error: "Admit players by QR and generate teams once before starting the first half." }); return; }
   }
   const updated = await db.transaction(async (tx) => {
     const [match] = await tx.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).for("update").limit(1);
@@ -768,7 +786,7 @@ router.post("/matches/:id/live/state", requireAuth, async (req, res): Promise<vo
     }
     if (action === "finish_match" && match.liveStatus === "second_half") {
       const participants = await tx.select({ userId: registrationsTable.userId, pitchSlot: registrationsTable.pitchSlot, liveTeam: registrationsTable.liveTeam }).from(registrationsTable)
-        .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
+        .where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.status, "checked_in")))
         .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
       const events = await tx.select().from(matchEventsTable)
         .where(and(eq(matchEventsTable.matchId, match.id), isNull(matchEventsTable.voidedAt)));
@@ -837,7 +855,7 @@ router.post("/matches/:id/live/events", requireAuth, async (req, res): Promise<v
     res.status(409).json({ error: "The match is not in a playing phase." }); return;
   }
   const registrations = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, pitchSlot: registrationsTable.pitchSlot, liveTeam: registrationsTable.liveTeam })
-    .from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
+    .from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.status, "checked_in")))
     .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
   const scorer = registrations.find((player) => player.userId === scorerUserId);
   const assist = assistUserId ? registrations.find((player) => player.userId === assistUserId) : undefined;
@@ -880,7 +898,7 @@ router.post("/matches/:id/live/events", requireAuth, async (req, res): Promise<v
         const afterRed = beforeRed + Number(team === "red");
         const afterBlue = beforeBlue + Number(team === "blue");
         const players = await tx.select({ userId: registrationsTable.userId, pitchSlot: registrationsTable.pitchSlot, liveTeam: registrationsTable.liveTeam }).from(registrationsTable)
-          .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
+          .where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.status, "checked_in")))
           .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
         for (const [index, player] of players.entries()) {
           const playerTeam = teamForRegistration(player, index, players, match.capacity);
@@ -961,7 +979,7 @@ router.delete("/matches/:id/live/events/:eventId", requireAuth, async (req, res)
         const afterRed = beforeRed - Number(current.team === "red");
         const afterBlue = beforeBlue - Number(current.team === "blue");
         const players = await tx.select({ userId: registrationsTable.userId, pitchSlot: registrationsTable.pitchSlot, liveTeam: registrationsTable.liveTeam }).from(registrationsTable)
-          .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
+          .where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.status, "checked_in")))
           .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
         for (const [index, player] of players.entries()) {
           const playerTeam = teamForRegistration(player, index, players, match.capacity);
@@ -1249,7 +1267,7 @@ router.post("/admin/matches/:id/check-in", requireAuth, async (req, res): Promis
   const matchId = paramId(req.params.id);
   if (!GetMatchParams.safeParse({ id: matchId }).success) { res.status(400).json({ error: "Choose a valid match." }); return; }
   const userId = res.locals.userId as string;
-  const [assignedMatch] = await db.select({ venueName: matchesTable.venueName, refereeUserId: matchesTable.refereeUserId, refereeAssignmentStatus: matchesTable.refereeAssignmentStatus })
+  const [assignedMatch] = await db.select({ venueName: matchesTable.venueName, refereeUserId: matchesTable.refereeUserId, refereeAssignmentStatus: matchesTable.refereeAssignmentStatus, liveStatus: matchesTable.liveStatus, teamsGeneratedAt: matchesTable.teamsGeneratedAt })
     .from(matchesTable).where(eq(matchesTable.id, matchId)).limit(1);
   const canCheckInAsReferee = assignedMatch && await canControlLiveMatch(userId, assignedMatch.refereeUserId, assignedMatch.refereeAssignmentStatus);
   const pitchOwnerAccess = await getPitchOwnerAccess(userId);
@@ -1258,23 +1276,26 @@ router.post("/admin/matches/:id/check-in", requireAuth, async (req, res): Promis
   if (!assignedMatch || (!canCheckInAsReferee && !canCheckInAsPitchOwner)) {
     res.status(403).json({ error: "An assigned referee, pitch owner, or admin is required to check players in." }); return;
   }
+  if (assignedMatch.liveStatus !== "scheduled" || assignedMatch.teamsGeneratedAt) { res.status(409).json({ error: "Player admission is closed after teams are generated or the match starts." }); return; }
   const token = req.body?.token;
   if (req.body?.ageChecked !== true) { res.status(400).json({ error: "Confirm that you checked the player's age against this match's age group before check-in." }); return; }
   if (typeof token !== "string" || token.length < 32) { res.status(400).json({ error: "Scan a valid player check-in QR code." }); return; }
   const hash = createHash("sha256").update(token).digest("hex");
   const now = new Date();
-  const row = await db.transaction(async (tx) => {
-    const [entry] = await tx.select({ id: registrationsTable.id, firstName: registrationsTable.firstName, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, matchStatus: matchesTable.status })
+  const admission = await db.transaction(async (tx) => {
+    const [entry] = await tx.select({ id: registrationsTable.id, firstName: registrationsTable.firstName, startsAt: matchesTable.startsAt, durationMinutes: matchesTable.durationMinutes, matchStatus: matchesTable.status, liveStatus: matchesTable.liveStatus, teamsGeneratedAt: matchesTable.teamsGeneratedAt })
       .from(registrationsTable).innerJoin(matchesTable, eq(registrationsTable.matchId, matchesTable.id))
       .where(and(eq(registrationsTable.matchId, matchId), eq(registrationsTable.checkinTokenHash, hash), eq(registrationsTable.status, "joined"))).for("update").limit(1);
+    if (entry && (entry.liveStatus !== "scheduled" || entry.teamsGeneratedAt)) return { closed: true as const };
     if (!entry || entry.matchStatus !== "published" || !isCheckInTokenValid(getMatchEndAt(entry.startsAt, entry.durationMinutes), now)) return null;
     const [checkedIn] = await tx.update(registrationsTable).set({ status: "checked_in", checkedInAt: now, checkinTokenHash: null, checkinExpiresAt: null, updatedAt: now })
       .where(and(eq(registrationsTable.id, entry.id), eq(registrationsTable.status, "joined"), eq(registrationsTable.checkinTokenHash, hash)))
       .returning({ id: registrationsTable.id, firstName: registrationsTable.firstName });
-    return checkedIn ?? null;
+    return checkedIn ? { closed: false as const, playerName: checkedIn.firstName } : null;
   });
-  if (!row) { res.status(409).json({ error: "This code is invalid, expired, or already used." }); return; }
-  res.json({ checkedIn: true, playerName: row.firstName });
+  if (!admission) { res.status(409).json({ error: "This code is invalid, expired, or already used." }); return; }
+  if (admission.closed) { res.status(409).json({ error: "Player admission closed when the team draw was generated or the match started." }); return; }
+  res.json({ checkedIn: true, playerName: admission.playerName });
 });
 
 router.get("/me/notifications", requireAuth, async (_req, res): Promise<void> => {
