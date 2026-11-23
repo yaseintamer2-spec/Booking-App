@@ -2,18 +2,19 @@ import React from 'react';
 import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { getGetCurrentUserQueryKey, getListMatchesQueryKey, useGetCurrentUser, useListMatches } from '@workspace/api-client-react';
+import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
 import { BrandHeader, EmptyState, LoadingState, MatchCard, Screen, SectionTitle } from '@/components/KickoffUI';
 import { homeHeroImage } from '@/components/KickoffUI';
 import { IconBadge } from '@/components/IconBadge';
 import { useColors } from '@/hooks/useColors';
 import { sampleMatchListing } from '@/data/matchRegistrationMock';
 import { isLocalPreviewMode } from '@/lib/localPreview';
+import { usePublicMatches } from '@/hooks/usePublicMatches';
 
 export default function HomeScreen() {
   const colors = useColors(); const router = useRouter();
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
-  const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey(), retry: false, staleTime: 20_000 } });
+  const matches = usePublicMatches();
   const listedMatches = matches.data?.length ? matches.data.slice(0, 2) : isLocalPreviewMode ? [sampleMatchListing] : [];
   const openMatch = (id: string) => router.push(id === sampleMatchListing.id ? '/match-registration' : { pathname: '/match-registration', params: { id } });
   const quickActions = [

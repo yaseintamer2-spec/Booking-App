@@ -5,7 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@clerk/expo';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
-import { getGetCurrentUserQueryKey, getListMatchesQueryKey, useGetCurrentUser, useListMatches } from '@workspace/api-client-react';
+import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
 import { BrandHeader, EmptyState, LoadingState, MatchCard, Screen, SectionTitle } from '@/components/KickoffUI';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { useColors } from '@/hooks/useColors';
@@ -14,6 +14,7 @@ import { sampleMatchListing } from '@/data/matchRegistrationMock';
 import { isLocalPreviewMode } from '@/lib/localPreview';
 import { IconBadge } from '@/components/IconBadge';
 import { homeHeroImage } from '@/components/KickoffUI';
+import { usePublicMatches } from '@/hooks/usePublicMatches';
 
 type DayFilter = 'Any day' | 'Today' | 'Tomorrow' | 'This week';
 type SortOption = 'soonest' | 'most-spots';
@@ -46,7 +47,7 @@ export default function MatchesScreen() {
   const [playerAge, setPlayerAge] = useState<number | null>(null);
 
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
-  const matches = useListMatches({ query: { queryKey: getListMatchesQueryKey(), retry: false, staleTime: 20_000 } });
+  const matches = usePublicMatches();
   const listedMatches = matches.data?.length ? matches.data : isLocalPreviewMode ? [sampleMatchListing] : [];
   useEffect(() => { let active = true; if (!isSignedIn) { setPlayerAge(null); return () => { active = false; }; } void (async () => { try { const token = await getToken(); const response = await fetch(`${apiBaseUrl}/api/me/age`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active && response.ok) setPlayerAge(typeof result.age === 'number' ? result.age : null); } catch { if (active) setPlayerAge(null); } })(); return () => { active = false; }; }, [getToken, isSignedIn]);
   const recommendedAgeGroup = playerAge == null ? null : getRecommendedMatchAgeGroup(playerAge);
