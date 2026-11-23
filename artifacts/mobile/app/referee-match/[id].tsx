@@ -156,6 +156,7 @@ export default function RefereeMatchScreen() {
       dismissals += 1;
       const duration = event.suspensionMinutes ?? (dismissals === 1 ? 15 : 30);
       latestEnd = new Date(event.occurredAt || event.createdAt).getTime() + duration * 60_000;
+      yellows = 0;
     }
     return latestEnd;
   };
@@ -237,9 +238,9 @@ export default function RefereeMatchScreen() {
     if (!match || !eventTeam || !player || busy || !['first_half', 'second_half'].includes(match.liveStatus)) return;
     setBusy(true); setNotice('');
     const event: PendingEvent = { clientEventId: Crypto.randomUUID(), type, team: eventTeam, scorerUserId: player.userId, assistUserId: type === 'goal' ? assistant?.userId ?? null : null, occurredAt: new Date().toISOString() };
-    const priorCards = [...match.events, ...queue].filter(item => item.scorerUserId === player.userId && (item.type === 'yellow_card' || item.type === 'red_card'));
-    const previousYellows = priorCards.filter(item => item.type === 'yellow_card').length;
-    const previousDismissals = priorCards.filter(item => item.type === 'red_card' || item.suspensionMinutes != null).length;
+    const priorCards = [...match.events, ...queue].filter(item => item.scorerUserId === player.userId && (item.type === 'yellow_card' || item.type === 'red_card')).sort((a, b) => (a.occurredAt || '').localeCompare(b.occurredAt || ''));
+    let previousYellows = 0; let previousDismissals = 0;
+    for (const card of priorCards) { if (card.type === 'red_card' || card.suspensionMinutes != null) { previousDismissals += 1; previousYellows = 0; } else if (card.type === 'yellow_card') previousYellows += 1; }
     const suspensionMinutes = type === 'red_card' || (type === 'yellow_card' && previousYellows >= 1) ? (previousDismissals ? 30 : 15) : null;
     const pendingEvent = { ...event, suspensionMinutes };
     const pending = [...queue, pendingEvent];

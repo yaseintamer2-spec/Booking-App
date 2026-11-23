@@ -860,9 +860,13 @@ router.post("/matches/:id/live/events", requireAuth, async (req, res): Promise<v
     let suspensionMinutes: number | null = null;
     if (eventType === "yellow_card" || eventType === "red_card") {
       const previousCards = await tx.select({ type: matchEventsTable.type, suspensionMinutes: matchEventsTable.suspensionMinutes })
-        .from(matchEventsTable).where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.scorerUserId, scorer.userId), isNull(matchEventsTable.voidedAt)));
-      const previousDismissals = previousCards.filter(card => card.type === "red_card" || card.suspensionMinutes != null).length;
-      const previousYellows = previousCards.filter(card => card.type === "yellow_card").length;
+        .from(matchEventsTable).where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.scorerUserId, scorer.userId), isNull(matchEventsTable.voidedAt)))
+        .orderBy(asc(matchEventsTable.occurredAt));
+      let previousDismissals = 0; let previousYellows = 0;
+      for (const card of previousCards) {
+        if (card.type === "red_card" || card.suspensionMinutes != null) { previousDismissals += 1; previousYellows = 0; }
+        else if (card.type === "yellow_card") previousYellows += 1;
+      }
       if (eventType === "red_card" || (eventType === "yellow_card" && previousYellows >= 1)) suspensionMinutes = previousDismissals >= 1 ? 30 : 15;
     }
     const scoreEventsBefore = lockedMatch.liveStatus === "full_time" && eventType === "goal"
