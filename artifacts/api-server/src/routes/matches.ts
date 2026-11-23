@@ -1016,11 +1016,12 @@ router.post("/matches/:id/registrations", requireAuth, async (req, res): Promise
   const positionPreference = req.body?.positionPreference;
   const friendEmails = req.body?.friendEmails;
   const pitchSlots = req.body?.pitchSlots;
+  const friendOnly = req.body?.friendOnly === true;
   if (!["anywhere", "goalkeeper", "defender", "midfielder", "attacker"].includes(positionPreference)) {
     res.status(400).json({ error: "Choose a valid position preference." }); return;
   }
-  if (!Array.isArray(friendEmails) || friendEmails.length > 13 || friendEmails.some((email: unknown) => typeof email !== "string")) {
-    res.status(400).json({ error: "Add up to 13 friends by email." }); return;
+  if (!Array.isArray(friendEmails) || friendEmails.length > (friendOnly ? 1 : 13) || friendEmails.some((email: unknown) => typeof email !== "string") || (friendOnly && friendEmails.length !== 1)) {
+    res.status(400).json({ error: friendOnly ? "Add one friend at a time after booking your own place." : "Add up to 13 friends by email." }); return;
   }
   const normalizedEmails = friendEmails.map((email: string) => email.trim().toLowerCase());
   if (
@@ -1029,7 +1030,7 @@ router.post("/matches/:id/registrations", requireAuth, async (req, res): Promise
   ) { res.status(400).json({ error: "Use a different, valid email for each friend." }); return; }
   if (
     !Array.isArray(pitchSlots) ||
-    pitchSlots.length !== normalizedEmails.length + 1 ||
+    pitchSlots.length !== normalizedEmails.length + (friendOnly ? 0 : 1) ||
     pitchSlots.some((slot: unknown) => !Number.isInteger(slot) || (slot as number) < 0 || (slot as number) >= 14) ||
     new Set(pitchSlots).size !== pitchSlots.length
   ) { res.status(400).json({ error: "Choose one different open pitch spot per attendee." }); return; }
@@ -1038,7 +1039,7 @@ router.post("/matches/:id/registrations", requireAuth, async (req, res): Promise
   const friendUsers = normalizedEmails.length
     ? (await clerkClient.users.getUserList({ emailAddress: normalizedEmails, limit: 100 })).data
     : [];
-  const attendees = [{
+  const attendees = friendOnly ? [] : [{
     userId,
     firstName: user.firstName || user.fullName?.split(" ")[0] || "Player",
     avatarUrl: user.imageUrl || null,
@@ -1065,6 +1066,11 @@ router.post("/matches/:id/registrations", requireAuth, async (req, res): Promise
   const outcome = await db.transaction(async (tx) => {
     const [match] = await tx.select().from(matchesTable).where(eq(matchesTable.id, paramId(req.params.id))).for("update").limit(1);
     if (!match || match.status !== "published" || match.startsAt <= new Date()) return { error: "Match is no longer available.", status: 404 } as const;
+    if (friendOnly) {
+      const [ownPlace] = await tx.select({ id: registrationsTable.id }).from(registrationsTable)
+        .where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.userId, userId), eq(registrationsTable.bookedByUserId, userId), sql`${registrationsTable.status} IN ('joined', 'checked_in')`)).limit(1);
+      if (!ownPlace) return { error: "Book your own place before booking a friend." , status: 403 } as const;
+    }
     if (pitchSlots.some((slot: number) => slot >= Math.min(match.capacity, 14))) return { error: "A selected pitch spot is outside this match's capacity.", status: 400 } as const;
     if (match.bookedCount + attendees.length > match.capacity) return { error: "There are not enough places left for everyone selected.", status: 409 } as const;
     if (!canConfirmPaidRegistration(match.priceHalalas, false)) return { error: "Paid booking is unavailable until the payment provider is configured. No seat has been held.", status: 503 } as const;
@@ -1096,7 +1102,7 @@ router.post("/matches/:id/registrations", requireAuth, async (req, res): Promise
         firstName: attendee.firstName,
         avatarUrl: attendee.avatarUrl,
         pitchSlot,
-        positionPreference: index === 0 ? positionPreference : "anywhere",
+        positionPreference: friendOnly ? "anywhere" : index === 0 ? positionPreference : "anywhere",
         status: "joined",
         paymentStatus: "free",
         checkedInAt: null,
@@ -1112,12 +1118,14 @@ router.post("/matches/:id/registrations", requireAuth, async (req, res): Promise
     }
 
     await tx.update(matchesTable).set({ bookedCount: match.bookedCount + attendees.length, updatedAt: new Date() }).where(eq(matchesTable.id, match.id));
-    if (attendees.length > 1) {
-      await tx.insert(notificationsTable).values(attendees.slice(1).map((attendee) => ({
+    const invitedAttendees = friendOnly ? attendees : attendees.slice(1);
+    if (invitedAttendees.length) {
+      const inviterName = user.firstName || user.fullName?.split(" ")[0] || "A player";
+      await tx.insert(notificationsTable).values(invitedAttendees.map((attendee) => ({
         userId: attendee.userId,
         matchId: match.id,
         kind: "match_invitation",
-        message: `${attendees[0].firstName} booked you a free spot at ${match.venueName}. Your check-in QR is in My Matches.`,
+        message: `${inviterName} booked you a spot at ${match.venueName}. Your check-in QR is in My Matches.`,
       })));
     }
     return { status: 201, data: { status: "joined", matchId: match.id, venueName: match.venueName, tickets } } as const;

@@ -190,6 +190,7 @@ export default function MatchRegistrationScreen() {
   const [positionPreference, setPositionPreference] =
     useState<PositionPreference>('anywhere');
   const [friendEmails, setFriendEmails] = useState<string[]>([]);
+  const [friendOnlyBooking, setFriendOnlyBooking] = useState(false);
   const [selectedPitchSlots, setSelectedPitchSlots] = useState<number[]>([]);
   const [confirmationTickets, setConfirmationTickets] = useState<ConfirmationTicket[]>([]);
   const [joining, setJoining] = useState(false);
@@ -245,9 +246,25 @@ export default function MatchRegistrationScreen() {
     (participant) => participant.positionPreference === 'goalkeeper',
   ).length;
   const goalkeeperLimitReached = goalkeeperCount >= match.maxGoalkeepers;
-  const friendLimit = Math.min(13, Math.max(0, Math.min(match.maxPlayers, spotsRemaining) - 1));
-  const expectedTicketCount = friendEmails.length + 1;
+  const friendLimit = friendOnlyBooking
+    ? Math.min(1, spotsRemaining)
+    : Math.min(13, Math.max(0, Math.min(match.maxPlayers, spotsRemaining) - 1));
+  const expectedTicketCount = friendEmails.length + (friendOnlyBooking ? 0 : 1);
   const hasAllSelectedPitchSlots = selectedPitchSlots.length === expectedTicketCount;
+
+  const beginFriendBooking = () => {
+    if (!joined || isFull || !liveMatchId) return;
+    setFriendOnlyBooking(true);
+    setFriendEmails(['']);
+    setSelectedPitchSlots([]);
+    setJoinError(null);
+  };
+  const cancelFriendBooking = () => {
+    setFriendOnlyBooking(false);
+    setFriendEmails([]);
+    setSelectedPitchSlots([]);
+    setJoinError(null);
+  };
 
   const addFriend = () => {
     if (!liveMatchId || friendEmails.length >= friendLimit) return;
@@ -272,7 +289,7 @@ export default function MatchRegistrationScreen() {
   };
 
   const joinMatch = async () => {
-    if (joinLock.current || joining || joined || isFull || isCancelled) return;
+    if (joinLock.current || joining || (joined && !friendOnlyBooking) || isFull || isCancelled) return;
     const normalizedFriendEmails = friendEmails.map((email) => email.trim());
     if (normalizedFriendEmails.some((email) => !email)) {
       setJoinError('Enter an email for each friend, or remove the empty friend row.');
@@ -282,8 +299,8 @@ export default function MatchRegistrationScreen() {
       setJoinError('Use a different email for each friend.');
       return;
     }
-    if (selectedPitchSlots.length !== normalizedFriendEmails.length + 1) {
-      setJoinError('Choose one open pitch spot for each ticket.');
+    if (selectedPitchSlots.length !== normalizedFriendEmails.length + (friendOnlyBooking ? 0 : 1)) {
+      setJoinError(friendOnlyBooking ? 'Choose one open pitch spot for your friend.' : 'Choose one open pitch spot for each ticket.');
       return;
     }
     joinLock.current = true;
@@ -295,7 +312,7 @@ export default function MatchRegistrationScreen() {
         const response = await fetch(`${apiBaseUrl}/api/matches/${liveMatchId}/registrations`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ positionPreference, friendEmails: normalizedFriendEmails, pitchSlots: selectedPitchSlots }),
+          body: JSON.stringify({ positionPreference, friendEmails: normalizedFriendEmails, pitchSlots: selectedPitchSlots, friendOnly: friendOnlyBooking }),
         });
         const payload = await response.json() as { error?: string; tickets?: unknown };
         if (!response.ok) throw new Error(payload.error || 'Could not join this match.');
@@ -315,11 +332,11 @@ export default function MatchRegistrationScreen() {
             firstName: ticket.firstName || 'Player',
             avatarUrl: ticket.avatarUrl || null,
             pitchSlot: ticket.pitchSlot,
-            positionPreference: index === 0 ? positionPreference : 'anywhere' as const,
+            positionPreference: !friendOnlyBooking && index === 0 ? positionPreference : 'anywhere' as const,
           }));
           return [...current.filter((participant) => !registeredUserIds.has(participant.userId)), ...additions];
         });
-        if (qrTickets.length === normalizedFriendEmails.length + 1) {
+        if (qrTickets.length === normalizedFriendEmails.length + (friendOnlyBooking ? 0 : 1)) {
           setConfirmationTickets(qrTickets);
         } else {
           setJoinError('Your places are confirmed, but the QR codes could not be displayed. Reopen them from My Matches.');
@@ -344,6 +361,7 @@ export default function MatchRegistrationScreen() {
         setConfirmationTickets([localTicket]);
       }
       setJoined(true);
+      if (friendOnlyBooking) cancelFriendBooking();
     } catch (error) {
       setJoinError(error instanceof Error ? error.message : 'Could not join this match. Please try again.');
     } finally {
@@ -367,7 +385,7 @@ export default function MatchRegistrationScreen() {
   const dateTitle = formatMatchDate(match.startsAt);
   const joinLabel = getJoinLabel({
     joining,
-    joined,
+    joined: joined && !friendOnlyBooking,
     isFull,
     isCancelled,
     hasSelectedPitchSlot: hasAllSelectedPitchSlots,
@@ -375,7 +393,7 @@ export default function MatchRegistrationScreen() {
   });
   const joinDisabled =
     joining ||
-    joined ||
+    (joined && !friendOnlyBooking) ||
     isFull ||
     isCancelled ||
     !hasAllSelectedPitchSlots;
@@ -500,9 +518,18 @@ export default function MatchRegistrationScreen() {
           {liveMatchId || isLocalPreviewMode ? <LiveScoreboard matchId={liveMatchId || match.id} showAllEvents={readOnly} onSnapshot={setLiveSnapshot} /> : null}
 
           {liveMatchId && !readOnly ? <>
-            <SectionLabel colors={colors}>BOOK FOR FRIENDS</SectionLabel>
+            {joined && !friendOnlyBooking ? <>
+              <SectionLabel colors={colors}>BOOK FOR A FRIEND</SectionLabel>
+              <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>Your place is confirmed. You can book one additional friend at a time; they need a KICKOFF account with a verified email.</Text>
+              <Pressable accessibilityRole="button" accessibilityState={{ disabled: isFull }} disabled={isFull || isCancelled} onPress={beginFriendBooking} style={[styles.addFriendButton, { borderColor: colors.border, opacity: isFull || isCancelled ? 0.5 : 1 }]}>
+                <Feather name="user-plus" size={15} color={colors.primary} />
+                <Text style={[styles.addFriendText, { color: colors.primary }]}>{isFull ? 'No places left for a friend' : 'Book another friend'}</Text>
+              </Pressable>
+            </> : null}
+            {(!joined || friendOnlyBooking) ? <>
+            <SectionLabel colors={colors}>{friendOnlyBooking ? 'FRIEND DETAILS' : 'BOOK FOR FRIENDS'}</SectionLabel>
             <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>
-              Friends need a KICKOFF account with a verified email. Each person gets their own free ticket and QR code.
+              {friendOnlyBooking ? 'Enter one friend’s verified KICKOFF account email. They get their own ticket and check-in QR.' : 'Friends need a KICKOFF account with a verified email. Each person gets their own ticket and QR code.'}
             </Text>
             {friendEmails.map((email, index) => (
               <View key={`friend-${index}`} style={[styles.friendRow, { borderColor: colors.border, backgroundColor: colors.card }]}>
@@ -526,14 +553,16 @@ export default function MatchRegistrationScreen() {
             ))}
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: friendEmails.length >= friendLimit || joining }}
-              disabled={friendEmails.length >= friendLimit || joining}
+              accessibilityState={{ disabled: friendEmails.length >= friendLimit || joining || friendOnlyBooking }}
+              disabled={friendEmails.length >= friendLimit || joining || friendOnlyBooking}
               onPress={addFriend}
               style={[styles.addFriendButton, { borderColor: colors.border, opacity: friendEmails.length >= friendLimit || joining ? 0.5 : 1 }]}
             >
               <Feather name="user-plus" size={15} color={colors.primary} />
-              <Text style={[styles.addFriendText, { color: colors.primary }]}>Add a friend</Text>
+              <Text style={[styles.addFriendText, { color: colors.primary }]}>{friendOnlyBooking ? 'One friend per additional booking' : 'Add a friend'}</Text>
             </Pressable>
+            {friendOnlyBooking ? <Pressable accessibilityRole="button" onPress={cancelFriendBooking} style={{ minHeight: 44, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: colors.mutedForeground, fontSize: 12, fontWeight: '700' }}>Cancel friend booking</Text></Pressable> : null}
+            </> : null}
           </> : null}
 
           <SectionLabel colors={colors}>PLAYERS</SectionLabel>
@@ -545,11 +574,15 @@ export default function MatchRegistrationScreen() {
             goalsByUser={Object.fromEntries((liveSnapshot?.events || []).filter(event => event.type === 'goal').reduce((counts, event) => counts.set(event.scorerUserId, (counts.get(event.scorerUserId) || 0) + 1), new Map<string, number>()))}
             onOpenProfile={setProfileParticipant}
             onSelectSpot={selectPitchSpot}
-            disabled={readOnly || joining || joined || isFull || isCancelled}
+            disabled={readOnly || joining || (joined && !friendOnlyBooking) || isFull || isCancelled}
           />
           {!readOnly ? <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>
-            {joined
-              ? `Your spot is confirmed. Reopen each ticket QR from My Matches.`
+            {joined && !friendOnlyBooking
+              ? `Your spot is confirmed. You can book one friend at a time above.`
+              : friendOnlyBooking && !selectedPitchSlots.length
+              ? 'Tap one open + spot for your friend; the booking is not confirmed until you continue.'
+              : friendOnlyBooking
+              ? `Friend spot selected: ${selectedSpotSummary}.`
               : !selectedPitchSlots.length
               ? `Tap open + spots to choose ${expectedTicketCount} spot${expectedTicketCount === 1 ? '' : 's'}; they are not confirmed until you join.`
               : `Selected: ${selectedSpotSummary}. Tap an open or selected spot to adjust.`}
@@ -632,13 +665,13 @@ export default function MatchRegistrationScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityState={{
-              disabled: joinDisabled,
+              disabled: joined && !friendOnlyBooking ? joining || isFull || isCancelled : joinDisabled,
               busy: joining,
             }}
-            disabled={joinDisabled}
+            disabled={joined && !friendOnlyBooking ? joining || isFull || isCancelled : joinDisabled}
             onFocus={() => setJoinButtonFocused(true)}
             onBlur={() => setJoinButtonFocused(false)}
-            onPress={joinMatch}
+            onPress={joined && !friendOnlyBooking ? beginFriendBooking : joinMatch}
             style={({ pressed }) => [
               styles.joinButton,
               {
@@ -651,23 +684,23 @@ export default function MatchRegistrationScreen() {
           >
             {joining ? (
               <ActivityIndicator color={colors.primaryForeground} />
-            ) : joined ? (
+            ) : joined && !friendOnlyBooking ? (
               <Feather
-                name="check"
+                name="user-plus"
                 size={17}
                 color={colors.primaryForeground}
               />
             ) : null}
             <Text style={[styles.joinButtonText, { color: colors.primaryForeground }]}>
-              {joinLabel}
+              {joined && !friendOnlyBooking ? isFull ? 'No friend places left' : 'Book another friend' : joinLabel}
             </Text>
           </Pressable>
           <Text style={[styles.paymentNote, { color: colors.mutedForeground }]}>
             {liveMatchId
-              ? 'Payment is skipped during testing. Your spot is confirmed; no money is collected.'
+              ? friendOnlyBooking ? 'Payment is skipped during testing. Your friend gets their own ticket; no money is collected.' : 'Payment is skipped during testing. Your spot is confirmed; no money is collected.'
               : 'Sample booking · payment is skipped. Your local spot is confirmed.'}
           </Text>
-          {isFull && liveMatchId ? <Pressable accessibilityRole="button" accessibilityState={{ disabled: joining || waitlisted }} disabled={joining || waitlisted} onPress={joinWaitlist} style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 8, borderWidth: 1, borderRadius: 14, borderColor: colors.border }}><Text style={{ color: colors.foreground, fontSize: 13, fontWeight: '700' }}>{waitlisted ? 'You’re on the waitlist' : 'Join waitlist'}</Text></Pressable> : null}
+          {isFull && liveMatchId && !joined ? <Pressable accessibilityRole="button" accessibilityState={{ disabled: joining || waitlisted }} disabled={joining || waitlisted} onPress={joinWaitlist} style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 8, borderWidth: 1, borderRadius: 14, borderColor: colors.border }}><Text style={{ color: colors.foreground, fontSize: 13, fontWeight: '700' }}>{waitlisted ? 'You’re on the waitlist' : 'Join waitlist'}</Text></Pressable> : null}
           {joinError ? (
             <Text accessibilityRole="alert" style={[styles.joinError, { color: colors.destructive }]}>
               {joinError}
