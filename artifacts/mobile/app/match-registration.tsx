@@ -474,13 +474,15 @@ export default function MatchRegistrationScreen() {
             <View style={styles.locationSummary}>
               <View style={styles.locationSummaryCopy}>
                 <View style={styles.locationNameRow}><Feather name="map-pin" size={15} color={colors.primary} /><Text numberOfLines={1} style={[styles.locationName, { color: colors.foreground }]}>{match.area}</Text></View>
-                <Text numberOfLines={2} style={[styles.locationAddress, { color: colors.mutedForeground }]}>{match.address || match.area}</Text>
+                <Text numberOfLines={2} style={[styles.locationAddress, { color: colors.mutedForeground }]}>{/^https?:\/\//i.test(match.address || '') ? 'Tap below to open the pitch pin in Google Maps.' : match.address || match.area}</Text>
                 <Pressable
                   accessibilityRole="link"
                   accessibilityLabel={`Open ${match.pitchName} in Google Maps`}
                   onPress={() => {
-                    const query = `${match.pitchName}, ${match.address || match.area}, Riyadh`;
-                    void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
+                    const destination = /^https?:\/\//i.test(match.address || '')
+                      ? match.address || ''
+                      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${match.pitchName}, ${match.address || match.area}, Riyadh`)}`;
+                    void Linking.openURL(destination);
                   }}
                   style={styles.mapsLink}
                 >

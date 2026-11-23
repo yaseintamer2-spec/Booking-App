@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@clerk/expo';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { BrandHeader, Button, EmptyState, Field, LoadingState, Screen, formatRiyadhDateTime, formatSar, parseRiyadhLocalInput, toRiyadhLocalInput } from '@/components/KickoffUI';
+import { IconBadge } from '@/components/IconBadge';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { useColors } from '@/hooks/useColors';
@@ -31,6 +32,7 @@ export default function PitchOwnerScreen() {
     try {
       const [assignment, history] = await Promise.all([request('/me/pitch-owner'), request('/pitch-owner/submissions')]);
       setPitch(assignment); setSubmissions(history); setError('');
+      setForm((current) => ({ ...current, address: current.address || assignment.address || '' }));
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load your pitch.'); }
     finally { setLoading(false); }
   }, [request]);
@@ -53,13 +55,14 @@ export default function PitchOwnerScreen() {
     const durationMinutes = Number(form.durationMinutes); const capacity = Number(form.capacity);
     const priceHalalas = Math.round(Number(form.price) * 100); const compareAtPriceHalalas = Math.round(Number(form.compareAt) * 100);
     if (!startsAt || startsAt.getTime() <= Date.now()) { setError('Choose a future date and time in Riyadh time.'); return; }
-    if (pitch?.canManageAnyPitch && (!form.venueName.trim() || !form.neighborhood.trim() || !form.address.trim())) { setError('Add the pitch name, area, and address.'); return; }
+    if (!form.address.trim() || form.address.trim().length > 300) { setError('Add a full pitch address or a Google Maps link (up to 300 characters).'); return; }
+    if (pitch?.canManageAnyPitch && (!form.venueName.trim() || !form.neighborhood.trim())) { setError('Add the pitch name and area.'); return; }
     if (!/^\+?[0-9][0-9 ()-]{7,18}$/.test(form.contactPhone.trim())) { setError('Enter a contact phone number so the team can reach you.'); return; }
     if (!Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > 240 || !Number.isInteger(capacity) || capacity < 2 || capacity > 30 || !Number.isFinite(priceHalalas) || priceHalalas < 0 || !Number.isFinite(compareAtPriceHalalas) || compareAtPriceHalalas < priceHalalas) { setError('Check the duration, capacity, and player prices.'); return; }
     setBusy(true);
     try {
       const imageUrls = await uploadMatchImages(form.imageUrls, getToken);
-      await request('/pitch-owner/submissions', { method: 'POST', body: JSON.stringify({ ...(pitch?.canManageAnyPitch ? { venueName: form.venueName.trim(), neighborhood: form.neighborhood.trim(), address: form.address.trim() } : {}), startsAt: startsAt.toISOString(), durationMinutes, capacity, ageGroup: form.ageGroup, priceHalalas, compareAtPriceHalalas, contactPhone: form.contactPhone.trim(), refereeIncluded: form.refereeIncluded, waterIncluded: form.waterIncluded, imageUrls }) });
+      await request('/pitch-owner/submissions', { method: 'POST', body: JSON.stringify({ ...(pitch?.canManageAnyPitch ? { venueName: form.venueName.trim(), neighborhood: form.neighborhood.trim() } : {}), address: form.address.trim(), startsAt: startsAt.toISOString(), durationMinutes, capacity, ageGroup: form.ageGroup, priceHalalas, compareAtPriceHalalas, contactPhone: form.contactPhone.trim(), refereeIncluded: form.refereeIncluded, waterIncluded: form.waterIncluded, imageUrls }) });
       setForm(freshForm()); await load();
       Alert.alert('Request sent', 'Your match time is now waiting for admin review. It will appear in Discover only after approval.');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not submit the match request.'); }
@@ -69,14 +72,24 @@ export default function PitchOwnerScreen() {
   if (!pitch) return <Screen><BrandHeader back subtitle="PITCH OWNER DESK" /><EmptyState icon="lock" title="Pitch owner access needed." body={error || 'Ask KICKOFF to assign your account to a pitch.'} /></Screen>;
   return <Screen refreshing={false} onRefresh={() => { void load(); }}>
     <BrandHeader back subtitle="PITCH OWNER DESK" />
-    <Text style={[styles.kicker, { color: colors.primary }]}>{pitch.canManageAnyPitch ? 'OWNER ACCESS' : 'YOUR PITCH'}</Text>
-    <Text style={[styles.title, { color: colors.foreground }]}>{pitch.canManageAnyPitch ? 'Pitch desk.' : pitch.venueName}</Text>
-    <Text style={[styles.meta, { color: colors.mutedForeground }]}>{pitch.canManageAnyPitch ? 'You can submit a match for any pitch. Each submission still goes to admin review.' : `${pitch.neighborhood} · ${pitch.address}`}</Text>
-    <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as never)} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: 14, marginTop: 14 }}><Feather name="camera" size={16} color={colors.primaryForeground} /><Text style={{ color: colors.primaryForeground, fontSize: 12, fontWeight: '800' }}>Scan match check-in QR</Text></Pressable>
+    <View style={[styles.hero, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={styles.heroTop}><IconBadge name="map-pin" tone="pink" size="large" /><View style={[styles.heroTag, { backgroundColor: `${colors.cyan}20` }]}><Text style={[styles.heroTagText, { color: colors.cyan }]}>PITCH DESK</Text></View></View>
+      <Text style={[styles.kicker, { color: colors.primary }]}>{pitch.canManageAnyPitch ? 'OWNER ACCESS' : 'YOUR PITCH'}</Text>
+      <Text style={[styles.title, { color: colors.foreground }]}>{pitch.canManageAnyPitch ? 'Run your pitch.' : pitch.venueName}</Text>
+      <Text style={[styles.meta, { color: colors.mutedForeground }]}>{pitch.canManageAnyPitch ? 'Create match requests and manage check-ins from one place.' : `${pitch.neighborhood} · ${pitch.address}`}</Text>
+      <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as never)} style={({ pressed }) => [styles.scanButton, { backgroundColor: colors.primary, opacity: pressed ? .82 : 1 }]}><Feather name="camera" size={16} color={colors.primaryForeground} /><Text style={{ color: colors.primaryForeground, fontSize: 12, fontWeight: '800' }}>Scan player check-in</Text><Feather name="arrow-up-right" size={14} color={colors.primaryForeground} /></Pressable>
+    </View>
+    <View style={styles.quickStats}>
+      <QuickStat label="Needs review" value={String(submissions.filter((item) => item.status === 'pending').length)} tone={colors.orange} icon="clock" colors={colors} />
+      <QuickStat label="Approved" value={String(submissions.filter((item) => item.status === 'approved').length)} tone={colors.primary} icon="check-circle" colors={colors} />
+      <QuickStat label="Requests" value={String(submissions.length)} tone={colors.violet} icon="layers" colors={colors} />
+    </View>
     <View style={[styles.reviewNotice, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={[styles.noticeIcon, { backgroundColor: colors.secondary }]}><Feather name="clock" size={16} color={colors.primary} /></View><Text style={[styles.noticeCopy, { color: colors.mutedForeground }]}>Choose a match time for this pitch and send us your contact number. Your request stays private until an admin reviews it.</Text></View>
     <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Propose a match</Text>
-      {pitch.canManageAnyPitch ? <><Field label="PITCH NAME" value={form.venueName} onChangeText={(value) => change('venueName', value)} placeholder="Pitch name" /><Field label="AREA" value={form.neighborhood} onChangeText={(value) => change('neighborhood', value)} placeholder="Neighborhood" /><Field label="ADDRESS OR MAP LINK" value={form.address} onChangeText={(value) => change('address', value)} placeholder="Street address or Google Maps link" /></> : null}
+      {pitch.canManageAnyPitch ? <><Field label="PITCH NAME" value={form.venueName} onChangeText={(value) => change('venueName', value)} placeholder="Pitch name" /><Field label="AREA" value={form.neighborhood} onChangeText={(value) => change('neighborhood', value)} placeholder="Neighborhood" /></> : null}
+      <Field label="FULL ADDRESS OR GOOGLE MAPS LINK" value={form.address} onChangeText={(value) => change('address', value)} placeholder="Paste a Maps link or type the full address" />
+      <Text style={[styles.addressHint, { color: colors.mutedForeground }]}>Players will see this on the match page and can tap it to open directions.</Text>
       <Field label="MATCH DATE AND TIME · RIYADH" value={form.startsAt} onChangeText={(value) => change('startsAt', value)} placeholder="YYYY-MM-DDTHH:mm" />
       <Field label="CONTACT PHONE" value={form.contactPhone} onChangeText={(value) => change('contactPhone', value)} placeholder="+966 5X XXX XXXX" keyboardType="phone-pad" autoComplete="off" />
       <Text style={[styles.formGroupTitle, { color: colors.primary }]}>PLAYER AGE GROUP</Text><MatchAgeGroupPicker value={form.ageGroup} onChange={(ageGroup) => change('ageGroup', ageGroup)} />
@@ -95,11 +108,16 @@ export default function PitchOwnerScreen() {
     {submissions.length ? submissions.map((item) => <View key={item.id} style={[styles.submissionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.submissionTop}><View style={{ flex: 1 }}><Text style={[styles.submissionDate, { color: colors.foreground }]}>{formatRiyadhDateTime(item.startsAt)}</Text><Text style={[styles.meta, { color: colors.mutedForeground }]}>{item.durationMinutes} min · {item.capacity} players · ages {item.ageGroup.replace('-', '–')} · {formatSar(item.priceHalalas)} each</Text></View><View style={[styles.statusPill, { backgroundColor: item.status === 'approved' ? colors.accent : colors.secondary }]}><Text style={[styles.statusText, { color: item.status === 'approved' ? colors.primary : colors.mutedForeground }]}>{item.status.toUpperCase()}</Text></View></View>
       <Text style={[styles.meta, { color: colors.mutedForeground }]}>Contact: {item.contactPhone}</Text>
+      <Pressable accessibilityRole="link" accessibilityLabel={`Open map for ${item.venueName}`} onPress={() => void Linking.openURL(/^https?:\/\//i.test(item.address) ? item.address : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.venueName}, ${item.address}, Riyadh`)}`)} style={styles.addressLink}><IconBadge name="map" tone="cyan" size="small" /><View style={{ flex: 1 }}><Text style={[styles.addressCaption, { color: colors.cyan }]}>PITCH LOCATION · OPEN MAP</Text><Text numberOfLines={2} style={[styles.meta, { color: colors.foreground, marginTop: 2 }]}>{item.address}</Text></View><Feather name="arrow-up-right" size={15} color={colors.cyan} /></Pressable>
       {item.status === 'pending' ? <Text style={[styles.reviewCopy, { color: colors.mutedForeground }]}>Waiting for admin review. Not visible to players yet.</Text> : null}
       {item.status === 'rejected' ? <Text style={[styles.reviewCopy, { color: colors.destructive }]}>{item.reviewNote || 'Not approved. Contact the KICKOFF team if you need help.'}</Text> : null}
       {item.status === 'approved' && item.matchId ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/match-registration', params: { id: item.matchId! } })} style={[styles.openMatch, { borderColor: colors.border }]}><Text style={[styles.openMatchText, { color: colors.primary }]}>Open published match</Text><Feather name="arrow-up-right" size={14} color={colors.primary} /></Pressable> : null}
     </View>) : <Text style={[styles.meta, { color: colors.mutedForeground }]}>Submitted match times will appear here with their review status.</Text>}
   </Screen>;
+}
+
+function QuickStat({ label, value, tone, icon, colors }: { label: string; value: string; tone: string; icon: React.ComponentProps<typeof Feather>['name']; colors: ReturnType<typeof useColors> }) {
+  return <View style={[styles.quickStat, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={[styles.statIcon, { backgroundColor: `${tone}20` }]}><Feather name={icon} size={14} color={tone} /></View><Text style={[styles.statValue, { color: colors.foreground }]}>{value}</Text><Text numberOfLines={1} style={[styles.statLabel, { color: colors.mutedForeground }]}>{label}</Text></View>;
 }
 
 function OwnerToggle({ label, value, onPress, colors }: { label: string; value: boolean; onPress: () => void; colors: ReturnType<typeof useColors> }) {
@@ -108,6 +126,14 @@ function OwnerToggle({ label, value, onPress, colors }: { label: string; value: 
 
 const styles = StyleSheet.create({
   kicker: { fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginTop: 18 },
+  hero: { borderWidth: 1, borderRadius: 20, padding: 16, marginTop: 8, overflow: 'hidden' },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heroTag: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 }, heroTagText: { fontSize: 8, fontWeight: '900', letterSpacing: 1 },
+  scanButton: { minHeight: 46, borderRadius: 13, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 15 },
+  quickStats: { flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 2 },
+  quickStat: { flex: 1, minWidth: 0, borderWidth: 1, borderRadius: 15, padding: 10 },
+  statIcon: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }, statValue: { fontSize: 20, fontWeight: '900', marginTop: 8 }, statLabel: { fontSize: 9, fontWeight: '700', marginTop: 2 },
+  addressHint: { fontSize: 10, lineHeight: 15, marginTop: -7, marginBottom: 10 }, addressLink: { minHeight: 56, borderRadius: 12, backgroundColor: 'rgba(53,216,255,0.07)', padding: 9, flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 10 }, addressCaption: { fontSize: 8, letterSpacing: .7, fontWeight: '900' },
   title: { fontFamily: 'Georgia', fontSize: 30, marginTop: 6 },
   meta: { fontSize: 11, lineHeight: 17, marginTop: 5 },
   reviewNotice: { borderWidth: 1, borderRadius: 15, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 15, marginBottom: 14 },

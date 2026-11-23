@@ -1348,7 +1348,10 @@ router.post("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (r
   const email = access?.email ?? user?.primaryEmailAddress?.emailAddress ?? OWNER_EMAIL;
   const venueName = access?.venueName ?? (typeof req.body?.venueName === "string" ? req.body.venueName.trim() : "");
   const neighborhood = access?.neighborhood ?? (typeof req.body?.neighborhood === "string" ? req.body.neighborhood.trim() : "");
-  const address = access?.address ?? (typeof req.body?.address === "string" ? req.body.address.trim() : "");
+  // Pitch owners may update their map pin or full street address per match.
+  // Fall back to the assigned pitch address when they leave the field unchanged.
+  const submittedAddress = typeof req.body?.address === "string" ? req.body.address.trim() : "";
+  const address = submittedAddress || access?.address || "";
   if (!venueName || venueName.length > 120 || !neighborhood || neighborhood.length > 120 || !address || address.length > 300) { res.status(400).json({ error: "Add the pitch name, area, and address." }); return; }
   const contactPhone = typeof req.body?.contactPhone === "string" ? req.body.contactPhone.trim() : "";
   const startsAt = new Date(req.body?.startsAt);
