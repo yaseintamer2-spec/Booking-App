@@ -110,11 +110,12 @@ export default function MatchRegistrationScreen() {
   const router = useRouter();
   const { id: routeId, view: routeView } = useLocalSearchParams<{ id?: string; view?: string }>();
   const liveMatchId = Array.isArray(routeId) ? routeId[0] : routeId;
+  const localSampleMatch = isLocalPreviewMode && liveMatchId === matchRegistrationMock.match.id;
   const readOnly = routeView === 'played';
   const { getToken, userId } = useAuth();
   const { user: clerkUser } = useUser();
-  const remoteMatch = useGetMatch(liveMatchId || '', { query: { queryKey: getGetMatchQueryKey(liveMatchId || ''), enabled: !!liveMatchId } });
-  const account = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
+  const remoteMatch = useGetMatch(liveMatchId || '', { query: { queryKey: getGetMatchQueryKey(liveMatchId || ''), enabled: !!liveMatchId && !localSampleMatch } });
+  const account = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: !isLocalPreviewMode, retry: false } });
   const match = remoteMatch.data ? {
     ...matchRegistrationMock.match,
     id: remoteMatch.data.id,
@@ -171,7 +172,7 @@ export default function MatchRegistrationScreen() {
     matchRegistrationMock.participants,
   );
   useFocusEffect(useCallback(() => {
-    if (liveMatchId) return;
+    if (liveMatchId && !localSampleMatch) return;
     let active = true;
     void loadSampleParticipants().then((rows) => {
       if (!active) return;
@@ -185,7 +186,7 @@ export default function MatchRegistrationScreen() {
       setSelectedPitchSlots(mine?.pitchSlot == null ? [] : [mine.pitchSlot]);
     });
     return () => { active = false; };
-  }, [liveMatchId, currentUser.userId, currentUser.avatarUrl]));
+  }, [liveMatchId, localSampleMatch, currentUser.userId, currentUser.avatarUrl]));
   const [joinError, setJoinError] = useState<string | null>(null);
   const [positionPreference, setPositionPreference] =
     useState<PositionPreference>('anywhere');
@@ -207,6 +208,12 @@ export default function MatchRegistrationScreen() {
   const [profileError, setProfileError] = useState('');
 
   useEffect(() => {
+    if (localSampleMatch) {
+      setProfileStats(null);
+      setProfileError('Player stats are not available in the local match preview.');
+      setProfileLoading(false);
+      return;
+    }
     if (!profileParticipant) return;
     let active = true;
     setProfileStats(null); setProfileError(''); setProfileLoading(true);
@@ -216,10 +223,10 @@ export default function MatchRegistrationScreen() {
       .catch(error => { if (active) setProfileError(error instanceof Error ? error.message : 'Could not load player stats.'); })
       .finally(() => { if (active) setProfileLoading(false); });
     return () => { active = false; };
-  }, [profileParticipant]);
+  }, [profileParticipant, localSampleMatch]);
 
   useFocusEffect(useCallback(() => {
-    if (!liveMatchId) return;
+    if (!liveMatchId || localSampleMatch) return;
     let active = true;
     fetchWithTimeout(`${apiBaseUrl}/api/matches/${liveMatchId}/participants`, {}, 8_000)
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('Could not load players.')))
@@ -232,7 +239,7 @@ export default function MatchRegistrationScreen() {
       })
       .catch(() => { if (active) setJoinError('Could not load the live player list. Please try again.'); });
     return () => { active = false; };
-  }, [liveMatchId, currentUser.userId]));
+  }, [liveMatchId, localSampleMatch, currentUser.userId]));
   useEffect(() => {
     setParticipants((current) => current.map((participant) => participant.userId === currentUser.userId
         ? { ...participant, avatarUrl: currentUser.avatarUrl }
@@ -307,7 +314,7 @@ export default function MatchRegistrationScreen() {
     setJoinError(null);
     setJoining(true);
     try {
-      if (liveMatchId) {
+      if (liveMatchId && !localSampleMatch) {
         const token = await getToken();
         const response = await fetch(`${apiBaseUrl}/api/matches/${liveMatchId}/registrations`, {
           method: 'POST',
@@ -343,22 +350,31 @@ export default function MatchRegistrationScreen() {
         }
       } else {
         await mockJoinMatch(match.id, positionPreference);
-        const localTicket: ConfirmationTicket = {
-          id: `sample-${currentUser.userId}`,
-          firstName: currentUser.firstName,
-          pitchSlot: selectedPitchSlots[0],
-          value: `kickoff://sample-check-in?matchId=${encodeURIComponent(match.id)}&userId=${encodeURIComponent(currentUser.userId)}`,
-          expiresAt: new Date(new Date(match.startsAt).getTime() + match.durationHours * 60 * 60_000).toISOString(),
-        };
-        setParticipants((current) => {
-          const updated = current.some((participant) => participant.userId === currentUser.userId) ? current : [
-            ...current,
-            { userId: currentUser.userId, firstName: currentUser.firstName, avatarUrl: currentUser.avatarUrl, pitchSlot: selectedPitchSlots[0], positionPreference },
-          ];
-          void saveSampleParticipants(updated);
-          return updated;
+        const friendRows = normalizedFriendEmails.map((email, index) => {
+          const localPart = email.split('@')[0].replace(/[._-]+/g, ' ').trim();
+          const firstName = localPart.split(/\s+/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ') || `Friend ${index + 1}`;
+          return { userId: `sample-friend-${email.toLowerCase()}`, firstName, avatarUrl: null, pitchSlot: selectedPitchSlots[index + (friendOnlyBooking ? 0 : 1)], positionPreference: 'anywhere' as const };
         });
-        setConfirmationTickets([localTicket]);
+        const localAttendees = friendOnlyBooking ? friendRows : [
+          { userId: currentUser.userId, firstName: currentUser.firstName, avatarUrl: currentUser.avatarUrl, pitchSlot: selectedPitchSlots[0], positionPreference },
+          ...friendRows,
+        ];
+        const existingSamples = await loadSampleParticipants();
+        const existingIds = new Set(existingSamples.map((participant) => participant.userId));
+        const alreadyBooked = localAttendees.find((participant) => existingIds.has(participant.userId));
+        if (alreadyBooked) throw new Error(`${alreadyBooked.firstName} already has a place in this match.`);
+        const additions = localAttendees.filter((participant) => !existingIds.has(participant.userId));
+        const updated = [...existingSamples, ...additions];
+        setParticipants(updated);
+        await saveSampleParticipants(updated);
+        const expiresAt = new Date(new Date(match.startsAt).getTime() + match.durationHours * 60 * 60_000).toISOString();
+        setConfirmationTickets(localAttendees.map((attendee, index) => ({
+          id: `sample-${attendee.userId}`,
+          firstName: attendee.firstName,
+          pitchSlot: attendee.pitchSlot,
+          value: `kickoff://sample-check-in?matchId=${encodeURIComponent(match.id)}&userId=${encodeURIComponent(attendee.userId)}`,
+          expiresAt,
+        })));
       }
       setJoined(true);
       if (friendOnlyBooking) cancelFriendBooking();
@@ -372,6 +388,7 @@ export default function MatchRegistrationScreen() {
 
   const joinWaitlist = async () => {
     if (!liveMatchId || joining || waitlisted || isCancelled) return;
+    if (localSampleMatch) { setWaitlisted(true); setJoinError('You’re on the local preview waitlist. No notification will be sent.'); return; }
     setJoinError(null); setJoining(true);
     try {
       const token = await getToken(); const apiBase = apiBaseUrl;

@@ -22,3 +22,6 @@ run = [ "pnpm", "--filter", "@workspace/mobile", "run", "serve" ]
 [services.env]
 PORT = "18115"
 BASE_PATH = "/"
+# The API artifact is mounted on this same host under /api. Keep the Expo
+# preview on the same origin instead of pointing the browser at its own localhost.
+EXPO_PUBLIC_API_URL = "/"
