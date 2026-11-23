@@ -5,13 +5,24 @@ import type { RequestHandler } from "express";
 
 export const OWNER_EMAIL = "yaseintamer2@gmail.com";
 
-export const requireAuth: RequestHandler = (req, res, next) => {
+function authenticatedUserId(req: Parameters<RequestHandler>[0], res: Parameters<RequestHandler>[1]): string | null {
+  if (!process.env.CLERK_SECRET_KEY?.trim()) {
+    res.status(503).json({ error: "Authentication is not configured on the API. Add CLERK_SECRET_KEY to the server environment." });
+    return null;
+  }
+
   const { userId } = getAuth(req);
   if (!userId) {
     res.status(401).json({ error: "Sign in to continue." });
-    return;
+    return null;
   }
 
+  return userId;
+}
+
+export const requireAuth: RequestHandler = (req, res, next) => {
+  const userId = authenticatedUserId(req, res);
+  if (!userId) return;
   res.locals.userId = userId;
   next();
 };
@@ -64,19 +75,16 @@ export async function isPitchOwnerUser(userId: string): Promise<boolean> {
 }
 
 export const requireMatchStaff: RequestHandler = async (req, res, next) => {
-  const { userId } = getAuth(req);
-  if (!userId) { res.status(401).json({ error: "Sign in to continue." }); return; }
+  const userId = authenticatedUserId(req, res);
+  if (!userId) return;
   if (!(await isMatchStaffUser(userId))) { res.status(403).json({ error: "Match staff access is required." }); return; }
   res.locals.userId = userId;
   next();
 };
 
 export const requireAdmin: RequestHandler = async (req, res, next) => {
-  const { userId } = getAuth(req);
-  if (!userId) {
-    res.status(401).json({ error: "Sign in to continue." });
-    return;
-  }
+  const userId = authenticatedUserId(req, res);
+  if (!userId) return;
 
   if (!(await isAdminUser(userId))) {
     res.status(403).json({ error: "Administrator access is required." });
@@ -88,11 +96,8 @@ export const requireAdmin: RequestHandler = async (req, res, next) => {
 };
 
 export const requireOwner: RequestHandler = async (req, res, next) => {
-  const { userId } = getAuth(req);
-  if (!userId) {
-    res.status(401).json({ error: "Sign in to continue." });
-    return;
-  }
+  const userId = authenticatedUserId(req, res);
+  if (!userId) return;
   if (!(await isOwnerUser(userId))) {
     res.status(403).json({ error: "Only the application owner can manage admin access." });
     return;
@@ -102,8 +107,8 @@ export const requireOwner: RequestHandler = async (req, res, next) => {
 };
 
 export const requirePitchOwner: RequestHandler = async (req, res, next) => {
-  const { userId } = getAuth(req);
-  if (!userId) { res.status(401).json({ error: "Sign in to continue." }); return; }
+  const userId = authenticatedUserId(req, res);
+  if (!userId) return;
   if (!(await isPitchOwnerUser(userId))) { res.status(403).json({ error: "Pitch owner access is required." }); return; }
   res.locals.userId = userId;
   next();
