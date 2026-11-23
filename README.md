@@ -1,8 +1,28 @@
 # Booking-App
 
+KICKOFF is an Expo mobile/web app with a separate Express API. The API stores match and booking data in PostgreSQL; this project uses Supabase PostgreSQL for hosted data and Clerk for sign-in.
+
+## Deploy on Render
+
+This repository includes `render.yaml` for a Render Static Site (Expo web app) and a Render Web Service (API). Connect the GitHub repository in Render and create a Blueprint from the repository root. Render will ask for the secret environment values declared with `sync: false`.
+
+Set these values for the API service:
+
+- `DATABASE_URL`: the Supabase PostgreSQL connection URI. Use the Supabase Session Pooler URI if the direct connection cannot be reached from the host.
+- `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`: matching keys from the same Clerk instance.
+
+Set `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` for the static app to the same Clerk publishable key. The Blueprint obtains the public API URL from the API service and embeds it in the web build.
+
+For a production release, the API should run on an always-on plan. Free web services can sleep after 15 minutes without requests, which can delay the first request after sleep. Keep database and Clerk secrets in the hosting dashboard, never in Git or the static app bundle.
+
+Optional features require additional configuration:
+
+- Pitch photo uploads need the `OBJECT_STORAGE_*` API variables for an S3-compatible bucket such as Cloudflare R2.
+- Remote push notifications need the Expo/EAS project ID and Android/iOS push credentials.
+
 ## Run locally
 
-The app runs without Replit. The API server uses PostgreSQL for matches and bookings and Clerk for sign-in. In production, it can connect to Supabase PostgreSQL through its server-side `DATABASE_URL`.
+The API server uses PostgreSQL for matches and bookings and Clerk for sign-in. It can connect to Supabase PostgreSQL through its server-only `DATABASE_URL`.
 
 ### Prerequisites
 
@@ -43,7 +63,7 @@ The app runs without Replit. The API server uses PostgreSQL for matches and book
 
 Create a development application in the Clerk Dashboard and use its test keys locally. The Clerk application handles account identity; PostgreSQL holds match and booking data. Keep `.env` files private and never commit real keys.
 
-For production, set `DATABASE_URL` in the API server environment to the Supabase PostgreSQL connection string. Set `EXPO_PUBLIC_API_URL` in the mobile build environment to the hosted API server's HTTPS origin. The mobile app calls the custom `/api/...` routes on that server; the Supabase project URL is not a substitute for the API server URL. Keep the database connection string and Clerk secret key on the API server only.
+For production, the mobile app calls the custom `/api/...` routes on the hosted API server; the Supabase project URL is not a substitute for the API server URL. Keep the database connection string and Clerk secret key on the API server only.
 
 To open the app on a phone on the same network, set `EXPO_PUBLIC_API_URL` in the mobile `.env` to `http://<your-computer-LAN-IP>:5000`.
 
