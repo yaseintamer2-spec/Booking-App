@@ -99,6 +99,7 @@ export const registrationsTable = pgTable(
     firstName: text("first_name").notNull(),
     avatarUrl: text("avatar_url"),
     pitchSlot: integer("pitch_slot"),
+    liveTeam: text("live_team"),
     positionPreference: text("position_preference").notNull().default("anywhere"),
     status: text("status").notNull().default("joined"),
     paymentStatus: text("payment_status").notNull().default("unpaid"),
@@ -119,6 +120,7 @@ export const registrationsTable = pgTable(
     index("match_registrations_booker_status_idx").on(table.bookedByUserId, table.status),
     check("match_registrations_status_check", sql`${table.status} IN ('joined', 'waitlisted', 'offered', 'cancelled', 'checked_in')`),
     check("match_registrations_pitch_slot_check", sql`${table.pitchSlot} IS NULL OR (${table.pitchSlot} >= 0 AND ${table.pitchSlot} < 14)`),
+    check("match_registrations_live_team_check", sql`${table.liveTeam} IS NULL OR ${table.liveTeam} IN ('red', 'blue')`),
     check("match_registrations_position_check", sql`${table.positionPreference} IN ('anywhere', 'goalkeeper', 'defender', 'midfielder', 'attacker')`),
   ],
 );
@@ -155,6 +157,7 @@ export const matchEventsTable = pgTable(
     scorerName: text("scorer_name").notNull(),
     assistUserId: text("assist_user_id"),
     assistName: text("assist_name"),
+    suspensionMinutes: integer("suspension_minutes"),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     recordedByUserId: text("recorded_by_user_id").notNull(),
     voidedAt: timestamp("voided_at", { withTimezone: true }),
@@ -168,6 +171,7 @@ export const matchEventsTable = pgTable(
     check("match_events_team_check", sql`${table.team} IN ('red', 'blue')`),
     check("match_events_period_check", sql`${table.period} IN (1, 2)`),
     check("match_events_minute_check", sql`${table.minute} > 0`),
+    check("match_events_suspension_minutes_check", sql`${table.suspensionMinutes} IS NULL OR ${table.suspensionMinutes} IN (15, 30)`),
   ],
 );
 

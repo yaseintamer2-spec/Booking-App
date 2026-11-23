@@ -118,10 +118,47 @@ async function canControlLiveMatch(userId: string, refereeUserId: string | null,
   return refereeUserId === userId && refereeAssignmentStatus === "accepted" && await isMatchStaffUser(userId);
 }
 
-function teamForRegistration(player: { pitchSlot: number | null }, index: number, players: Array<{ pitchSlot: number | null }>, capacity: number): "red" | "blue" {
+function teamForRegistration(player: { pitchSlot: number | null; liveTeam?: string | null }, index: number, players: Array<{ pitchSlot: number | null; liveTeam?: string | null }>, capacity: number): "red" | "blue" {
+  if (player.liveTeam === "red" || player.liveTeam === "blue") return player.liveTeam;
   return player.pitchSlot == null
     ? index < Math.ceil(players.length / 2) ? "red" : "blue"
     : player.pitchSlot < Math.ceil(capacity / 2) ? "red" : "blue";
+}
+
+function shuffled<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const other = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[other]] = [copy[other], copy[index]];
+  }
+  return copy;
+}
+
+function balancePlayersByAge<T extends { userId: string; age: number | null }>(players: T[]): Array<{ userId: string; team: "red" | "blue" }> {
+  const groups = new Map<string, T[]>();
+  for (const player of players) {
+    const key = player.age == null ? "unknown" : String(player.age);
+    groups.set(key, [...(groups.get(key) ?? []), player]);
+  }
+  const orderedGroups = [...groups.entries()].sort(([left], [right]) => left.localeCompare(right));
+  let redCount = 0;
+  let blueCount = 0;
+  const assignments: Array<{ userId: string; team: "red" | "blue" }> = [];
+  for (const [, group] of orderedGroups) {
+    const split = shuffled(group);
+    let redInGroup = Math.floor(split.length / 2);
+    let blueInGroup = Math.floor(split.length / 2);
+    if (split.length % 2) {
+      if (redCount < blueCount || (redCount === blueCount && Math.random() < 0.5)) redInGroup += 1;
+      else blueInGroup += 1;
+    }
+    const redPlayers = shuffled(split).slice(0, redInGroup);
+    const redIds = new Set(redPlayers.map(player => player.userId));
+    for (const player of split) assignments.push({ userId: player.userId, team: redIds.has(player.userId) ? "red" : "blue" });
+    redCount += redInGroup;
+    blueCount += blueInGroup;
+  }
+  return assignments;
 }
 
 function resultForTeam(team: "red" | "blue", redScore: number, blueScore: number): "wins" | "draws" | "losses" {
@@ -153,7 +190,7 @@ async function getLiveMatchSnapshot(matchId: string) {
   const events = await db.select().from(matchEventsTable)
     .where(and(eq(matchEventsTable.matchId, matchId), isNull(matchEventsTable.voidedAt)))
     .orderBy(asc(matchEventsTable.createdAt));
-  const players = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, avatarUrl: registrationsTable.avatarUrl, pitchSlot: registrationsTable.pitchSlot })
+  const players = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, avatarUrl: registrationsTable.avatarUrl, pitchSlot: registrationsTable.pitchSlot, liveTeam: registrationsTable.liveTeam })
     .from(registrationsTable)
     .where(and(eq(registrationsTable.matchId, matchId), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
     .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
@@ -178,8 +215,8 @@ async function getLiveMatchSnapshot(matchId: string) {
     liveSecondHalfStartedAt: match.liveSecondHalfStartedAt,
     liveEndedAt: match.liveEndedAt,
     score: { red: redScore, blue: blueScore },
-    players: players.map((player, index) => ({ ...player, team: player.pitchSlot == null ? (index < Math.ceil(players.length / 2) ? "red" : "blue") : player.pitchSlot < Math.ceil(match.capacity / 2) ? "red" : "blue" })),
-    events: events.map((event) => ({ id: event.id, clientEventId: event.clientEventId, type: event.type, team: event.team, period: event.period, minute: event.minute, scorerUserId: event.scorerUserId, scorerName: event.scorerName, assistUserId: event.assistUserId, assistName: event.assistName, createdAt: event.createdAt })),
+    players: players.map((player, index) => ({ ...player, team: teamForRegistration(player, index, players, match.capacity) })),
+    events: events.map((event) => ({ id: event.id, clientEventId: event.clientEventId, type: event.type, team: event.team, period: event.period, minute: event.minute, scorerUserId: event.scorerUserId, scorerName: event.scorerName, assistUserId: event.assistUserId, assistName: event.assistName, suspensionMinutes: event.suspensionMinutes, occurredAt: event.occurredAt, createdAt: event.createdAt })),
     updatedAt: match.updatedAt,
   };
 }
@@ -566,6 +603,50 @@ router.get("/matches/:id/live", async (req, res): Promise<void> => {
   res.json(snapshot);
 });
 
+router.post("/matches/:id/live/teams/generate", requireAuth, async (req, res): Promise<void> => {
+  const params = GetMatchParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "A valid match ID is required." }); return; }
+  const userId = res.locals.userId as string;
+  const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
+  if (!match) { res.status(404).json({ error: "Match not found." }); return; }
+  if (!(await canControlLiveMatch(userId, match.refereeUserId, match.refereeAssignmentStatus))) { res.status(403).json({ error: "Only the assigned referee or an admin can balance teams." }); return; }
+  if (match.liveStatus !== "scheduled") { res.status(409).json({ error: "Generate or shuffle teams before kick-off. During the match, move players individually." }); return; }
+  const participants = await db.select({ userId: registrationsTable.userId, age: playerProfilesTable.age })
+    .from(registrationsTable)
+    .leftJoin(playerProfilesTable, eq(playerProfilesTable.userId, registrationsTable.userId))
+    .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`));
+  if (participants.length < 2) { res.status(409).json({ error: "At least two registered players are needed to make teams." }); return; }
+  const assignments = balancePlayersByAge(participants);
+  const generated = await db.transaction(async tx => {
+    const [lockedMatch] = await tx.select({ liveStatus: matchesTable.liveStatus }).from(matchesTable).where(eq(matchesTable.id, match.id)).for("update").limit(1);
+    if (!lockedMatch || lockedMatch.liveStatus !== "scheduled") return false;
+    for (const assignment of assignments) {
+      await tx.update(registrationsTable).set({ liveTeam: assignment.team, updatedAt: new Date() })
+        .where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.userId, assignment.userId)));
+    }
+    return true;
+  });
+  if (!generated) { res.status(409).json({ error: "Generate or shuffle teams before kick-off." }); return; }
+  res.json(await getLiveMatchSnapshot(match.id));
+});
+
+router.patch("/matches/:id/live/teams/:playerId", requireAuth, async (req, res): Promise<void> => {
+  const params = GetMatchParams.safeParse(req.params);
+  const playerId = paramId(req.params.playerId).trim();
+  const team = req.body?.team;
+  if (!params.success || !playerId || playerId.length > 128 || !["red", "blue"].includes(team)) { res.status(400).json({ error: "Choose a valid player and team." }); return; }
+  const userId = res.locals.userId as string;
+  const [match] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
+  if (!match) { res.status(404).json({ error: "Match not found." }); return; }
+  if (!(await canControlLiveMatch(userId, match.refereeUserId, match.refereeAssignmentStatus))) { res.status(403).json({ error: "Only the assigned referee or an admin can move players." }); return; }
+  if (match.liveStatus === "full_time") { res.status(409).json({ error: "Teams are locked after full time." }); return; }
+  const [player] = await db.update(registrationsTable).set({ liveTeam: team, updatedAt: new Date() })
+    .where(and(eq(registrationsTable.matchId, match.id), eq(registrationsTable.userId, playerId), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
+    .returning({ userId: registrationsTable.userId });
+  if (!player) { res.status(404).json({ error: "That player is not registered for this match." }); return; }
+  res.json(await getLiveMatchSnapshot(match.id));
+});
+
 router.get("/me/recent-matches", requireAuth, async (_req, res): Promise<void> => {
   const userId = res.locals.userId as string;
   const archiveAfter = new Date(Date.now() - MATCH_ARCHIVE_HOURS * 60 * 60_000);
@@ -665,6 +746,11 @@ router.post("/matches/:id/live/state", requireAuth, async (req, res): Promise<vo
   if (!(await canControlLiveMatch(userId, current.refereeUserId, current.refereeAssignmentStatus))) { res.status(403).json({ error: "Only the assigned referee after accepting the assignment, or an admin, can control this match." }); return; }
   const action = req.body?.action;
   const now = new Date();
+  if (action === "start_first_half") {
+    const participants = await db.select({ userId: registrationsTable.userId, liveTeam: registrationsTable.liveTeam }).from(registrationsTable)
+      .where(and(eq(registrationsTable.matchId, current.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`));
+    if (participants.length < 2 || participants.some(player => player.liveTeam == null)) { res.status(409).json({ error: "Generate balanced teams for at least two players before starting the first half." }); return; }
+  }
   const updated = await db.transaction(async (tx) => {
     const [match] = await tx.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).for("update").limit(1);
     if (!match || match.status !== "published") return null;
@@ -681,7 +767,7 @@ router.post("/matches/:id/live/state", requireAuth, async (req, res): Promise<vo
       return row;
     }
     if (action === "finish_match" && match.liveStatus === "second_half") {
-      const participants = await tx.select({ userId: registrationsTable.userId, pitchSlot: registrationsTable.pitchSlot }).from(registrationsTable)
+      const participants = await tx.select({ userId: registrationsTable.userId, pitchSlot: registrationsTable.pitchSlot, liveTeam: registrationsTable.liveTeam }).from(registrationsTable)
         .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
         .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
       const events = await tx.select().from(matchEventsTable)
@@ -692,9 +778,9 @@ router.post("/matches/:id/live/state", requireAuth, async (req, res): Promise<vo
         const goals = events.filter((event) => event.type === "goal" && event.scorerUserId === player.userId).length;
         const assists = events.filter((event) => event.type === "goal" && event.assistUserId === player.userId).length;
         const yellowCards = events.filter((event) => event.type === "yellow_card" && event.scorerUserId === player.userId).length;
-        const redCards = events.filter((event) => event.type === "red_card" && event.scorerUserId === player.userId).length;
+        const redCards = events.filter((event) => event.scorerUserId === player.userId && (event.type === "red_card" || event.suspensionMinutes != null)).length;
         const fairPlayPoints = Math.max(0, 100 - yellowCards * 10 - redCards * 25);
-        const playerTeam = player.pitchSlot == null ? (index < Math.ceil(participants.length / 2) ? "red" : "blue") : player.pitchSlot < Math.ceil(match.capacity / 2) ? "red" : "blue";
+        const playerTeam = teamForRegistration(player, index, participants, match.capacity);
         const wins = Number(redScore !== blueScore && ((playerTeam === "red") === (redScore > blueScore)));
         const draws = Number(redScore === blueScore);
         const losses = Number(redScore !== blueScore && ((playerTeam === "red") !== (redScore > blueScore)));
@@ -750,12 +836,12 @@ router.post("/matches/:id/live/events", requireAuth, async (req, res): Promise<v
   if (match.liveStatus === "scheduled" || (match.liveStatus === "halftime" && occurredAt >= (match.liveSecondHalfStartedAt ?? now)) || (match.liveStatus === "full_time" && (!match.liveEndedAt || occurredAt > match.liveEndedAt))) {
     res.status(409).json({ error: "The match is not in a playing phase." }); return;
   }
-  const registrations = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, pitchSlot: registrationsTable.pitchSlot })
+  const registrations = await db.select({ userId: registrationsTable.userId, firstName: registrationsTable.firstName, pitchSlot: registrationsTable.pitchSlot, liveTeam: registrationsTable.liveTeam })
     .from(registrationsTable).where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
     .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
   const scorer = registrations.find((player) => player.userId === scorerUserId);
   const assist = assistUserId ? registrations.find((player) => player.userId === assistUserId) : undefined;
-  const getPlayerTeam = (player: typeof registrations[number]) => player.pitchSlot == null ? (registrations.indexOf(player) < Math.ceil(registrations.length / 2) ? "red" : "blue") : player.pitchSlot < Math.ceil(match.capacity / 2) ? "red" : "blue";
+  const getPlayerTeam = (player: typeof registrations[number]) => teamForRegistration(player, registrations.indexOf(player), registrations, match.capacity);
   if (!scorer || getPlayerTeam(scorer) !== team || (assistUserId && (!assist || assist.userId === scorer.userId || getPlayerTeam(assist) !== team))) {
     res.status(400).json({ error: "Choose a player and assist from the selected team." }); return;
   }
@@ -766,17 +852,30 @@ router.post("/matches/:id/live/events", requireAuth, async (req, res): Promise<v
       .from(matchesTable).where(eq(matchesTable.id, match.id)).for("update").limit(1);
     if (!lockedMatch) return { inserted: false, afterEnd: false };
     if (lockedMatch.liveStatus === "full_time" && (!lockedMatch.liveEndedAt || occurredAt > lockedMatch.liveEndedAt)) return { inserted: false, afterEnd: true };
+    const activeSendingOffs = await tx.select({ occurredAt: matchEventsTable.occurredAt, suspensionMinutes: matchEventsTable.suspensionMinutes })
+      .from(matchEventsTable)
+      .where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.scorerUserId, scorer.userId), isNull(matchEventsTable.voidedAt), or(eq(matchEventsTable.type, "red_card"), sql`${matchEventsTable.suspensionMinutes} IS NOT NULL`)));
+    const activeTimeout = activeSendingOffs.some(card => card.suspensionMinutes != null && card.occurredAt.getTime() + card.suspensionMinutes * 60_000 > occurredAt.getTime());
+    if (activeTimeout) return { inserted: false, afterEnd: false, suspended: true };
+    let suspensionMinutes: number | null = null;
+    if (eventType === "yellow_card" || eventType === "red_card") {
+      const previousCards = await tx.select({ type: matchEventsTable.type, suspensionMinutes: matchEventsTable.suspensionMinutes })
+        .from(matchEventsTable).where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.scorerUserId, scorer.userId), isNull(matchEventsTable.voidedAt)));
+      const previousDismissals = previousCards.filter(card => card.type === "red_card" || card.suspensionMinutes != null).length;
+      const previousYellows = previousCards.filter(card => card.type === "yellow_card").length;
+      if (eventType === "red_card" || (eventType === "yellow_card" && previousYellows >= 1)) suspensionMinutes = previousDismissals >= 1 ? 30 : 15;
+    }
     const scoreEventsBefore = lockedMatch.liveStatus === "full_time" && eventType === "goal"
       ? await tx.select({ team: matchEventsTable.team }).from(matchEventsTable).where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.type, "goal"), isNull(matchEventsTable.voidedAt)))
       : [];
-    const [inserted] = await tx.insert(matchEventsTable).values({ matchId: match.id, clientEventId: clientEventId.trim(), type: eventType, team, period, minute, scorerUserId: scorer.userId, scorerName: scorer.firstName, assistUserId: assist?.userId ?? null, assistName: assist?.firstName ?? null, occurredAt, recordedByUserId: userId }).onConflictDoNothing({ target: [matchEventsTable.matchId, matchEventsTable.clientEventId] }).returning({ id: matchEventsTable.id });
+    const [inserted] = await tx.insert(matchEventsTable).values({ matchId: match.id, clientEventId: clientEventId.trim(), type: eventType, team, period, minute, scorerUserId: scorer.userId, scorerName: scorer.firstName, assistUserId: assist?.userId ?? null, assistName: assist?.firstName ?? null, suspensionMinutes, occurredAt, recordedByUserId: userId }).onConflictDoNothing({ target: [matchEventsTable.matchId, matchEventsTable.clientEventId] }).returning({ id: matchEventsTable.id });
     if (inserted && lockedMatch.liveStatus === "full_time") {
       if (eventType === "goal") {
         const beforeRed = scoreEventsBefore.filter(event => event.team === "red").length;
         const beforeBlue = scoreEventsBefore.filter(event => event.team === "blue").length;
         const afterRed = beforeRed + Number(team === "red");
         const afterBlue = beforeBlue + Number(team === "blue");
-        const players = await tx.select({ userId: registrationsTable.userId, pitchSlot: registrationsTable.pitchSlot }).from(registrationsTable)
+        const players = await tx.select({ userId: registrationsTable.userId, pitchSlot: registrationsTable.pitchSlot, liveTeam: registrationsTable.liveTeam }).from(registrationsTable)
           .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
           .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
         for (const [index, player] of players.entries()) {
@@ -795,16 +894,16 @@ router.post("/matches/:id/live/events", requireAuth, async (req, res): Promise<v
       }
       let fairPlayDelta = 0;
       if (eventType === "yellow_card" || eventType === "red_card") {
-        const oldCards = await tx.select({ type: matchEventsTable.type }).from(matchEventsTable)
+        const oldCards = await tx.select({ type: matchEventsTable.type, suspensionMinutes: matchEventsTable.suspensionMinutes }).from(matchEventsTable)
           .where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.scorerUserId, scorer.userId), isNull(matchEventsTable.voidedAt)));
         const oldYellow = oldCards.filter(card => card.type === "yellow_card").length - Number(eventType === "yellow_card");
-        const oldRed = oldCards.filter(card => card.type === "red_card").length - Number(eventType === "red_card");
-        fairPlayDelta = Math.max(0, 100 - (oldYellow + Number(eventType === "yellow_card")) * 10 - (oldRed + Number(eventType === "red_card")) * 25) - Math.max(0, 100 - oldYellow * 10 - oldRed * 25);
+        const oldRed = oldCards.filter(card => card.type === "red_card" || card.suspensionMinutes != null).length - Number(suspensionMinutes != null);
+        fairPlayDelta = Math.max(0, 100 - (oldYellow + Number(eventType === "yellow_card")) * 10 - (oldRed + Number(suspensionMinutes != null)) * 25) - Math.max(0, 100 - oldYellow * 10 - oldRed * 25);
       }
       await tx.update(playerCareerStatsTable).set({
         goals: sql`${playerCareerStatsTable.goals} + ${Number(eventType === "goal")}`,
         yellowCards: sql`${playerCareerStatsTable.yellowCards} + ${Number(eventType === "yellow_card")}`,
-        redCards: sql`${playerCareerStatsTable.redCards} + ${Number(eventType === "red_card")}`,
+        redCards: sql`${playerCareerStatsTable.redCards} + ${Number(eventType === "red_card" || suspensionMinutes != null)}`,
         fairPlayPoints: sql`${playerCareerStatsTable.fairPlayPoints} + ${fairPlayDelta}`,
         updatedAt: now,
       }).where(eq(playerCareerStatsTable.userId, scorer.userId));
@@ -812,6 +911,7 @@ router.post("/matches/:id/live/events", requireAuth, async (req, res): Promise<v
     }
     return { inserted: Boolean(inserted), afterEnd: false };
   });
+  if (insertResult.suspended) { res.status(409).json({ error: "That player is still serving a temporary red-card timeout." }); return; }
   if (insertResult.afterEnd) { res.status(400).json({ error: "This event happened after the match ended." }); return; }
   res.status(201).json(await getLiveMatchSnapshot(match.id));
 });
@@ -831,16 +931,22 @@ router.delete("/matches/:id/live/events/:eventId", requireAuth, async (req, res)
     if (!lockedMatch) return null;
     const [current] = await tx.select().from(matchEventsTable).where(and(eq(matchEventsTable.id, eventId), eq(matchEventsTable.matchId, match.id), isNull(matchEventsTable.voidedAt))).for("update").limit(1);
     if (!current) return null;
+    if (current.type === "yellow_card" && current.suspensionMinutes == null) {
+      const [laterDismissal] = await tx.select({ id: matchEventsTable.id }).from(matchEventsTable)
+        .where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.scorerUserId, current.scorerUserId), eq(matchEventsTable.type, "yellow_card"), sql`${matchEventsTable.suspensionMinutes} IS NOT NULL`, gt(matchEventsTable.occurredAt, current.occurredAt), isNull(matchEventsTable.voidedAt))).limit(1);
+      if (laterDismissal) return { blockedBySecondYellow: true } as const;
+    }
     const scoreEventsBefore = lockedMatch.liveStatus === "full_time" && current.type === "goal"
       ? await tx.select({ team: matchEventsTable.team }).from(matchEventsTable).where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.type, "goal"), isNull(matchEventsTable.voidedAt)))
       : [];
     let fairPlayDelta = 0;
     if (lockedMatch.liveStatus === "full_time" && (current.type === "yellow_card" || current.type === "red_card")) {
-      const cards = await tx.select({ type: matchEventsTable.type }).from(matchEventsTable)
+      const cards = await tx.select({ type: matchEventsTable.type, suspensionMinutes: matchEventsTable.suspensionMinutes }).from(matchEventsTable)
         .where(and(eq(matchEventsTable.matchId, match.id), eq(matchEventsTable.scorerUserId, current.scorerUserId), isNull(matchEventsTable.voidedAt)));
       const oldYellow = cards.filter(card => card.type === "yellow_card").length;
-      const oldRed = cards.filter(card => card.type === "red_card").length;
-      fairPlayDelta = Math.max(0, 100 - (oldYellow - Number(current.type === "yellow_card")) * 10 - (oldRed - Number(current.type === "red_card")) * 25) - Math.max(0, 100 - oldYellow * 10 - oldRed * 25);
+      const oldRed = cards.filter(card => card.type === "red_card" || card.suspensionMinutes != null).length;
+      const wasDismissed = current.type === "red_card" || current.suspensionMinutes != null;
+      fairPlayDelta = Math.max(0, 100 - (oldYellow - Number(current.type === "yellow_card")) * 10 - (oldRed - Number(wasDismissed)) * 25) - Math.max(0, 100 - oldYellow * 10 - oldRed * 25);
     }
     const [removed] = await tx.update(matchEventsTable).set({ voidedAt, voidedByUserId: userId })
       .where(eq(matchEventsTable.id, current.id)).returning({ id: matchEventsTable.id });
@@ -850,7 +956,7 @@ router.delete("/matches/:id/live/events/:eventId", requireAuth, async (req, res)
         const beforeBlue = scoreEventsBefore.filter(entry => entry.team === "blue").length;
         const afterRed = beforeRed - Number(current.team === "red");
         const afterBlue = beforeBlue - Number(current.team === "blue");
-        const players = await tx.select({ userId: registrationsTable.userId, pitchSlot: registrationsTable.pitchSlot }).from(registrationsTable)
+        const players = await tx.select({ userId: registrationsTable.userId, pitchSlot: registrationsTable.pitchSlot, liveTeam: registrationsTable.liveTeam }).from(registrationsTable)
           .where(and(eq(registrationsTable.matchId, match.id), sql`${registrationsTable.status} IN ('joined', 'checked_in')`))
           .orderBy(asc(registrationsTable.pitchSlot), asc(registrationsTable.createdAt));
         for (const [index, player] of players.entries()) {
@@ -870,15 +976,16 @@ router.delete("/matches/:id/live/events/:eventId", requireAuth, async (req, res)
       await tx.update(playerCareerStatsTable).set({
         goals: sql`${playerCareerStatsTable.goals} - ${Number(current.type === "goal")}`,
         yellowCards: sql`${playerCareerStatsTable.yellowCards} - ${Number(current.type === "yellow_card")}`,
-        redCards: sql`${playerCareerStatsTable.redCards} - ${Number(current.type === "red_card")}`,
+        redCards: sql`${playerCareerStatsTable.redCards} - ${Number(current.type === "red_card" || current.suspensionMinutes != null)}`,
         fairPlayPoints: sql`${playerCareerStatsTable.fairPlayPoints} + ${fairPlayDelta}`,
         updatedAt: voidedAt,
       }).where(eq(playerCareerStatsTable.userId, current.scorerUserId));
       if (current.assistUserId && current.type === "goal") await tx.update(playerCareerStatsTable).set({ assists: sql`${playerCareerStatsTable.assists} - 1`, updatedAt: voidedAt }).where(eq(playerCareerStatsTable.userId, current.assistUserId));
     }
-    return removed;
+    return removed ? { blockedBySecondYellow: false, id: removed.id } as const : null;
   });
   if (!event) { res.status(404).json({ error: "That event is already removed or could not be found." }); return; }
+  if ("blockedBySecondYellow" in event && event.blockedBySecondYellow) { res.status(409).json({ error: "Undo the second-yellow sending-off first, then undo this earlier yellow card." }); return; }
   res.json(await getLiveMatchSnapshot(match.id));
 });
 
