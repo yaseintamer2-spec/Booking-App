@@ -26,7 +26,7 @@ export default function HomeScreen() {
     <View style={styles.greeting}><Text style={[styles.hello, { color: colors.cyan }]}>GOOD EVENING{user.data?.name ? `, ${user.data.name.split(' ')[0].toUpperCase()}` : ''}  ·  READY TO PLAY?</Text><Text style={[styles.headline, { color: colors.foreground }]}>Your next game{ '\n' }starts here.</Text></View>
     <ImageBackground source={homeHeroImage} resizeMode="cover" style={styles.hero} imageStyle={styles.heroImage}>
       <View style={[StyleSheet.absoluteFill, styles.heroShade]} />
-      <View style={[styles.heroTop, { backgroundColor: 'rgba(18,10,51,.78)' }]}><View style={styles.heroTag}><View style={[styles.liveDot, { backgroundColor: colors.primary }]} /><Text style={styles.heroTagText}>RIYADH · 7V7</Text></View><IconBadge name="zap" tone="yellow" size="medium" /></View>
+      <View style={styles.heroTop}><Text style={styles.heroTagText}>RIYADH · 7V7</Text></View>
       <View style={styles.heroBottom}><View style={{ flex: 1 }}><Text style={[styles.heroTitle, { color: colors.foreground }]}>Good football.{ '\n' }Good people.</Text><Text style={[styles.heroCopy, { color: '#E7E2F8' }]}>Show up. Play hard. Leave the group chat behind.</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Explore available matches" onPress={() => router.push('/(tabs)/matches')} style={[styles.heroButton, { backgroundColor: colors.primary }]}><Feather name="arrow-up-right" size={21} color={colors.primaryForeground} /></Pressable></View>
     </ImageBackground>
 
@@ -41,9 +41,10 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   greeting: { marginTop: 10, marginBottom: 20 }, hello: { fontSize: 9, letterSpacing: 1.45, fontWeight: '800' }, headline: { fontFamily: 'Georgia', fontSize: 38, lineHeight: 42, marginTop: 9 },
-  hero: { height: 292, padding: 17, justifyContent: 'space-between', overflow: 'hidden', borderRadius: 24 }, heroImage: { borderRadius: 24 }, heroShade: { backgroundColor: 'rgba(18,10,51,.55)' }, heroTop: { minHeight: 54, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 17 }, heroTag: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 8, paddingRight: 10 }, liveDot: { width: 8, height: 8, borderRadius: 4 }, heroTagText: { color: 'white', fontSize: 10, fontWeight: '900', letterSpacing: 1.25 }, heroBottom: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 }, heroTitle: { fontFamily: 'Georgia', fontSize: 28, lineHeight: 31, fontWeight: '700' }, heroCopy: { fontSize: 11, lineHeight: 16, marginTop: 8, maxWidth: 240 }, heroButton: { width: 48, height: 48, borderRadius: 17, justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
+  hero: { height: 292, padding: 17, justifyContent: 'space-between', overflow: 'hidden', borderRadius: 24 }, heroImage: { borderRadius: 24 }, heroShade: { backgroundColor: 'rgba(18,10,51,.55)' }, heroTop: { minHeight: 24, alignItems: 'flex-start', justifyContent: 'center' }, heroTagText: { color: 'white', fontSize: 10, fontWeight: '900', letterSpacing: 1.25, textShadowColor: 'rgba(0,0,0,.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 5 }, heroBottom: { flexDirection: 'row', alignItems: 'flex-end', gap: 12 }, heroTitle: { fontFamily: 'Georgia', fontSize: 28, lineHeight: 31, fontWeight: '700' }, heroCopy: { fontSize: 11, lineHeight: 16, marginTop: 8, maxWidth: 240 }, heroButton: { width: 48, height: 48, borderRadius: 17, justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
   quickGrid: { flexDirection: 'row', gap: 9, marginTop: 13 }, quickTile: { flex: 1, minHeight: 126, borderWidth: 1, borderRadius: 18, padding: 10, justifyContent: 'flex-start' }, quickTitle: { fontSize: 12, fontWeight: '800', marginTop: 10 }, quickCaption: { fontSize: 9, lineHeight: 13, marginTop: 3 }, quickArrow: { position: 'absolute', top: 13, right: 10 },
   note: { borderWidth: 1, borderRadius: 17, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 5, marginBottom: 12 }, noteText: { flex: 1, fontSize: 10, lineHeight: 16 },
 });
+
 
 
