@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ImageBackground, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@clerk/expo';
@@ -12,8 +12,6 @@ import { useColors } from '@/hooks/useColors';
 import { getRecommendedMatchAgeGroup } from '@/lib/matchAge';
 import { sampleMatchListing } from '@/data/matchRegistrationMock';
 import { isLocalPreviewMode } from '@/lib/localPreview';
-import { IconBadge } from '@/components/IconBadge';
-import { homeHeroImage } from '@/components/KickoffUI';
 import { usePublicMatches } from '@/hooks/usePublicMatches';
 
 type DayFilter = 'Any day' | 'Today' | 'Tomorrow' | 'This week';
@@ -191,24 +189,20 @@ export default function MatchesScreen() {
   };
 
   return <Screen refreshing={matches.isRefetching} onRefresh={() => { void matches.refetch(); }}>
-    <BrandHeader user={user.data} subtitle="FIND YOUR GAME" />
-    <ImageBackground source={homeHeroImage} resizeMode="cover" style={styles.discoverHero} imageStyle={styles.discoverHeroImage}>
-      <View style={[StyleSheet.absoluteFill, styles.discoverShade]} />
-      <View style={styles.discoverHeroTop}><Text style={styles.heroKicker}>KICKOFF / RIYADH</Text><IconBadge name="compass" tone="cyan" size="medium" /></View>
-      <View><Text style={styles.discoverTitle}>Find your{ '\n' }next game.</Text><Text style={styles.discoverSub}>Real pitches. Good people. Game on.</Text></View>
-    </ImageBackground>
-    <Pressable accessibilityRole="button" onPress={() => router.push('/player-age' as never)} style={[styles.ageLink, { backgroundColor: `${colors.violet}20`, borderColor: `${colors.violet}44` }]}><IconBadge name="user" tone="violet" size="small" /><Text style={{ flex: 1, fontSize: 11, fontWeight: '700', color: colors.foreground }}>{playerAge == null ? 'Add your age for match recommendations' : `Age ${playerAge} · ${recommendedAgeGroup ? `recommended group ${recommendedAgeGroup.replace('-', '–')}` : 'edit age'}`}</Text><Feather name="arrow-up-right" size={14} color={colors.violet} /></Pressable>
+    <BrandHeader user={user.data} subtitle="RIYADH" />
+    <View style={styles.pageHeading}><Text style={[styles.pageTitle, { color: colors.foreground }]}>Find a match</Text><Text style={[styles.pageDescription, { color: colors.mutedForeground }]}>Compare pitch photos, kickoff times, and places available before you book.</Text></View>
+    <Pressable accessibilityRole="button" onPress={() => router.push('/player-age' as never)} style={[styles.ageLink, { backgroundColor: `${colors.violet}12`, borderColor: `${colors.violet}44` }]}><Feather name="user" size={16} color={colors.violet} /><Text style={{ flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '700', color: colors.foreground }}>{playerAge == null ? 'Set your age to see recommended matches' : `Age ${playerAge} · ${recommendedAgeGroup ? `recommended group ${recommendedAgeGroup.replace('-', '–')}` : 'update age'}`}</Text><Feather name="chevron-right" size={17} color={colors.violet} /></Pressable>
 
     <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <IconBadge name="search" tone="cyan" size="small" />
+      <Feather name="search" size={18} color={colors.cyan} />
       <TextInput accessibilityLabel="Search matches by venue, area, or address" value={query} onChangeText={setQuery} autoCapitalize="none" autoCorrect={false} placeholder="Venue, area, or address" placeholderTextColor={colors.mutedForeground} style={[styles.searchInput, { color: colors.foreground }]} />
     </View>
 
     <View style={[styles.alertRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <IconBadge name="bell" tone="yellow" size="medium" />
+      <Feather name="bell" size={19} color={colors.yellow} />
       <View style={styles.alertCopy}>
         <Text style={[styles.alertTitle, { color: colors.foreground }]}>New match alerts</Text>
-        <Text numberOfLines={2} style={[styles.alertDescription, { color: colors.mutedForeground }]}>{matchAlertsMessage || (matchAlertsEnabled ? 'Get reminders before kickoff and an alert when a new game is posted.' : 'Get reminders before kickoff and an alert when a new game is posted.')}</Text>
+        <Text numberOfLines={2} style={[styles.alertDescription, { color: colors.mutedForeground }]}>{matchAlertsMessage || 'Get new-match alerts and reminders before kickoff.'}</Text>
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel={matchAlertsEnabled ? 'Turn off new match alerts' : 'Alert me when a new match is available'} accessibilityState={{ disabled: matchAlertsLoading || matchAlertsBusy, selected: matchAlertsEnabled, busy: matchAlertsBusy }} disabled={matchAlertsLoading || matchAlertsBusy} onPress={() => void toggleMatchAlerts()} style={[styles.alertButton, { backgroundColor: matchAlertsEnabled ? colors.secondary : colors.primary, borderColor: matchAlertsEnabled ? colors.border : colors.primary, opacity: matchAlertsLoading || matchAlertsBusy ? 0.6 : 1 }]}>
         <Text style={[styles.alertButtonText, { color: matchAlertsEnabled ? colors.foreground : colors.primaryForeground }]}>{matchAlertsLoading ? 'Loading…' : matchAlertsBusy ? 'Saving…' : matchAlertsEnabled ? 'Alerts on' : 'Alert me'}</Text>
@@ -218,7 +212,7 @@ export default function MatchesScreen() {
 
     <View style={[styles.filterBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Pressable accessibilityRole="button" accessibilityLabel={`Open match filters${activeFilterCount ? `, ${activeFilterCount} active` : ''}`} accessibilityState={{ expanded: filtersOpen }} onPress={() => setFiltersOpen(true)} style={[styles.filterOpenButton, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-        <IconBadge name="sliders" tone="cyan" size="small" /><Text style={[styles.filterOpenText, { color: colors.foreground }]}>Filters</Text>{activeFilterCount > 0 ? <View style={[styles.filterCount, { backgroundColor: colors.pink }]}><Text style={[styles.filterCountText, { color: colors.background }]}>{activeFilterCount}</Text></View> : null}
+        <Feather name="sliders" size={16} color={colors.cyan} /><Text style={[styles.filterOpenText, { color: colors.foreground }]}>Filters</Text>{activeFilterCount > 0 ? <View style={[styles.filterCount, { backgroundColor: colors.pink }]}><Text style={[styles.filterCountText, { color: colors.background }]}>{activeFilterCount}</Text></View> : null}
       </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={`Sort matches by ${sortBy === 'soonest' ? 'soonest' : 'most available spots'}. Tap to change.`} onPress={() => setSortBy(value => value === 'soonest' ? 'most-spots' : 'soonest')} style={[styles.sortButton, { backgroundColor: colors.secondary, borderColor: colors.border }]}><Feather name="bar-chart-2" size={15} color={colors.violet} /><Text style={[styles.sortButtonText, { color: colors.foreground }]}>{sortBy === 'soonest' ? 'Soonest' : 'Most spots'}</Text><Feather name="chevron-down" size={14} color={colors.mutedForeground} /></Pressable>
     </View>
@@ -243,9 +237,8 @@ export default function MatchesScreen() {
     <Modal transparent visible={pushPromptOpen} animationType="fade" onRequestClose={() => setPushPromptOpen(false)}>
       <View style={styles.pushBackdrop}>
         <View style={[styles.pushCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <IconBadge name="bell" tone="yellow" size="large" />
-          <Text style={[styles.pushTitle, { color: colors.foreground }]}>Never miss kickoff.</Text>
-          <Text style={[styles.pushDescription, { color: colors.mutedForeground }]}>Allow notifications for a heads-up before your match and when new games are ready to join. You can change this anytime.</Text>
+          <Text style={[styles.pushTitle, { color: colors.foreground }]}>Get match reminders?</Text>
+          <Text style={[styles.pushDescription, { color: colors.mutedForeground }]}>Notifications can remind you before kickoff and let you know when a new match is posted. They’re optional and can be changed later.</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Allow notifications" accessibilityState={{ busy: matchAlertsBusy }} disabled={matchAlertsBusy} onPress={() => void allowMatchPush()} style={[styles.pushAllow, { backgroundColor: colors.primary, opacity: matchAlertsBusy ? .65 : 1 }]}>
             <Text style={[styles.pushAllowText, { color: colors.primaryForeground }]}>{matchAlertsBusy ? 'Setting up…' : 'Allow notifications'}</Text>
           </Pressable>
@@ -266,29 +259,23 @@ function FilterChip({ label, selected, onPress, colors, compact = false }: { lab
 }
 
 const styles = StyleSheet.create({
-  discoverHero: { minHeight: 220, borderRadius: 23, overflow: 'hidden', padding: 17, justifyContent: 'space-between', marginTop: 8 },
-  discoverHeroImage: { borderRadius: 23 }, discoverShade: { backgroundColor: 'rgba(18,10,51,.56)' },
-  discoverHeroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, heroKicker: { color: '#E8E1FF', fontSize: 9, letterSpacing: 1.5, fontWeight: '900' },
-  discoverTitle: { color: 'white', fontSize: 32, fontFamily: 'Georgia', lineHeight: 35, fontWeight: '700' }, discoverSub: { color: '#E8E1FF', fontSize: 11, marginTop: 7 },
-  ageLink: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderRadius: 15, marginTop: 10, marginBottom: 15 },
-  kicker: { fontSize: 10, letterSpacing: 1.8, fontWeight: '700', marginTop: 12 },
-  title: { fontSize: 31, fontFamily: 'Georgia', marginTop: 8 },
-  sub: { fontSize: 13, marginTop: 6, marginBottom: 22 },
+  pageHeading: { marginTop: 7, marginBottom: 13 },
+  pageTitle: { fontSize: 27, lineHeight: 33, fontWeight: '800' },
+  pageDescription: { fontSize: 14, lineHeight: 20, marginTop: 5 },
+  ageLink: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderRadius: 14, marginBottom: 12 },
   searchBox: { height: 50, borderWidth: 1, borderRadius: 14, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 10 },
   searchInput: { flex: 1, fontSize: 13 },
-  alertRow: { minHeight: 76, borderWidth: 1, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
-  alertIcon: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  alertRow: { minHeight: 64, borderWidth: 1, borderRadius: 14, paddingHorizontal: 13, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 11 },
   alertCopy: { flex: 1, gap: 4 },
-  alertTitle: { fontSize: 12, fontWeight: '800' },
-  alertDescription: { fontSize: 10, lineHeight: 14 },
+  alertTitle: { fontSize: 13, fontWeight: '800' },
+  alertDescription: { fontSize: 12, lineHeight: 17 },
   alertButton: { minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   alertButtonText: { fontSize: 11, fontWeight: '800' },
   alertStatus: { fontSize: 11, lineHeight: 16, marginTop: 6, marginHorizontal: 4 },
   pushBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,.72)', justifyContent: 'center', alignItems: 'center', padding: 22 },
-  pushCard: { width: '100%', maxWidth: 390, borderWidth: 1, borderRadius: 24, padding: 22, alignItems: 'center' },
-  pushIcon: { width: 54, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
-  pushTitle: { fontSize: 24, lineHeight: 30, fontFamily: 'Georgia', fontWeight: '700', textAlign: 'center' },
-  pushDescription: { fontSize: 13, lineHeight: 20, textAlign: 'center', marginTop: 9, marginBottom: 18 },
+  pushCard: { width: '100%', maxWidth: 390, borderWidth: 1, borderRadius: 18, padding: 22, alignItems: 'stretch' },
+  pushTitle: { fontSize: 21, lineHeight: 27, fontWeight: '800', textAlign: 'left' },
+  pushDescription: { fontSize: 14, lineHeight: 21, textAlign: 'left', marginTop: 9, marginBottom: 18 },
   pushAllow: { minHeight: 50, width: '100%', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   pushAllowText: { fontSize: 13, fontWeight: '800' },
   pushLater: { minHeight: 48, width: '100%', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
@@ -308,10 +295,10 @@ const styles = StyleSheet.create({
   filterSheet: { width: '100%', maxWidth: 560, alignSelf: 'center', borderWidth: 1, borderBottomWidth: 0, borderTopLeftRadius: 26, borderTopRightRadius: 26, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 26 },
   sheetHandle: { width: 42, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 18 },
   sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  sheetTitle: { fontSize: 22, fontFamily: 'Georgia', fontWeight: '700' },
-  sheetSubtitle: { fontSize: 11, marginTop: 4 },
+  sheetTitle: { fontSize: 21, fontWeight: '800' },
+  sheetSubtitle: { fontSize: 13, marginTop: 4 },
   sheetClose: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  sheetLabel: { fontSize: 9, letterSpacing: 1.3, fontWeight: '900', marginBottom: 9 },
+  sheetLabel: { fontSize: 11, letterSpacing: .3, fontWeight: '800', marginBottom: 9 },
   sheetOptionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   sheetSpotRow: { flexDirection: 'row', gap: 8 },
   filter: { flexBasis: '48%', minHeight: 46, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 7 },

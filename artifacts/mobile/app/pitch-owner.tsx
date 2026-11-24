@@ -5,7 +5,6 @@ import { useAuth } from '@clerk/expo';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { BrandHeader, Button, EmptyState, Field, LoadingState, Screen, formatRiyadhDateTime, formatSar, parseRiyadhLocalInput, toRiyadhLocalInput } from '@/components/KickoffUI';
-import { IconBadge } from '@/components/IconBadge';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { useColors } from '@/hooks/useColors';
@@ -73,16 +72,14 @@ export default function PitchOwnerScreen() {
   return <Screen refreshing={false} onRefresh={() => { void load(); }}>
     <BrandHeader back subtitle="PITCH OWNER DESK" />
     <View style={[styles.hero, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={styles.heroTop}><IconBadge name="map-pin" tone="pink" size="large" /><View style={[styles.heroTag, { backgroundColor: `${colors.cyan}20` }]}><Text style={[styles.heroTagText, { color: colors.cyan }]}>PITCH DESK</Text></View></View>
-      <Text style={[styles.kicker, { color: colors.primary }]}>{pitch.canManageAnyPitch ? 'OWNER ACCESS' : 'YOUR PITCH'}</Text>
-      <Text style={[styles.title, { color: colors.foreground }]}>{pitch.canManageAnyPitch ? 'Run your pitch.' : pitch.venueName}</Text>
-      <Text style={[styles.meta, { color: colors.mutedForeground }]}>{pitch.canManageAnyPitch ? 'Create match requests and manage check-ins from one place.' : `${pitch.neighborhood} · ${pitch.address}`}</Text>
+      <Text style={[styles.title, { color: colors.foreground }]}>{pitch.canManageAnyPitch ? 'Pitch owner desk' : pitch.venueName}</Text>
+      <Text style={[styles.meta, { color: colors.mutedForeground }]}>{pitch.canManageAnyPitch ? 'Create a match request or scan tickets for check-in.' : `${pitch.neighborhood} · ${pitch.address}`}</Text>
       <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as never)} style={({ pressed }) => [styles.scanButton, { backgroundColor: colors.primary, opacity: pressed ? .82 : 1 }]}><Feather name="camera" size={16} color={colors.primaryForeground} /><Text style={{ color: colors.primaryForeground, fontSize: 12, fontWeight: '800' }}>Scan player check-in</Text><Feather name="arrow-up-right" size={14} color={colors.primaryForeground} /></Pressable>
     </View>
-    <View style={styles.quickStats}>
-      <QuickStat label="Needs review" value={String(submissions.filter((item) => item.status === 'pending').length)} tone={colors.orange} icon="clock" colors={colors} />
-      <QuickStat label="Approved" value={String(submissions.filter((item) => item.status === 'approved').length)} tone={colors.primary} icon="check-circle" colors={colors} />
-      <QuickStat label="Requests" value={String(submissions.length)} tone={colors.violet} icon="layers" colors={colors} />
+    <View style={[styles.quickStats, { borderColor: colors.border }]}>
+      <QuickStat label="Needs review" value={String(submissions.filter((item) => item.status === 'pending').length)} tone={colors.orange} colors={colors} />
+      <QuickStat label="Approved" value={String(submissions.filter((item) => item.status === 'approved').length)} tone={colors.primary} colors={colors} />
+      <QuickStat label="Requests" value={String(submissions.length)} tone={colors.violet} colors={colors} />
     </View>
     <View style={[styles.reviewNotice, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={[styles.noticeIcon, { backgroundColor: colors.secondary }]}><Feather name="clock" size={16} color={colors.primary} /></View><Text style={[styles.noticeCopy, { color: colors.mutedForeground }]}>Choose a match time for this pitch and send us your contact number. Your request stays private until an admin reviews it.</Text></View>
     <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -108,7 +105,7 @@ export default function PitchOwnerScreen() {
     {submissions.length ? submissions.map((item) => <View key={item.id} style={[styles.submissionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.submissionTop}><View style={{ flex: 1 }}><Text style={[styles.submissionDate, { color: colors.foreground }]}>{formatRiyadhDateTime(item.startsAt)}</Text><Text style={[styles.meta, { color: colors.mutedForeground }]}>{item.durationMinutes} min · {item.capacity} players · ages {item.ageGroup.replace('-', '–')} · {formatSar(item.priceHalalas)} each</Text></View><View style={[styles.statusPill, { backgroundColor: item.status === 'approved' ? colors.accent : colors.secondary }]}><Text style={[styles.statusText, { color: item.status === 'approved' ? colors.primary : colors.mutedForeground }]}>{item.status.toUpperCase()}</Text></View></View>
       <Text style={[styles.meta, { color: colors.mutedForeground }]}>Contact: {item.contactPhone}</Text>
-      <Pressable accessibilityRole="link" accessibilityLabel={`Open map for ${item.venueName}`} onPress={() => void Linking.openURL(/^https?:\/\//i.test(item.address) ? item.address : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.venueName}, ${item.address}, Riyadh`)}`)} style={styles.addressLink}><IconBadge name="map" tone="cyan" size="small" /><View style={{ flex: 1 }}><Text style={[styles.addressCaption, { color: colors.cyan }]}>PITCH LOCATION · OPEN MAP</Text><Text numberOfLines={2} style={[styles.meta, { color: colors.foreground, marginTop: 2 }]}>{item.address}</Text></View><Feather name="arrow-up-right" size={15} color={colors.cyan} /></Pressable>
+      <Pressable accessibilityRole="link" accessibilityLabel={`Open map for ${item.venueName}`} onPress={() => void Linking.openURL(/^https?:\/\//i.test(item.address) ? item.address : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.venueName}, ${item.address}, Riyadh`)}`)} style={styles.addressLink}><Feather name="map" size={17} color={colors.cyan} /><View style={{ flex: 1 }}><Text style={[styles.addressCaption, { color: colors.cyan }]}>PITCH LOCATION · OPEN MAP</Text><Text numberOfLines={2} style={[styles.meta, { color: colors.foreground, marginTop: 2 }]}>{item.address}</Text></View><Feather name="arrow-up-right" size={15} color={colors.cyan} /></Pressable>
       {item.status === 'pending' ? <Text style={[styles.reviewCopy, { color: colors.mutedForeground }]}>Waiting for admin review. Not visible to players yet.</Text> : null}
       {item.status === 'rejected' ? <Text style={[styles.reviewCopy, { color: colors.destructive }]}>{item.reviewNote || 'Not approved. Contact the KICKOFF team if you need help.'}</Text> : null}
       {item.status === 'approved' && item.matchId ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/match-registration', params: { id: item.matchId! } })} style={[styles.openMatch, { borderColor: colors.border }]}><Text style={[styles.openMatchText, { color: colors.primary }]}>Open published match</Text><Feather name="arrow-up-right" size={14} color={colors.primary} /></Pressable> : null}
@@ -116,8 +113,8 @@ export default function PitchOwnerScreen() {
   </Screen>;
 }
 
-function QuickStat({ label, value, tone, icon, colors }: { label: string; value: string; tone: string; icon: React.ComponentProps<typeof Feather>['name']; colors: ReturnType<typeof useColors> }) {
-  return <View style={[styles.quickStat, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={[styles.statIcon, { backgroundColor: `${tone}20` }]}><Feather name={icon} size={14} color={tone} /></View><Text style={[styles.statValue, { color: colors.foreground }]}>{value}</Text><Text numberOfLines={1} style={[styles.statLabel, { color: colors.mutedForeground }]}>{label}</Text></View>;
+function QuickStat({ label, value, tone, colors }: { label: string; value: string; tone: string; colors: ReturnType<typeof useColors> }) {
+  return <View style={styles.quickStat}><Text style={[styles.statValue, { color: tone }]}>{value}</Text><Text numberOfLines={1} style={[styles.statLabel, { color: colors.mutedForeground }]}>{label}</Text></View>;
 }
 
 function OwnerToggle({ label, value, onPress, colors }: { label: string; value: boolean; onPress: () => void; colors: ReturnType<typeof useColors> }) {
@@ -125,31 +122,28 @@ function OwnerToggle({ label, value, onPress, colors }: { label: string; value: 
 }
 
 const styles = StyleSheet.create({
-  kicker: { fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginTop: 18 },
-  hero: { borderWidth: 1, borderRadius: 20, padding: 16, marginTop: 8, overflow: 'hidden' },
-  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  heroTag: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 }, heroTagText: { fontSize: 8, fontWeight: '900', letterSpacing: 1 },
+  hero: { borderBottomWidth: StyleSheet.hairlineWidth, borderRadius: 0, paddingTop: 8, paddingBottom: 14, marginTop: 0, overflow: 'hidden' },
   scanButton: { minHeight: 46, borderRadius: 13, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 15 },
-  quickStats: { flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 2 },
-  quickStat: { flex: 1, minWidth: 0, borderWidth: 1, borderRadius: 15, padding: 10 },
-  statIcon: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }, statValue: { fontSize: 20, fontWeight: '900', marginTop: 8 }, statLabel: { fontSize: 9, fontWeight: '700', marginTop: 2 },
-  addressHint: { fontSize: 10, lineHeight: 15, marginTop: -7, marginBottom: 10 }, addressLink: { minHeight: 56, borderRadius: 12, backgroundColor: 'rgba(53,216,255,0.07)', padding: 9, flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 10 }, addressCaption: { fontSize: 8, letterSpacing: .7, fontWeight: '900' },
-  title: { fontFamily: 'Georgia', fontSize: 30, marginTop: 6 },
-  meta: { fontSize: 11, lineHeight: 17, marginTop: 5 },
+  quickStats: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, marginTop: 12, marginBottom: 2 },
+  quickStat: { flex: 1, minWidth: 0, paddingHorizontal: 8, paddingVertical: 12 },
+  statValue: { fontSize: 22, fontWeight: '800' }, statLabel: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  addressHint: { fontSize: 12, lineHeight: 17, marginTop: -7, marginBottom: 10 }, addressLink: { minHeight: 56, borderRadius: 12, backgroundColor: 'rgba(53,216,255,0.07)', padding: 9, flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 10 }, addressCaption: { fontSize: 10, letterSpacing: .4, fontWeight: '800' },
+  title: { fontSize: 23, lineHeight: 29, fontWeight: '800' },
+  meta: { fontSize: 13, lineHeight: 19, marginTop: 5 },
   reviewNotice: { borderWidth: 1, borderRadius: 15, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 15, marginBottom: 14 },
   noticeIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  noticeCopy: { flex: 1, fontSize: 11, lineHeight: 17 },
+  noticeCopy: { flex: 1, fontSize: 13, lineHeight: 19 },
   formCard: { borderWidth: 1, borderRadius: 17, padding: 14 },
   sectionTitle: { fontSize: 17, fontWeight: '800', marginBottom: 12 },
   inlineFields: { flexDirection: 'row', gap: 10 },
-  formGroupTitle: { fontSize: 9, letterSpacing: 1.3, fontWeight: '800', marginTop: 6, marginBottom: 12 },
+  formGroupTitle: { fontSize: 12, letterSpacing: .5, fontWeight: '800', marginTop: 6, marginBottom: 12 },
   photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 9, marginBottom: 10 },
   photoWrap: { width: 76, height: 70 },
   photo: { width: 76, height: 70, borderRadius: 10 },
   photoRemove: { position: 'absolute', top: 2, right: 2, width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   addPhoto: { minWidth: 90, minHeight: 70, borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 8 },
-  error: { fontSize: 11, lineHeight: 17, marginVertical: 9 },
-  footnote: { fontSize: 10, lineHeight: 15, marginTop: 10, textAlign: 'center' },
+  error: { fontSize: 13, lineHeight: 18, marginVertical: 9 },
+  footnote: { fontSize: 12, lineHeight: 17, marginTop: 10, textAlign: 'center' },
   toggleRow: { minHeight: 48, borderTopWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   toggleLabel: { fontSize: 12, fontWeight: '600' },
   toggle: { width: 42, height: 24, borderRadius: 15, padding: 4, justifyContent: 'center' },
@@ -158,8 +152,8 @@ const styles = StyleSheet.create({
   submissionTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   submissionDate: { fontSize: 13, fontWeight: '800' },
   statusPill: { minHeight: 25, borderRadius: 13, paddingHorizontal: 9, justifyContent: 'center' },
-  statusText: { fontSize: 8, fontWeight: '900', letterSpacing: .7 },
-  reviewCopy: { fontSize: 10, lineHeight: 15, marginTop: 8 },
+  statusText: { fontSize: 10, fontWeight: '800', letterSpacing: .4 },
+  reviewCopy: { fontSize: 12, lineHeight: 17, marginTop: 8 },
   openMatch: { minHeight: 42, borderWidth: 1, borderRadius: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10 },
-  openMatchText: { fontSize: 11, fontWeight: '800' },
+  openMatchText: { fontSize: 13, fontWeight: '800' },
 });

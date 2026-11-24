@@ -76,11 +76,8 @@ export default function PreferredPositionScreen() {
 
   return <Screen>
     <BrandHeader title="KICKOFF" hideMenu />
-    <View style={styles.heroIcon}><Feather name="award" size={24} color={colors.primary} /></View>
-    <Text style={[styles.kicker, { color: colors.primary }]}>YOUR PLAYER CARD</Text>
-    <Text style={[styles.title, { color: colors.foreground }]}>Where do you play?</Text>
-    <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>Choose your favorite position. It adds a small badge to your profile photo so other players can get to know your style.</Text>
-    <View style={[styles.note, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="info" size={15} color={colors.primary} /><Text style={[styles.noteText, { color: colors.mutedForeground }]}>Just for your profile. It will not affect match registration, team selection, or balancing.</Text></View>
+    <Text style={[styles.title, { color: colors.foreground }]}>Choose a profile position</Text>
+    <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>This appears on your profile photo. It won’t affect match registration or team selection.</Text>
     {syncMessage ? <View accessibilityRole="status" style={[styles.syncNotice, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name={savedOffline ? 'check-circle' : 'wifi-off'} size={15} color={colors.primary} /><Text style={[styles.noteText, { color: colors.mutedForeground }]}>{syncMessage}</Text></View> : null}
     <>
       <PreferredPositionPicker selected={selected} onSelect={setSelected} />
@@ -91,13 +88,10 @@ export default function PreferredPositionScreen() {
 }
 
 const styles = StyleSheet.create({
-  heroIcon: { width: 54, height: 54, borderRadius: 18, marginTop: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(57,217,138,.12)' },
-  kicker: { fontSize: 9, fontWeight: '900', letterSpacing: 1.5, marginTop: 18 },
-  title: { fontFamily: 'Georgia', fontSize: 31, lineHeight: 37, marginTop: 7 },
-  subtitle: { fontSize: 12, lineHeight: 19, marginTop: 8, marginBottom: 16 },
-  note: { borderWidth: 1, borderRadius: 13, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 16 },
+  title: { fontSize: 27, lineHeight: 33, fontWeight: '800', marginTop: 16 },
+  subtitle: { fontSize: 14, lineHeight: 20, marginTop: 6, marginBottom: 16 },
   syncNotice: { borderWidth: 1, borderRadius: 13, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 14 },
-  noteText: { flex: 1, fontSize: 10, lineHeight: 15 },
+  noteText: { flex: 1, fontSize: 13, lineHeight: 19 },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 10 },
   error: { flex: 1, fontSize: 11, lineHeight: 16 },
   retry: { minHeight: 44, minWidth: 50, alignItems: 'center', justifyContent: 'center' },

@@ -28,11 +28,11 @@ export default function LegalDocumentScreen() {
 }
 
 const styles = StyleSheet.create({
-  eyebrow: { fontSize: 9, letterSpacing: 1.7, fontWeight: '800', marginTop: 18 },
-  title: { fontFamily: 'Georgia', fontSize: 32, lineHeight: 39, marginTop: 7 },
-  updated: { fontSize: 11, marginTop: 8 },
+  eyebrow: { fontSize: 12, letterSpacing: 0.6, fontWeight: '800', marginTop: 18 },
+  title: { fontSize: 28, lineHeight: 35, fontWeight: '800', marginTop: 7 },
+  updated: { fontSize: 13, marginTop: 8 },
   draftNotice: { flexDirection: 'row', gap: 10, borderWidth: 1, borderRadius: 14, padding: 13, marginTop: 20 },
-  noticeText: { flex: 1, fontSize: 11, lineHeight: 17 },
-  section: { marginTop: 24 }, heading: { fontSize: 15, fontWeight: '800', marginBottom: 8 },
-  body: { fontSize: 12, lineHeight: 19, marginBottom: 9 },
+  noticeText: { flex: 1, fontSize: 13, lineHeight: 19 },
+  section: { marginTop: 24 }, heading: { fontSize: 17, fontWeight: '800', marginBottom: 8 },
+  body: { fontSize: 14, lineHeight: 22, marginBottom: 10 },
 });

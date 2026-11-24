@@ -62,13 +62,13 @@ export default function LegalAcceptanceScreen() {
 
 const styles = StyleSheet.create({
   icon: { width: 52, height: 52, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginTop: 23 },
-  eyebrow: { fontSize: 9, letterSpacing: 1.6, fontWeight: '900', marginTop: 18 },
-  title: { fontFamily: 'Georgia', fontSize: 30, lineHeight: 37, marginTop: 8 },
-  copy: { fontSize: 12, lineHeight: 19, marginTop: 9, marginBottom: 15 },
+  eyebrow: { fontSize: 12, letterSpacing: 0.5, fontWeight: '800', marginTop: 18 },
+  title: { fontSize: 27, lineHeight: 34, fontWeight: '800', marginTop: 8 },
+  copy: { fontSize: 14, lineHeight: 21, marginTop: 9, marginBottom: 15 },
   link: { minHeight: 47, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth },
   linkText: { fontSize: 13, fontWeight: '700' },
   checkRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, borderWidth: 1, borderRadius: 14, padding: 13, marginTop: 19, marginBottom: 14 },
   checkBox: { width: 21, height: 21, borderWidth: 1.5, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  checkText: { flex: 1, fontSize: 11, lineHeight: 17 },
+  checkText: { flex: 1, fontSize: 13, lineHeight: 19 },
   error: { fontSize: 12, marginBottom: 10 },
 });

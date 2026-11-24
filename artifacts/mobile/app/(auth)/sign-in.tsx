@@ -33,7 +33,7 @@ export default function SignInScreen() {
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop]} />
     <BrandHeader title="KICKOFF" back backFallback="/(auth)/welcome" hideMenu />
     <KeyboardAwareScrollViewCompat bottomOffset={72} contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 28 }]}>
-      <Text style={[styles.eyebrow, { color: colors.primary }]}>GOOD TO HAVE YOU BACK</Text><Text style={[styles.title, { color: colors.foreground }]}>Pick up where{'\n'}you left off.</Text><Text style={[styles.copy, { color: colors.mutedForeground }]}>Sign in to find your next match in Riyadh.</Text>
+      <Text style={[styles.title, { color: colors.foreground }]}>Sign in to KICKOFF</Text><Text style={[styles.copy, { color: colors.mutedForeground }]}>Find matches and manage your bookings.</Text>
       <View style={{ marginTop: 28 }}><Field label="EMAIL ADDRESS" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoComplete="email" /><Field label="PASSWORD" value={password} onChangeText={setPassword} placeholder="Your password" secureTextEntry autoComplete="current-password" /></View>
       {errorField || message ? <Text style={[styles.error, { color: colors.destructive }]}>{message || errorField}</Text> : null}
       <Button label={busy ? 'Signing in…' : 'Sign in'} onPress={submit} disabled={!email || !password || busy} icon="arrow-right" />
@@ -43,4 +43,4 @@ export default function SignInScreen() {
     </KeyboardAwareScrollViewCompat>
   </ImageBackground>;
 }
-const styles = StyleSheet.create({ background: { flex: 1, width: '100%', height: '100%' }, backdrop: { backgroundColor: 'rgba(5,17,26,0.74)' }, container: { paddingHorizontal: 24, paddingTop: 19 }, eyebrow: { fontSize: 10, letterSpacing: 1.7, fontWeight: '700' }, title: { fontSize: 35, lineHeight: 40, fontFamily: 'Georgia', marginTop: 10 }, copy: { fontSize: 13, lineHeight: 20, marginTop: 9 }, error: { fontSize: 12, lineHeight: 18, marginBottom: 12 }, divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 22 }, rule: { height: 1, flex: 1 }, or: { fontSize: 9, letterSpacing: 1.3 }, footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 25 } });
+const styles = StyleSheet.create({ background: { flex: 1, width: '100%', height: '100%' }, backdrop: { backgroundColor: 'rgba(5,17,26,0.74)' }, container: { paddingHorizontal: 24, paddingTop: 19 }, title: { fontSize: 30, lineHeight: 37, fontWeight: '800' }, copy: { fontSize: 14, lineHeight: 21, marginTop: 7 }, error: { fontSize: 13, lineHeight: 19, marginBottom: 12 }, divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 22 }, rule: { height: 1, flex: 1 }, or: { fontSize: 11, letterSpacing: .4 }, footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 25 } });

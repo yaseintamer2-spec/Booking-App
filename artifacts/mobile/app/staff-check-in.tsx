@@ -111,9 +111,9 @@ export default function StaffCheckInScreen() {
 }
 
 const styles = StyleSheet.create({
-  kicker: { fontSize: 9, letterSpacing: 1.5, fontWeight: '800', marginTop: 16 },
-  title: { fontSize: 31, fontFamily: 'Georgia', marginTop: 7 },
-  subtitle: { fontSize: 12, lineHeight: 19, marginTop: 7, marginBottom: 18 },
+  kicker: { fontSize: 11, letterSpacing: 0.7, fontWeight: '800', marginTop: 16 },
+  title: { fontSize: 28, fontWeight: '800', marginTop: 7 },
+  subtitle: { fontSize: 14, lineHeight: 21, marginTop: 7, marginBottom: 18 },
   ageCheck: { minHeight: 56, borderWidth: 1, borderRadius: 13, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   ageCheckText: { flex: 1, fontSize: 12, fontWeight: '700', lineHeight: 18 },
   openScannerButton: { flexDirection: 'row', gap: 9, marginTop: 8 },
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   scannerPanel: { width: '92%', maxWidth: 330, borderWidth: 1, borderRadius: 22, padding: 16, shadowColor: '#000000', shadowOpacity: 0.28, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 16 },
   scannerPanelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 13 },
   scannerTitle: { fontSize: 19, fontWeight: '800' },
-  scannerSubtitle: { fontSize: 11, marginTop: 4 },
+  scannerSubtitle: { fontSize: 13, marginTop: 4 },
   closeScanner: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   scannerShell: { width: '100%', maxWidth: 250, aspectRatio: 1, alignSelf: 'center', borderRadius: 17, overflow: 'hidden', backgroundColor: '#06130D' },
   camera: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   cameraPlaceholder: { width: '100%', maxWidth: 250, aspectRatio: 1, alignSelf: 'center', borderWidth: 1, borderRadius: 17, alignItems: 'center', justifyContent: 'center', gap: 13, padding: 20 },
   cameraText: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
   scannerError: { textAlign: 'center', fontSize: 12, fontWeight: '700', marginTop: 10 },
-  scannerFootnote: { fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 12 },
+  scannerFootnote: { fontSize: 12, lineHeight: 17, textAlign: 'center', marginTop: 12 },
   primaryButton: { minHeight: 46, borderRadius: 14, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', marginTop: 5 },
   primaryText: { fontSize: 12, fontWeight: '800' },
   result: { fontSize: 13, fontWeight: '700', marginTop: 14 },
