@@ -166,8 +166,164 @@ export default function AdminScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel="Grant admin access" disabled={adminAccessBusy || !adminEmail.trim()} onPress={grantAdminAccess} style={[styles.grantButton, { backgroundColor: colors.primary, opacity: adminAccessBusy || !adminEmail.trim() ? .55 : 1 }]}><Feather name="user-plus" size={15} color={colors.primaryForeground} /><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{adminAccessBusy ? 'Saving…' : 'Add admin'}</Text></Pressable>
         </View>
         {adminAccessError ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.destructive }]}>{adminAccessError}</Text> : null}
-        {adminGrants.length ? adminGrants.map(grant => <View key={grant.email} style={[styles.adminGrantRow, { borderTopColor: colors.border }]}><View style={{ flex: 1 }}><Text numberOfLines={1} style={[styles.grantEmail, { color: colors.foreground }]}>{grant.email}</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 3 }]}>Admin access</Text></View><Pressable accessibilityRole="button" accessibilityLabel={`Revoke admin access for ${grant.email}`} disabled={adminAccessBusy} onPress={() => revokeAdminAccess(grant.email)} style={[styles.revokeButton, { borderColor: colors.destructive, opacity: adminAccessBusy ? .5 : 1 }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>Revoke</Text></Pressable></View>) : <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 12 }]}>No additional admins yet.</Text>}
-      </View> : null}…6123 tokens truncated…eanEmail = email.trim().toLowerCase();
+        {adminGrants.map((grant) => (
+          <View key={grant.email} style={[styles.adminGrantRow, { borderTopColor: colors.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text numberOfLines={1} style={[styles.grantEmail, { color: colors.foreground }]}>{grant.email}</Text>
+              <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 3 }]}>Admin access</Text>
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel={'Revoke admin access for ' + grant.email} disabled={adminAccessBusy} onPress={() => revokeAdminAccess(grant.email)} style={[styles.revokeButton, { borderColor: colors.destructive, opacity: adminAccessBusy ? .5 : 1 }]}>
+              <Text style={[styles.revokeText, { color: colors.destructive }]}>Revoke</Text>
+            </Pressable>
+          </View>
+        ))}
+        {!adminGrants.length ? <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 12 }]}>No additional admins yet.</Text> : null}
+      </View> : null}
+      <PitchSubmissionReview visible={isAdmin} />
+      {isOwner ? <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.formGroupTitle, { color: colors.primary, marginTop: 0 }]}>PITCH PHOTO STORAGE</Text>
+        <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 0 }]}>Move older photos from the database into the configured image bucket. New photos upload there automatically.</Text>
+        {imageMigrationMessage ? <Text accessibilityRole="alert" style={[styles.meta, { color: imageMigrationMessage.includes('moved to file storage') ? colors.primary : colors.destructive }]}>{imageMigrationMessage}</Text> : null}
+        <Pressable accessibilityRole="button" disabled={imageMigrationBusy} onPress={() => confirmAdminAction('Move existing pitch photos?', 'This uploads old pitch photos to the configured storage bucket and replaces their database copies with file addresses.', 'Move photos', false, () => void migrateExistingMatchImages())} style={[styles.grantButton, { backgroundColor: colors.primary, alignSelf: 'flex-start', opacity: imageMigrationBusy ? .55 : 1 }]}><Feather name="upload-cloud" size={15} color={colors.primaryForeground} /><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{imageMigrationBusy ? 'Moving photos…' : 'Move existing photos'}</Text></Pressable>
+      </View> : null}
+      <RefereeAssignmentReview visible={isAdmin} />
+      <PitchOwnerManagement visible={isOwner} />
+      <RefereeAccessManagement visible={isAdmin} onChanged={loadReferees} />
+      <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as Href)} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.primary, borderRadius: 14, marginBottom: 15 }}><Feather name="camera" size={16} color={colors.primaryForeground} /><Text style={{ color: colors.primaryForeground, fontSize: 12, fontWeight: '800' }}>Staff check-in scanner</Text></Pressable>
+       {list.isLoading ? <LoadingState /> : list.isError ? <EmptyState icon="alert-circle" title="Admin data unavailable." body="Check your connection and admin permissions, then return to the console." action="Retry" onAction={() => list.refetch()} /> : list.data?.length ? list.data.map(match => <View key={match.id} style={[styles.adminCard, { backgroundColor: colors.card, borderColor: colors.border }]}><View style={styles.cardHeader}><View style={{ flex: 1 }}><Text style={[styles.venue, { color: colors.foreground }]}>{match.venueName}</Text><Text style={[styles.meta, { color: colors.mutedForeground }]}>{match.neighborhood} · {formatRiyadhDateTime(match.startsAt)} Riyadh</Text></View><View style={[styles.status, { backgroundColor: match.status === 'published' ? colors.accent : colors.secondary }]}><Text style={[styles.statusText, { color: match.status === 'published' ? colors.primary : colors.mutedForeground }]}>{match.status.toUpperCase()}</Text></View></View><View style={styles.cardFooter}><Text style={[styles.meta, { color: colors.mutedForeground }]}>{match.bookedCount}/{match.capacity} booked · {formatSar(match.priceHalalas)}</Text><View style={{ flexDirection: 'row', gap: 8 }}><Pressable accessibilityRole="button" accessibilityLabel={`Edit ${match.venueName}`} onPress={() => openEdit(match)} style={[styles.iconAction, { borderColor: colors.border }]}><Feather name="edit-2" size={15} color={colors.foreground} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${match.venueName}`} onPress={() => deleteMatch(match)} style={[styles.iconAction, { borderColor: colors.border }]}><Feather name="trash-2" size={15} color={colors.destructive} /></Pressable></View></View></View>) : <EmptyState icon="calendar" title="No matches in the console." body="Create the first match when the next Riyadh pitch is ready." />}
+    </Screen>
+    <Modal visible={formOpen} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setFormOpen(false)}>
+      <View style={[styles.modal, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 67 : 0) }]}><View style={[styles.modalHeader, { borderColor: colors.border }]}><Pressable onPress={() => setFormOpen(false)} style={styles.modalClose}><Feather name="x" size={21} color={colors.foreground} /></Pressable><View style={{ flex: 1 }}><Text style={[styles.modalTitle, { color: colors.foreground }]}>{editing ? 'Edit match' : 'Create match'}</Text><Text style={[styles.meta, { color: colors.mutedForeground }]}>7v7 · Riyadh · 14-player default</Text></View></View>
+        <KeyboardAwareScrollViewCompat bottomOffset={80} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 34 : 0) + 30 }}>
+          <Text style={[styles.formGroupTitle, { color: colors.primary }]}>PITCH DETAILS</Text>
+          <Field label="VENUE NAME" value={form.venueName} onChangeText={v => change('venueName', v)} placeholder="Venue name" />
+          <Field label="RIYADH NEIGHBORHOOD" value={form.neighborhood} onChangeText={v => change('neighborhood', v)} placeholder="e.g. Al Malqa" />
+          <Field label="FULL ADDRESS" value={form.address} onChangeText={v => change('address', v)} placeholder="Street and location details" multiline />
+           <Field label="DATE AND TIME · RIYADH" value={form.startsAt} onChangeText={v => change('startsAt', v)} placeholder="YYYY-MM-DDTHH:mm" />
+          <Text style={[styles.formGroupTitle, { color: colors.primary }]}>MATCH SETUP</Text>
+          <Text style={[styles.photoHint, { color: colors.mutedForeground }]}>PLAYER AGE GROUP</Text><MatchAgeGroupPicker value={form.ageGroup} onChange={(ageGroup) => setForm((current) => ({ ...current, ageGroup }))} />
+          <View style={styles.inlineFields}><View style={{ flex: 1 }}><Field label="DURATION (MIN)" value={form.durationMinutes} onChangeText={v => change('durationMinutes', v)} placeholder="120" keyboardType="numeric" /></View><View style={{ flex: 1 }}><Field label="CAPACITY" value={form.capacity} onChangeText={v => change('capacity', v)} placeholder="14" keyboardType="numeric" /></View></View>
+          <View style={styles.inlineFields}><View style={{ flex: 1 }}><Field label="PLAYER PRICE (SAR)" value={form.price} onChangeText={v => change('price', v)} placeholder="30" keyboardType="numeric" /></View><View style={{ flex: 1 }}><Field label="COMPARE AT (SAR)" value={form.compareAt} onChangeText={v => change('compareAt', v)} placeholder="35" keyboardType="numeric" /></View></View>
+          <Text style={[styles.formGroupTitle, { color: colors.primary }]}>PITCH PHOTOS · {form.imageUrls.length}/3</Text>
+          <Text style={[styles.photoHint, { color: colors.mutedForeground }]}>Add up to three photos. They rotate on the match card and can also be swiped.</Text>
+          <View style={styles.photoRow}>{form.imageUrls.map((uri, index) => <View key={`${index}-${uri.slice(0, 30)}`} style={styles.photoPreviewWrap}><Image source={{ uri }} style={styles.photoPreview} /><Pressable accessibilityRole="button" accessibilityLabel={`Remove pitch photo ${index + 1}`} onPress={() => removePhoto(index)} style={[styles.removePhoto, { backgroundColor: colors.background, borderColor: colors.border }]}><Feather name="x" size={15} color={colors.foreground} /></Pressable></View>)}{form.imageUrls.length < 3 ? <Pressable accessibilityRole="button" accessibilityLabel="Choose pitch photos" onPress={() => void addPhotos()} style={[styles.addPhoto, { borderColor: colors.border, backgroundColor: colors.card }]}><Feather name="image" size={19} color={colors.primary} /><Text style={[styles.addPhotoText, { color: colors.foreground }]}>Add photos</Text></Pressable> : null}</View>
+          <Text style={[styles.formGroupTitle, { color: colors.primary }]}>STATUS AND INCLUSIONS</Text>
+          <View style={styles.statusChoices}>{(['draft', 'published', 'cancelled'] as const).map(status => <Pressable key={status} onPress={() => change('status', status)} style={[styles.statusChoice, { borderColor: form.status === status ? colors.primary : colors.border, backgroundColor: form.status === status ? colors.accent : colors.card }]}><Text style={{ color: form.status === status ? colors.primary : colors.mutedForeground, fontSize: 10, fontWeight: '700' }}>{status.toUpperCase()}</Text></Pressable>)}</View>
+          <ToggleRow label="Referee included" value={form.refereeIncluded} onPress={() => change('refereeIncluded', !form.refereeIncluded)} />
+          <Text style={[styles.photoHint, { color: colors.mutedForeground, marginTop: 8 }]}>ASSIGNED REFEREE · OPTIONAL</Text>
+          {refereeLoadError ? <Text style={[styles.error, { color: colors.mutedForeground }]}>{refereeLoadError}</Text> : null}
+          <View style={styles.refereeOptions}>
+            {[{ id: '', name: 'Not assigned', avatarUrl: null }, ...referees].map(referee => {
+              const selected = form.refereeUserId === referee.id;
+              return <Pressable key={referee.id || 'unassigned'} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => change('refereeUserId', referee.id)} style={[styles.refereeOption, { borderColor: selected ? colors.primary : colors.border, backgroundColor: selected ? colors.accent : colors.card }]}>
+                {referee.avatarUrl ? <Image source={{ uri: referee.avatarUrl }} style={styles.refereeAvatar} /> : <View style={[styles.refereeAvatar, { backgroundColor: colors.secondary, alignItems: 'center', justifyContent: 'center' }]}><Feather name="user" size={13} color={colors.mutedForeground} /></View>}
+                <Text numberOfLines={1} style={{ color: selected ? colors.primary : colors.foreground, fontSize: 10, fontWeight: '700', flexShrink: 1 }}>{referee.name}</Text>
+              </Pressable>;
+            })}
+          </View>
+          <ToggleRow label="Water provided" value={form.waterIncluded} onPress={() => change('waterIncluded', !form.waterIncluded)} />
+          {formError ? <Text style={[styles.error, { color: colors.destructive }]}>{formError}</Text> : null}
+          <Button label={busy ? 'Saving match…' : editing ? 'Save changes' : 'Create match'} onPress={save} disabled={busy} icon="check" />
+        </KeyboardAwareScrollViewCompat>
+      </View>
+    </Modal>
+  </>;
+}
+
+function ToggleRow({ label, value, onPress }: { label: string; value: boolean; onPress: () => void }) {
+  const colors = useColors();
+  return <Pressable onPress={onPress} style={[styles.toggleRow, { borderColor: colors.border }]}><Text style={[styles.toggleLabel, { color: colors.foreground }]}>{label}</Text><View style={[styles.toggle, { backgroundColor: value ? colors.primary : colors.secondary }]}><View style={[styles.toggleDot, { backgroundColor: value ? colors.primaryForeground : colors.mutedForeground, alignSelf: value ? 'flex-end' : 'flex-start' }]} /></View></Pressable>;
+}
+
+type PitchOwnerGrant = { email: string; venueName: string; neighborhood: string; address: string };
+type RefereeGrant = { email: string; createdAt: string };
+type PitchSubmission = { id: string; ownerEmail: string; venueName: string; neighborhood: string; address: string; contactPhone: string; startsAt: string; durationMinutes: number; capacity: number; priceHalalas: number; compareAtPriceHalalas: number; refereeIncluded: boolean; waterIncluded: boolean; imageUrls: string[] };
+
+function PitchOwnerManagement({ visible }: { visible: boolean }) {
+  const colors = useColors(); const { getToken } = useAuth();
+  const [owners, setOwners] = useState<PitchOwnerGrant[]>([]); const [email, setEmail] = useState(''); const [venueName, setVenueName] = useState(''); const [neighborhood, setNeighborhood] = useState(''); const [address, setAddress] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const request = useCallback(async (path: string, init: RequestInit = {}) => {
+    const token = await getToken();
+    const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
+    let body;
+    try { body = response.status === 204 ? null : await response.json(); }
+    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KICKOFF API server, not the static app or Supabase URL.'); }
+    if (!response.ok) throw new Error(body?.error || 'Could not update pitch-owner access.');
+    return body;
+  }, [getToken]);
+  const load = useCallback(async () => { if (!visible) return; try { setOwners(await request('/admin/pitch-owners') as PitchOwnerGrant[]); setError(''); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load pitch owners.'); } }, [request, visible]);
+  useEffect(() => { void load(); }, [load]);
+  const save = () => {
+    if (!email.trim() || !venueName.trim() || !neighborhood.trim() || !address.trim()) { setError('Add the verified email and the pitch details.'); return; }
+    confirmAdminAction('Grant pitch-owner access?', `${email.trim()} can submit match times for ${venueName.trim()}. Every match request still needs admin approval.`, 'Grant access', false, () => { void (async () => { setBusy(true); setError(''); try { await request('/admin/pitch-owners', { method: 'POST', body: JSON.stringify({ email, venueName, neighborhood, address }) }); setEmail(''); setVenueName(''); setNeighborhood(''); setAddress(''); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not grant pitch-owner access.'); } finally { setBusy(false); } })(); });
+  };
+  const revoke = (owner: PitchOwnerGrant) => confirmAdminAction('Remove pitch-owner access?', `${owner.email} will no longer be able to submit match requests for ${owner.venueName}.`, 'Remove access', true, () => { void (async () => { setBusy(true); try { await request(`/admin/pitch-owners/${encodeURIComponent(owner.email)}`, { method: 'DELETE' }); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not remove pitch-owner access.'); } finally { setBusy(false); } })(); });
+  if (!visible) return null;
+  return <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <Text style={[styles.formGroupTitle, { color: colors.primary, marginTop: 0 }]}>PITCH OWNER ACCESS</Text>
+    <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: -7, marginBottom: 12 }]}>Assign a verified account to one pitch. Their submitted dates remain private until an admin approves them.</Text>
+    <TextInput accessibilityLabel="Pitch owner verified email" autoCapitalize="none" keyboardType="email-address" placeholder="Verified account email" placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} style={[styles.ownerInput, { borderColor: colors.border, color: colors.foreground }]} />
+    <TextInput accessibilityLabel="Pitch name" placeholder="Pitch name" placeholderTextColor={colors.mutedForeground} value={venueName} onChangeText={setVenueName} style={[styles.ownerInput, { borderColor: colors.border, color: colors.foreground }]} />
+    <TextInput accessibilityLabel="Pitch area or neighborhood" placeholder="Area or neighborhood" placeholderTextColor={colors.mutedForeground} value={neighborhood} onChangeText={setNeighborhood} style={[styles.ownerInput, { borderColor: colors.border, color: colors.foreground }]} />
+    <TextInput accessibilityLabel="Full pitch address" multiline placeholder="Full pitch address" placeholderTextColor={colors.mutedForeground} value={address} onChangeText={setAddress} style={[styles.ownerInput, styles.ownerAddressInput, { borderColor: colors.border, color: colors.foreground }]} />
+    <Pressable accessibilityRole="button" disabled={busy} onPress={save} style={[styles.ownerGrantButton, { backgroundColor: colors.primary, opacity: busy ? .6 : 1 }]}><Feather name="user-plus" size={15} color={colors.primaryForeground} /><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{busy ? 'Saving…' : 'Add pitch owner'}</Text></Pressable>
+    {error ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
+    {owners.map(owner => <View key={owner.email} style={[styles.adminGrantRow, { borderTopColor: colors.border }]}><View style={{ flex: 1 }}><Text numberOfLines={1} style={[styles.grantEmail, { color: colors.foreground }]}>{owner.email}</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 3 }]}>{owner.venueName} · {owner.neighborhood}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={`Remove pitch-owner access for ${owner.email}`} disabled={busy} onPress={() => revoke(owner)} style={[styles.revokeButton, { borderColor: colors.destructive }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>Remove</Text></Pressable></View>)}
+  </View>;
+}
+
+function PitchSubmissionReview({ visible }: { visible: boolean }) {
+  const colors = useColors(); const { getToken } = useAuth(); const qc = useQueryClient();
+  const [submissions, setSubmissions] = useState<PitchSubmission[]>([]); const [busyId, setBusyId] = useState(''); const [error, setError] = useState('');
+  const request = useCallback(async (path: string, init: RequestInit = {}) => {
+    const token = await getToken();
+    const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
+    let body;
+    try { body = response.status === 204 ? null : await response.json(); }
+    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KICKOFF API server, not the static app or Supabase URL.'); }
+    if (!response.ok) throw new Error(body?.error || 'Could not review this match request.');
+    return body;
+  }, [getToken]);
+  const load = useCallback(async () => { if (!visible) return; try { setSubmissions(await request('/admin/pitch-match-submissions') as PitchSubmission[]); setError(''); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load pitch requests.'); } }, [request, visible]);
+  useEffect(() => { void load(); }, [load]);
+  const review = (submission: PitchSubmission, action: 'approve' | 'reject') => {
+    const isApprove = action === 'approve';
+    confirmAdminAction(isApprove ? 'Approve and publish this match?' : 'Reject this match request?', isApprove ? `${submission.venueName} · ${formatRiyadhDateTime(submission.startsAt)} Riyadh. It will immediately appear in Discover using the existing match card.` : `${submission.venueName} · ${formatRiyadhDateTime(submission.startsAt)} Riyadh. It will stay out of Discover.`, isApprove ? 'Approve & publish' : 'Reject request', !isApprove, () => { void (async () => { setBusyId(submission.id); setError(''); try { await request(`/admin/pitch-match-submissions/${submission.id}`, { method: 'PATCH', body: JSON.stringify({ action }) }); await load(); if (isApprove) await Promise.all([qc.invalidateQueries({ queryKey: getListAdminMatchesQueryKey() }), qc.invalidateQueries({ queryKey: getListMatchesQueryKey() })]); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not review this request.'); } finally { setBusyId(''); } })(); });
+  };
+  if (!visible) return null;
+  return <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={styles.accessHeading}><View style={{ flex: 1 }}><Text style={[styles.formGroupTitle, { color: colors.primary, marginTop: 0, marginBottom: 4 }]}>PITCH MATCH REQUESTS</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 0 }]}>Approve to publish in Discover. Requests stay private until approved.</Text></View><View style={[styles.requestCount, { backgroundColor: colors.accent }]}><Text style={[styles.ownerBadgeText, { color: colors.primary }]}>{submissions.length} PENDING</Text></View></View>
+    {error ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
+    {submissions.length ? submissions.map(submission => <View key={submission.id} style={[styles.requestCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+      <Text style={[styles.venue, { color: colors.foreground }]}>{submission.venueName}</Text>
+      <Text style={[styles.meta, { color: colors.mutedForeground }]}>{submission.neighborhood} · {formatRiyadhDateTime(submission.startsAt)} · {submission.durationMinutes} min</Text>
+      <Text style={[styles.meta, { color: colors.mutedForeground }]}>Owner: {submission.ownerEmail} · Contact: {submission.contactPhone}</Text>
+      <Text style={[styles.meta, { color: colors.mutedForeground }]}>{submission.capacity} players · {formatSar(submission.priceHalalas)} each · {submission.address}</Text>
+      <View style={styles.requestPhotos}>{submission.imageUrls.slice(0, 3).map((uri, index) => <Image key={`${submission.id}-${index}`} source={{ uri }} style={[styles.requestPhoto, { borderColor: colors.border }]} accessibilityLabel={`Submitted pitch photo ${index + 1}`} />)}</View>
+      <View style={styles.reviewActions}>
+        <Pressable accessibilityRole="button" disabled={!!busyId} onPress={() => review(submission, 'reject')} style={[styles.rejectButton, { borderColor: colors.destructive, opacity: busyId ? .5 : 1 }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>{busyId === submission.id ? 'Saving…' : 'Reject'}</Text></Pressable>
+        <Pressable accessibilityRole="button" disabled={!!busyId} onPress={() => review(submission, 'approve')} style={[styles.approveButton, { backgroundColor: colors.primary, opacity: busyId ? .5 : 1 }]}><Feather name="check" size={14} color={colors.primaryForeground} /><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{busyId === submission.id ? 'Saving…' : 'Approve & publish'}</Text></Pressable>
+      </View>
+    </View>) : <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 12 }]}>No match requests waiting for review.</Text>}
+  </View>;
+}
+
+function RefereeAccessManagement({ visible, onChanged }: { visible: boolean; onChanged: () => Promise<void> }) {
+  const colors = useColors(); const { getToken } = useAuth();
+  const [grants, setGrants] = useState<RefereeGrant[]>([]); const [email, setEmail] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const request = useCallback(async (path: string, init: RequestInit = {}) => {
+    const token = await getToken();
+    const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
+    let body;
+    try { body = response.status === 204 ? null : await response.json(); }
+    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KICKOFF API server, not the static app or Supabase URL.'); }
+    if (!response.ok) throw new Error(body?.error || 'Could not update referee access.');
+    return body;
+  }, [getToken]);
+  const load = useCallback(async () => { if (!visible) return; try { setGrants(await request('/admin/referee-access') as RefereeGrant[]); setError(''); } catch (cause) { setError(explainApiConnectionError(cause, 'Could not load referee access.')); } }, [request, visible]);
+  useEffect(() => { void load(); }, [load]);
+  const grant = () => {
+    const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) { setError('Enter the verified email used by this referee to sign in.'); return; }
     confirmAdminAction('Approve this referee?', `${cleanEmail} can be assigned to matches. They must accept each match invitation before using its controls.`, 'Approve referee', false, () => { void (async () => { setBusy(true); setError(''); try { await request('/admin/referee-access', { method: 'POST', body: JSON.stringify({ email: cleanEmail }) }); setEmail(''); await Promise.all([load(), onChanged()]); } catch (cause) { setError(explainApiConnectionError(cause, 'Could not approve referee.')); } finally { setBusy(false); } })(); });
   };
