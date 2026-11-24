@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 
 export const apiBaseUrl = (
-  configuredApiUrl || (Platform.OS === 'web' && __DEV__ ? 'http://localhost:5000' : '')
+  configuredApiUrl || (Platform.OS === 'web' && __DEV__ ? 'https://kickoff-api-t03z.onrender.com' : '')
 ).replace(/\/+$/, '');
 
 export function explainApiConnectionError(error: unknown, fallback: string): string {
