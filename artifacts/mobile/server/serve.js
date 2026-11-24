@@ -49,9 +49,15 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  res.writeHead(200, {
-    'content-type': mimeTypes[path.extname(filePath).toLowerCase()] || 'application/octet-stream',
-  });
+  const extension = path.extname(filePath).toLowerCase();
+  const headers = {
+    'content-type': mimeTypes[extension] || 'application/octet-stream',
+  };
+  if (['.ttf', '.woff', '.woff2'].includes(extension)) {
+    headers['access-control-allow-origin'] = '*';
+    headers['cross-origin-resource-policy'] = 'cross-origin';
+  }
+  res.writeHead(200, headers);
   fs.createReadStream(filePath).pipe(res);
 });
 
