@@ -1469,7 +1469,11 @@ router.get("/me/pitch-owner", requireAuth, async (_req, res): Promise<void> => {
     return;
   }
   const access = await getPitchOwnerAccess(userId);
-  if (access) { res.json({ venueName: access.venueName, neighborhood: access.neighborhood, address: access.address, email: access.email, canManageAnyPitch: false }); return; }
+  if (access) {
+    const canManageAnyPitch = !access.venueName.trim() || !access.neighborhood.trim();
+    res.json({ venueName: access.venueName, neighborhood: access.neighborhood, address: access.address, email: access.email, canManageAnyPitch });
+    return;
+  }
   res.status(403).json({ error: "Pitch owner access is required." });
 });
 
@@ -1483,12 +1487,12 @@ router.get("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (_r
 router.post("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (req, res): Promise<void> => {
   const userId = res.locals.userId as string;
   const access = await getPitchOwnerAccess(userId);
-  const canManageAnyPitch = await isAdminUser(userId);
+  const canManageAnyPitch = await isAdminUser(userId) || (!!access && (!access.venueName.trim() || !access.neighborhood.trim()));
   if (!access && !canManageAnyPitch) { res.status(403).json({ error: "Pitch owner access is required." }); return; }
   const user = canManageAnyPitch ? await clerkClient.users.getUser(userId) : null;
   const email = access?.email ?? user?.primaryEmailAddress?.emailAddress ?? OWNER_EMAIL;
-  const venueName = access?.venueName ?? (typeof req.body?.venueName === "string" ? req.body.venueName.trim() : "");
-  const neighborhood = access?.neighborhood ?? (typeof req.body?.neighborhood === "string" ? req.body.neighborhood.trim() : "");
+  const venueName = access?.venueName.trim() || (typeof req.body?.venueName === "string" ? req.body.venueName.trim() : "");
+  const neighborhood = access?.neighborhood.trim() || (typeof req.body?.neighborhood === "string" ? req.body.neighborhood.trim() : "");
   const submittedAddress = typeof req.body?.address === "string" ? req.body.address.trim() : "";
   const address = submittedAddress;
   if (!venueName || venueName.length > 120 || !neighborhood || neighborhood.length > 120 || address.length > 300 || !isGoogleMapsUrl(address)) { res.status(400).json({ error: "Add a valid HTTPS Google Maps link for the pitch location." }); return; }
@@ -1520,17 +1524,14 @@ router.get("/admin/pitch-owners", requireAuth, requireOwner, async (_req, res): 
 
 router.post("/admin/pitch-owners", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
-  const venueName = typeof req.body?.venueName === "string" ? req.body.venueName.trim() : "";
-  const neighborhood = typeof req.body?.neighborhood === "string" ? req.body.neighborhood.trim() : "";
-  const address = typeof req.body?.address === "string" ? req.body.address.trim() : "";
-  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !venueName || venueName.length > 120 || !neighborhood || neighborhood.length > 120 || address.length < 5 || address.length > 500) {
-    res.status(400).json({ error: "Add a valid verified email, pitch name, area, and full address." }); return;
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    res.status(400).json({ error: "Enter a valid email address." }); return;
   }
   const users = await clerkClient.users.getUserList({ emailAddress: [email], limit: 10 });
   const account = users.data.find((user) => user.emailAddresses.some((item) => item.verification?.status === "verified" && item.emailAddress.trim().toLowerCase() === email));
   if (!account) { res.status(404).json({ error: "No account with that verified email was found. Ask them to sign up and verify it first." }); return; }
-  const [access] = await db.insert(pitchOwnerAccessTable).values({ email, venueName, neighborhood, address, grantedByUserId: res.locals.userId as string })
-    .onConflictDoUpdate({ target: pitchOwnerAccessTable.email, set: { venueName, neighborhood, address, grantedByUserId: res.locals.userId as string } }).returning();
+  const [access] = await db.insert(pitchOwnerAccessTable).values({ email, venueName: "", neighborhood: "", address: "", grantedByUserId: res.locals.userId as string })
+    .onConflictDoUpdate({ target: pitchOwnerAccessTable.email, set: { grantedByUserId: res.locals.userId as string } }).returning();
   res.status(200).json(access);
 });
 

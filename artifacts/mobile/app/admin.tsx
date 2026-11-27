@@ -241,34 +241,37 @@ type PitchSubmission = { id: string; ownerEmail: string; venueName: string; neig
 
 function PitchOwnerManagement({ visible }: { visible: boolean }) {
   const colors = useColors(); const { getToken } = useAuth();
-  const [owners, setOwners] = useState<PitchOwnerGrant[]>([]); const [email, setEmail] = useState(''); const [venueName, setVenueName] = useState(''); const [neighborhood, setNeighborhood] = useState(''); const [address, setAddress] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const [owners, setOwners] = useState<PitchOwnerGrant[]>([]); const [email, setEmail] = useState(''); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   const request = useCallback(async (path: string, init: RequestInit = {}) => {
     const token = await getToken();
     const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
-    let body;
+    let body: unknown;
     try { body = response.status === 204 ? null : await response.json(); }
-    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KORZA API server, not the static app or Supabase URL.'); }
-    if (!response.ok) throw new Error(body?.error || 'Could not update pitch-owner access.');
+    catch { throw new Error(`Pitch-owner API returned a non-JSON response (HTTP ${response.status}, ${response.headers.get('content-type') || 'unknown content type'}). Check the Render API logs.`); }
+    if (!response.ok) {
+      const message = body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
+        ? body.error
+        : `Could not update pitch-owner access (HTTP ${response.status}).`;
+      throw new Error(message);
+    }
     return body;
   }, [getToken]);
   const load = useCallback(async () => { if (!visible) return; try { setOwners(await request('/admin/pitch-owners') as PitchOwnerGrant[]); setError(''); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load pitch owners.'); } }, [request, visible]);
   useEffect(() => { void load(); }, [load]);
   const save = () => {
-    if (!email.trim() || !venueName.trim() || !neighborhood.trim() || !address.trim()) { setError('Add the verified email and the pitch details.'); return; }
-    confirmAdminAction('Grant pitch-owner access?', `${email.trim()} can submit match times for ${venueName.trim()}. Every match request still needs admin approval.`, 'Grant access', false, () => { void (async () => { setBusy(true); setError(''); try { await request('/admin/pitch-owners', { method: 'POST', body: JSON.stringify({ email, venueName, neighborhood, address }) }); setEmail(''); setVenueName(''); setNeighborhood(''); setAddress(''); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not grant pitch-owner access.'); } finally { setBusy(false); } })(); });
+    const verifiedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(verifiedEmail)) { setError('Enter a valid, verified Gmail address.'); return; }
+    confirmAdminAction('Grant pitch-owner access?', `${verifiedEmail} can submit match requests. Pitch details are added with the first request, and every request needs admin approval.`, 'Grant access', false, () => { void (async () => { setBusy(true); setError(''); try { await request('/admin/pitch-owners', { method: 'POST', body: JSON.stringify({ email: verifiedEmail }) }); setEmail(''); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not grant pitch-owner access.'); } finally { setBusy(false); } })(); });
   };
-  const revoke = (owner: PitchOwnerGrant) => confirmAdminAction('Remove pitch-owner access?', `${owner.email} will no longer be able to submit match requests for ${owner.venueName}.`, 'Remove access', true, () => { void (async () => { setBusy(true); try { await request(`/admin/pitch-owners/${encodeURIComponent(owner.email)}`, { method: 'DELETE' }); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not remove pitch-owner access.'); } finally { setBusy(false); } })(); });
+  const revoke = (owner: PitchOwnerGrant) => confirmAdminAction('Remove pitch-owner access?', `${owner.email} will no longer be able to submit match requests.`, 'Remove access', true, () => { void (async () => { setBusy(true); try { await request(`/admin/pitch-owners/${encodeURIComponent(owner.email)}`, { method: 'DELETE' }); await load(); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not remove pitch-owner access.'); } finally { setBusy(false); } })(); });
   if (!visible) return null;
   return <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
     <Text style={[styles.formGroupTitle, { color: colors.primary, marginTop: 0 }]}>PITCH OWNER ACCESS</Text>
-    <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: -7, marginBottom: 12 }]}>Assign a verified account to one pitch. Their submitted dates remain private until an admin approves them.</Text>
-    <TextInput accessibilityLabel="Pitch owner verified email" autoCapitalize="none" keyboardType="email-address" placeholder="Verified account email" placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} style={[styles.ownerInput, { borderColor: colors.border, color: colors.foreground }]} />
-    <TextInput accessibilityLabel="Pitch name" placeholder="Pitch name" placeholderTextColor={colors.mutedForeground} value={venueName} onChangeText={setVenueName} style={[styles.ownerInput, { borderColor: colors.border, color: colors.foreground }]} />
-    <TextInput accessibilityLabel="Pitch area or neighborhood" placeholder="Area or neighborhood" placeholderTextColor={colors.mutedForeground} value={neighborhood} onChangeText={setNeighborhood} style={[styles.ownerInput, { borderColor: colors.border, color: colors.foreground }]} />
-    <TextInput accessibilityLabel="Full pitch address" multiline placeholder="Full pitch address" placeholderTextColor={colors.mutedForeground} value={address} onChangeText={setAddress} style={[styles.ownerInput, styles.ownerAddressInput, { borderColor: colors.border, color: colors.foreground }]} />
+    <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: -7, marginBottom: 12 }]}>Add a verified Gmail address. The owner can enter the pitch name, area, and map location with their first match request.</Text>
+    <TextInput accessibilityLabel="Pitch owner verified Gmail address" autoCapitalize="none" autoCorrect={false} keyboardType="email-address" placeholder="Verified Gmail address" placeholderTextColor={colors.mutedForeground} value={email} onChangeText={setEmail} style={[styles.ownerInput, { borderColor: colors.border, color: colors.foreground }]} />
     <Pressable accessibilityRole="button" disabled={busy} onPress={save} style={[styles.ownerGrantButton, { backgroundColor: colors.primary, opacity: busy ? .6 : 1 }]}><Feather name="user-plus" size={15} color={colors.primaryForeground} /><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{busy ? 'Saving…' : 'Add pitch owner'}</Text></Pressable>
     {error ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
-    {owners.map(owner => <View key={owner.email} style={[styles.adminGrantRow, { borderTopColor: colors.border }]}><View style={{ flex: 1 }}><Text numberOfLines={1} style={[styles.grantEmail, { color: colors.foreground }]}>{owner.email}</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 3 }]}>{owner.venueName} · {owner.neighborhood}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={`Remove pitch-owner access for ${owner.email}`} disabled={busy} onPress={() => revoke(owner)} style={[styles.revokeButton, { borderColor: colors.destructive }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>Remove</Text></Pressable></View>)}
+    {owners.map(owner => <View key={owner.email} style={[styles.adminGrantRow, { borderTopColor: colors.border }]}><View style={{ flex: 1 }}><Text numberOfLines={1} style={[styles.grantEmail, { color: colors.foreground }]}>{owner.email}</Text><Text style={[styles.meta, { color: colors.mutedForeground, marginTop: 3 }]}>{owner.venueName || owner.neighborhood ? [owner.venueName, owner.neighborhood].filter(Boolean).join(' · ') : 'Pitch details added with first match request'}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={`Remove pitch-owner access for ${owner.email}`} disabled={busy} onPress={() => revoke(owner)} style={[styles.revokeButton, { borderColor: colors.destructive }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>Remove</Text></Pressable></View>)}
   </View>;
 }
 
@@ -400,7 +403,6 @@ const styles = StyleSheet.create({
   noteText: { flex: 1, fontSize: 13, lineHeight: 19 },
   accessCard: { borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 15 },
   ownerInput: { minHeight: 46, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, marginBottom: 8 },
-  ownerAddressInput: { minHeight: 70, textAlignVertical: 'top' },
   ownerGrantButton: { minHeight: 46, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   requestCount: { minHeight: 28, borderRadius: 14, paddingHorizontal: 9, alignItems: 'center', justifyContent: 'center' },
   requestCard: { borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 12 },
