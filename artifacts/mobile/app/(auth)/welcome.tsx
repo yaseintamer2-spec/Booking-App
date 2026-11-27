@@ -17,15 +17,15 @@ export default function WelcomeScreen() {
   if (isLoaded && isSignedIn) return <Redirect href="/(tabs)" />;
   return <ImageBackground source={heroImage} resizeMode="cover" style={styles.background}>
     <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(6,13,10,0.46)' }]} />
-    <View style={[styles.content, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 67 : 0) + 18, paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 34 : 0) + 24 }]}>
-      <View style={styles.topline}><View style={[styles.mark, { backgroundColor: colors.primary }]}><Feather name="activity" size={18} color={colors.primaryForeground} /></View><Text style={[styles.wordmark, { color: colors.foreground }]}>KICKOFF</Text><Text style={[styles.city, { color: colors.foreground }]}>RIYADH</Text></View>
-      <View style={styles.hero}><Text style={[styles.title, { color: colors.foreground }]}>7v7 football,{ '\n' }ready to book.</Text><Text style={[styles.body, { color: colors.foreground }]}>Find a Riyadh pitch, check the kickoff time and open spots, then join a match.</Text></View>
+    <View style={[styles.content, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 32 : 0) + 18, paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 24 : 0) + 24 }]}>
+      <View style={styles.topline}><View style={[styles.mark, { backgroundColor: colors.primary }]}><Feather name="activity" size={18} color={colors.primaryForeground} /></View><Text style={styles.wordmark}>KICKOFF</Text><View style={styles.cityBadge}><Feather name="map-pin" size={11} color="#FFFFFF" /><Text style={styles.city}>RIYADH, SA</Text></View></View>
+      <View style={styles.hero}><Text style={styles.eyebrow}>THE CITY IS YOUR PITCH</Text><Text style={styles.title}>Find your people.{'\n'}Play your game.</Text><Text style={styles.body}>Book a well-organized 7v7 match in Riyadh. Real pitches, clear details, no guesswork.</Text></View>
       <View style={{ gap: 10 }}>
         <GoogleSignInButton />
-        <Text style={[styles.emailDivider, { color: colors.foreground }]}>OR CONTINUE WITH EMAIL</Text>
+        <Text style={styles.emailDivider}>OR CONTINUE WITH EMAIL</Text>
         <Button label="Create your account" onPress={() => router.push('/(auth)/sign-up')} icon="arrow-up-right" />
         <Button label="I already have an account" onPress={() => router.push('/(auth)/sign-in')} secondary />
-        <Text style={[styles.legal, { color: colors.foreground }]}>Email verification keeps every player real.</Text>
+        <Text style={styles.legal}>Secure sign-in · Verified players · Riyadh matches</Text>
       </View>
     </View>
   </ImageBackground>;
@@ -33,14 +33,16 @@ export default function WelcomeScreen() {
 
 const styles = StyleSheet.create({
   background: { flex: 1, justifyContent: 'flex-end' },
-  content: { flex: 1, paddingHorizontal: 25, justifyContent: 'space-between' },
+  content: { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 24, justifyContent: 'space-between' },
   topline: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  mark: { width: 34, height: 34, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
-  wordmark: { fontSize: 14, letterSpacing: 2.4, fontWeight: '800' },
-  city: { fontSize: 9, letterSpacing: 1.8, marginLeft: 'auto', opacity: 0.75 },
-  hero: { marginTop: 'auto', marginBottom: 42, maxWidth: 430 },
-  title: { fontSize: 40, lineHeight: 46, fontWeight: '900', letterSpacing: -.6 },
-  body: { fontSize: 15, lineHeight: 23, maxWidth: 340, marginTop: 12, opacity: 0.92 },
-  legal: { textAlign: 'center', fontSize: 12, lineHeight: 17, opacity: 0.86, marginTop: 4 },
-  emailDivider: { textAlign: 'center', fontSize: 11, letterSpacing: .4, fontWeight: '700', marginTop: 4, marginBottom: 1, opacity: 0.86 },
+  mark: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  wordmark: { color: '#FFFFFF', fontSize: 14, letterSpacing: 2.1, fontWeight: '800' },
+  cityBadge: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 5, marginLeft: 'auto', paddingHorizontal: 10, borderRadius: 16, backgroundColor: 'rgba(255,255,255,.14)' },
+  city: { color: '#FFFFFF', fontSize: 9, letterSpacing: 1, fontWeight: '800' },
+  hero: { marginTop: 'auto', marginBottom: 34, maxWidth: 450 },
+  eyebrow: { color: '#A8E3C0', fontSize: 10, fontWeight: '800', letterSpacing: 1.7, marginBottom: 11 },
+  title: { color: '#FFFFFF', fontSize: 38, lineHeight: 44, fontWeight: '900', letterSpacing: -.7 },
+  body: { color: '#EDF2EF', fontSize: 14, lineHeight: 22, maxWidth: 370, marginTop: 12 },
+  legal: { color: '#E2E9E4', textAlign: 'center', fontSize: 11, lineHeight: 16, marginTop: 4 },
+  emailDivider: { color: '#E2E9E4', textAlign: 'center', fontSize: 10, letterSpacing: 1, fontWeight: '800', marginTop: 4, marginBottom: 1 },
 });

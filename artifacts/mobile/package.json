@@ -57,6 +57,8 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@react-native-community/datetimepicker": "9.2.1",
+    "@workspace/api-zod": "workspace:*",
     "expo-auth-session": "58.0.12",
     "expo-camera": "~58.0.14",
     "expo-crypto": "58.0.7",
@@ -65,4 +67,3 @@
     "react-native-qrcode-svg": "^6.3.54"
   }
 }
-

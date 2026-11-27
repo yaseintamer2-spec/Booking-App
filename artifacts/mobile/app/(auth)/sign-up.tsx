@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useAuth, useSignUp } from '@clerk/expo';
 import { Feather } from '@expo/vector-icons';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
-import { BrandHeader, Button, Field, GoogleSignInButton, heroImage } from '@/components/KickoffUI';
+import { BrandHeader, Button, Field, GoogleSignInButton } from '@/components/KickoffUI';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -39,10 +39,10 @@ export default function SignUpScreen() {
     }
   };
   const errorsText = errors.fields.emailAddress?.message || errors.fields.password?.message || errors.fields.code?.message;
-  return <ImageBackground source={heroImage} resizeMode="cover" style={styles.background}>
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop]} />
-    <BrandHeader back backFallback="/(auth)/welcome" hideMenu />
+  return <View style={[styles.background, { backgroundColor: colors.background }]}>
+    <View style={styles.headerWrap}><BrandHeader back backFallback="/(auth)/welcome" hideMenu /></View>
     <KeyboardAwareScrollViewCompat bottomOffset={72} contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 28 }]}>
+      <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Text style={[styles.title, { color: colors.foreground }]}>{verifyStep ? 'Verify your email' : 'Create your account'}</Text>
       <Text style={[styles.copy, { color: colors.mutedForeground }]}>{verifyStep ? `Enter the code sent to ${email}.` : 'Use your email to join matches and keep your tickets together.'}</Text>
       {verifyStep ? <View style={{ marginTop: 30 }}><Field label="EMAIL VERIFICATION CODE" value={code} onChangeText={setCode} placeholder="Enter the code" keyboardType="numeric" /><Button label={fetchStatus === 'fetching' ? 'Verifying…' : 'Verify and continue'} onPress={verify} disabled={!code || fetchStatus === 'fetching'} /><Pressable onPress={async () => { try { await signUp.verifications.sendEmailCode(); setMessage(`A new code was sent to ${email}.`); } catch { setMessage('Could not resend the code. Try again shortly.'); } }} style={styles.resend}><Text style={[styles.resendText, { color: colors.primary }]}>Send me a new code</Text></Pressable></View> :
@@ -52,8 +52,9 @@ export default function SignUpScreen() {
       <View nativeID="clerk-captcha" />
       <View style={styles.footer}><Text style={[styles.copy, { color: colors.mutedForeground }]}>Already a member? </Text><Link href="/(auth)/sign-in" style={{ color: colors.primary, fontWeight: '700' }}>Sign in</Link></View>
       <View style={[styles.security, { borderColor: colors.border }]}><Feather name="lock" size={14} color={colors.primary} /><Text style={[styles.helper, { color: colors.mutedForeground }]}>Your account is secured by Clerk. Email verification happens once during sign-up.</Text></View>
+      </View>
     </KeyboardAwareScrollViewCompat>
-  </ImageBackground>;
+  </View>;
 }
 function LegalConsentRow({ checked, onPress, colors, router }: { checked: boolean; onPress: () => void; colors: ReturnType<typeof useColors>; router: ReturnType<typeof useRouter> }) {
   return <View style={styles.legalRow}>
@@ -62,4 +63,4 @@ function LegalConsentRow({ checked, onPress, colors, router }: { checked: boolea
   </View>;
 }
 
-const styles = StyleSheet.create({ background: { flex: 1, width: '100%', height: '100%' }, backdrop: { backgroundColor: 'rgba(5,17,26,0.74)' }, container: { paddingHorizontal: 24, paddingTop: 19 }, title: { fontSize: 30, lineHeight: 37, fontWeight: '800' }, copy: { fontSize: 14, lineHeight: 21, marginTop: 7 }, helper: { fontSize: 13, lineHeight: 19, marginBottom: 17 }, error: { fontSize: 13, lineHeight: 19, marginTop: 14 }, footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 27 }, resend: { alignSelf: 'center', minHeight: 44, paddingHorizontal: 12, justifyContent: 'center' }, resendText: { fontSize: 13, fontWeight: '700' }, security: { borderTopWidth: 1, marginTop: 25, paddingTop: 16, flexDirection: 'row', gap: 10 }, divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 22 }, rule: { height: 1, flex: 1 }, or: { fontSize: 11, letterSpacing: .4 }, legalRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 15 }, legalCheck: { width: 24, height: 24, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center' }, legalText: { flex: 1, fontSize: 13, lineHeight: 19 }, legalHint: { textAlign: 'center', fontSize: 12, lineHeight: 17, marginTop: 8 } });
+const styles = StyleSheet.create({ background: { flex: 1, width: '100%', height: '100%' }, headerWrap: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 24 }, container: { width: '100%', alignSelf: 'center', maxWidth: 560, paddingHorizontal: 24, paddingTop: 12 }, formCard: { borderWidth: 1, borderRadius: 22, padding: 22 }, title: { fontSize: 29, lineHeight: 36, fontWeight: '800', letterSpacing: -.4 }, copy: { fontSize: 14, lineHeight: 21, marginTop: 7 }, helper: { fontSize: 13, lineHeight: 19, marginBottom: 17 }, error: { fontSize: 13, lineHeight: 19, marginTop: 14 }, footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 27 }, resend: { alignSelf: 'center', minHeight: 44, paddingHorizontal: 12, justifyContent: 'center' }, resendText: { fontSize: 13, fontWeight: '700' }, security: { borderTopWidth: 1, marginTop: 25, paddingTop: 16, flexDirection: 'row', gap: 10 }, divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 22 }, rule: { height: 1, flex: 1 }, or: { fontSize: 11, letterSpacing: .4 }, legalRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 15 }, legalCheck: { width: 24, height: 24, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center' }, legalText: { flex: 1, fontSize: 13, lineHeight: 19 }, legalHint: { textAlign: 'center', fontSize: 12, lineHeight: 17, marginTop: 8 } });

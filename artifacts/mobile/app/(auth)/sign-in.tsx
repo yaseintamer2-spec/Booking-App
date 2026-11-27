@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { ImageBackground, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useAuth, useSignIn } from '@clerk/expo';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
-import { BrandHeader, Button, Field, GoogleSignInButton, heroImage } from '@/components/KickoffUI';
+import { BrandHeader, Button, Field, GoogleSignInButton } from '@/components/KickoffUI';
 import { useColors } from '@/hooks/useColors';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -29,18 +29,19 @@ export default function SignInScreen() {
     }
   };
   const errorField = errors.fields.identifier?.message || errors.fields.password?.message;
-  return <ImageBackground source={heroImage} resizeMode="cover" style={styles.background}>
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.backdrop]} />
-    <BrandHeader title="KICKOFF" back backFallback="/(auth)/welcome" hideMenu />
+  return <View style={[styles.background, { backgroundColor: colors.background }]}>
+    <View style={styles.headerWrap}><BrandHeader title="KICKOFF" back backFallback="/(auth)/welcome" hideMenu /></View>
     <KeyboardAwareScrollViewCompat bottomOffset={72} contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 28 }]}>
-      <Text style={[styles.title, { color: colors.foreground }]}>Sign in to KICKOFF</Text><Text style={[styles.copy, { color: colors.mutedForeground }]}>Find matches and manage your bookings.</Text>
+      <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Text style={[styles.title, { color: colors.foreground }]}>Welcome back</Text><Text style={[styles.copy, { color: colors.mutedForeground }]}>Sign in to find matches and keep your bookings together.</Text>
       <View style={{ marginTop: 28 }}><Field label="EMAIL ADDRESS" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoComplete="email" /><Field label="PASSWORD" value={password} onChangeText={setPassword} placeholder="Your password" secureTextEntry autoComplete="current-password" /></View>
       {errorField || message ? <Text style={[styles.error, { color: colors.destructive }]}>{message || errorField}</Text> : null}
       <Button label={busy ? 'Signing in…' : 'Sign in'} onPress={submit} disabled={!email || !password || busy} icon="arrow-right" />
       <View style={styles.divider}><View style={[styles.rule, { backgroundColor: colors.border }]} /><Text style={[styles.or, { color: colors.mutedForeground }]}>OR CONTINUE WITH</Text><View style={[styles.rule, { backgroundColor: colors.border }]} /></View>
       <GoogleSignInButton />
       <View style={styles.footer}><Text style={[styles.copy, { color: colors.mutedForeground }]}>New to KICKOFF? </Text><Link href="/(auth)/sign-up" style={{ color: colors.primary, fontWeight: '700' }}>Create account</Link></View>
+      </View>
     </KeyboardAwareScrollViewCompat>
-  </ImageBackground>;
+  </View>;
 }
-const styles = StyleSheet.create({ background: { flex: 1, width: '100%', height: '100%' }, backdrop: { backgroundColor: 'rgba(5,17,26,0.74)' }, container: { paddingHorizontal: 24, paddingTop: 19 }, title: { fontSize: 30, lineHeight: 37, fontWeight: '800' }, copy: { fontSize: 14, lineHeight: 21, marginTop: 7 }, error: { fontSize: 13, lineHeight: 19, marginBottom: 12 }, divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 22 }, rule: { height: 1, flex: 1 }, or: { fontSize: 11, letterSpacing: .4 }, footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 25 } });
+const styles = StyleSheet.create({ background: { flex: 1, width: '100%', height: '100%' }, headerWrap: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 24 }, container: { width: '100%', alignSelf: 'center', maxWidth: 560, paddingHorizontal: 24, paddingTop: 12 }, formCard: { borderWidth: 1, borderRadius: 22, padding: 22 }, title: { fontSize: 29, lineHeight: 36, fontWeight: '800', letterSpacing: -.4 }, copy: { fontSize: 14, lineHeight: 21, marginTop: 7 }, error: { fontSize: 13, lineHeight: 19, marginBottom: 12 }, divider: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 22 }, rule: { height: 1, flex: 1 }, or: { fontSize: 11, letterSpacing: .4 }, footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 25 } });

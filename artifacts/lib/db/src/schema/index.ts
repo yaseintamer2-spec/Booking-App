@@ -300,6 +300,7 @@ export const pitchMatchSubmissionsTable = pgTable(
     capacity: integer("capacity").notNull().default(14),
     priceHalalas: integer("price_halalas").notNull(),
     compareAtPriceHalalas: integer("compare_at_price_halalas").notNull(),
+    rentalPriceHalalas: integer("rental_price_halalas"),
     refereeIncluded: boolean("referee_included").notNull().default(true),
     waterIncluded: boolean("water_included").notNull().default(true),
     imageUrls: jsonb("image_urls").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
@@ -321,6 +322,7 @@ export const pitchMatchSubmissionsTable = pgTable(
     check("pitch_match_submissions_capacity_check", sql`${table.capacity} BETWEEN 2 AND 30`),
     check("pitch_match_submissions_duration_check", sql`${table.durationMinutes} BETWEEN 30 AND 240`),
     check("pitch_match_submissions_price_check", sql`${table.priceHalalas} >= 0 AND ${table.compareAtPriceHalalas} >= ${table.priceHalalas}`),
+    check("pitch_match_submissions_rental_price_check", sql`${table.rentalPriceHalalas} IS NULL OR ${table.rentalPriceHalalas} > 0`),
   ],
 );
 

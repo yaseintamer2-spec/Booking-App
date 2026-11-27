@@ -190,7 +190,7 @@ export default function MatchesScreen() {
 
   return <Screen refreshing={matches.isRefetching} onRefresh={() => { void matches.refetch(); }}>
     <BrandHeader user={user.data} subtitle="RIYADH" />
-    <View style={styles.pageHeading}><Text style={[styles.pageTitle, { color: colors.foreground }]}>Find a match</Text><Text style={[styles.pageDescription, { color: colors.mutedForeground }]}>Compare pitch photos, kickoff times, and places available before you book.</Text></View>
+    <View style={styles.pageHeading}><Text style={[styles.pageKicker, { color: colors.primary }]}>DISCOVER · RIYADH</Text><Text style={[styles.pageTitle, { color: colors.foreground }]}>Find a match</Text><Text style={[styles.pageDescription, { color: colors.mutedForeground }]}>Good pitches, clear details, and open spots. Your next game is closer than you think.</Text></View>
     <Pressable accessibilityRole="button" onPress={() => router.push('/player-age' as never)} style={[styles.ageLink, { backgroundColor: `${colors.violet}12`, borderColor: `${colors.violet}44` }]}><Feather name="user" size={16} color={colors.violet} /><Text style={{ flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '700', color: colors.foreground }}>{playerAge == null ? 'Set your age to see recommended matches' : `Age ${playerAge} · ${recommendedAgeGroup ? `recommended group ${recommendedAgeGroup.replace('-', '–')}` : 'update age'}`}</Text><Feather name="chevron-right" size={17} color={colors.violet} /></Pressable>
 
     <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -259,13 +259,14 @@ function FilterChip({ label, selected, onPress, colors, compact = false }: { lab
 }
 
 const styles = StyleSheet.create({
-  pageHeading: { marginTop: 7, marginBottom: 13 },
-  pageTitle: { fontSize: 27, lineHeight: 33, fontWeight: '800' },
-  pageDescription: { fontSize: 14, lineHeight: 20, marginTop: 5 },
-  ageLink: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderRadius: 14, marginBottom: 12 },
-  searchBox: { height: 50, borderWidth: 1, borderRadius: 14, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, gap: 10 },
-  searchInput: { flex: 1, fontSize: 13 },
-  alertRow: { minHeight: 64, borderWidth: 1, borderRadius: 14, paddingHorizontal: 13, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 11 },
+  pageHeading: { marginTop: 4, marginBottom: 17 },
+  pageKicker: { fontSize: 10, lineHeight: 15, letterSpacing: 1.4, fontWeight: '800', marginBottom: 4 },
+  pageTitle: { fontSize: 31, lineHeight: 38, fontWeight: '800', letterSpacing: -.5 },
+  pageDescription: { fontSize: 14, lineHeight: 21, marginTop: 6, maxWidth: 560 },
+  ageLink: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderRadius: 15, marginBottom: 12 },
+  searchBox: { height: 54, borderWidth: 1, borderRadius: 15, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 11 },
+  searchInput: { flex: 1, fontSize: 14 },
+  alertRow: { minHeight: 68, borderWidth: 1, borderRadius: 15, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 11, marginTop: 12 },
   alertCopy: { flex: 1, gap: 4 },
   alertTitle: { fontSize: 13, fontWeight: '800' },
   alertDescription: { fontSize: 12, lineHeight: 17 },
@@ -280,7 +281,7 @@ const styles = StyleSheet.create({
   pushAllowText: { fontSize: 13, fontWeight: '800' },
   pushLater: { minHeight: 48, width: '100%', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   pushLaterText: { fontSize: 12, fontWeight: '700' },
-  filterBar: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderRadius: 18, padding: 7, marginTop: 12 },
+  filterBar: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderRadius: 16, padding: 5, marginTop: 12 },
   filterOpenButton: { flex: 1, minWidth: 0, minHeight: 46, borderWidth: 1, borderRadius: 13, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   filterOpenText: { fontSize: 12, fontWeight: '800' },
   filterCount: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
@@ -310,7 +311,7 @@ const styles = StyleSheet.create({
   sheetApplyText: { fontSize: 13, fontWeight: '900' },
   clearButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.12)', marginTop: 2 },
   clearText: { fontSize: 12, fontWeight: '700' },
-  resultCount: { fontSize: 11, fontWeight: '600', marginTop: 4, marginBottom: 8 },
+  resultCount: { fontSize: 12, fontWeight: '700', marginTop: 13, marginBottom: 10 },
 });
 
 

@@ -35,12 +35,12 @@ type FormState = {
   venueName: string; neighborhood: string; address: string; startsAt: string;
   durationMinutes: string; capacity: string; price: string; compareAt: string;
   ageGroup: MatchAgeGroup;
-  status: 'draft' | 'published' | 'cancelled'; refereeIncluded: boolean; refereeUserId: string; waterIncluded: boolean; imageUrl: string; imageUrls: string[];
+  status: 'draft' | 'published' | 'cancelled'; refereeUserId: string; waterIncluded: boolean; imageUrl: string; imageUrls: string[];
 };
-const freshForm = (): FormState => ({ venueName: '', neighborhood: '', address: '', startsAt: toRiyadhLocalInput(new Date(Date.now() + 86400000)), durationMinutes: '120', capacity: '14', price: '30', compareAt: '35', ageGroup: '13-16', status: 'draft', refereeIncluded: true, refereeUserId: '', waterIncluded: true, imageUrl: '', imageUrls: [] });
+const freshForm = (): FormState => ({ venueName: '', neighborhood: '', address: '', startsAt: toRiyadhLocalInput(new Date(Date.now() + 86400000)), durationMinutes: '120', capacity: '14', price: '30', compareAt: '35', ageGroup: '13-16', status: 'draft', refereeUserId: '', waterIncluded: true, imageUrl: '', imageUrls: [] });
 function fromMatch(match: Match): FormState {
   const imageUrls = match.imageUrls?.length ? match.imageUrls : /^https:\/\//i.test(match.imageUrl) ? [match.imageUrl] : [];
-  return { venueName: match.venueName, neighborhood: match.neighborhood, address: match.address, startsAt: toRiyadhLocalInput(match.startsAt), durationMinutes: String(match.durationMinutes), capacity: String(match.capacity), ageGroup: match.ageGroup, price: String(match.priceHalalas / 100), compareAt: String(match.compareAtPriceHalalas / 100), status: match.status, refereeIncluded: match.refereeIncluded, refereeUserId: match.refereeUserId || '', waterIncluded: match.waterIncluded, imageUrl: imageUrls[0] || '', imageUrls };
+  return { venueName: match.venueName, neighborhood: match.neighborhood, address: match.address, startsAt: toRiyadhLocalInput(match.startsAt), durationMinutes: String(match.durationMinutes), capacity: String(match.capacity), ageGroup: match.ageGroup, price: String(match.priceHalalas / 100), compareAt: String(match.compareAtPriceHalalas / 100), status: match.status, refereeUserId: match.refereeUserId || '', waterIncluded: match.waterIncluded, imageUrl: imageUrls[0] || '', imageUrls };
 }
 
 export default function AdminScreen() {
@@ -102,8 +102,8 @@ export default function AdminScreen() {
     setFormError('');
     const startsAt = parseRiyadhLocalInput(form.startsAt);
     if (!form.venueName.trim() || !form.neighborhood.trim() || form.address.trim().length < 5 || !startsAt) { setFormError('Add a venue, Riyadh neighborhood, full address, and date/time in YYYY-MM-DDTHH:mm format.'); return; }
-    const payload = { venueName: form.venueName.trim(), neighborhood: form.neighborhood.trim(), address: form.address.trim(), startsAt: startsAt.toISOString(), durationMinutes: Number(form.durationMinutes), capacity: Number(form.capacity), ageGroup: form.ageGroup, priceHalalas: Math.round(Number(form.price) * 100), compareAtPriceHalalas: Math.round(Number(form.compareAt) * 100), status: form.status, refereeIncluded: form.refereeIncluded, refereeUserId: form.refereeUserId || null, waterIncluded: form.waterIncluded, imageUrl: 'match-card', imageUrls: form.imageUrls };
-    if (!Number.isInteger(payload.durationMinutes) || payload.durationMinutes < 30 || payload.durationMinutes > 240 || !Number.isInteger(payload.capacity) || payload.capacity < 2 || payload.capacity > 30 || !Number.isFinite(payload.priceHalalas) || payload.priceHalalas < 0 || !Number.isFinite(payload.compareAtPriceHalalas) || payload.compareAtPriceHalalas <= payload.priceHalalas) { setFormError('Use 30–240 minutes, 2–30 players, and a compare-at price above the SAR player price.'); return; }
+    const payload = { venueName: form.venueName.trim(), neighborhood: form.neighborhood.trim(), address: form.address.trim(), startsAt: startsAt.toISOString(), durationMinutes: Number(form.durationMinutes), capacity: Number(form.capacity), ageGroup: form.ageGroup, priceHalalas: Math.round(Number(form.price) * 100), compareAtPriceHalalas: Math.round(Number(form.compareAt) * 100), status: form.status, refereeIncluded: true, refereeUserId: form.refereeUserId || null, waterIncluded: form.waterIncluded, imageUrl: 'match-card', imageUrls: form.imageUrls };
+    if (!Number.isInteger(payload.durationMinutes) || payload.durationMinutes < 30 || payload.durationMinutes > 240 || !Number.isInteger(payload.capacity) || payload.capacity < 2 || payload.capacity > 30 || !Number.isFinite(payload.priceHalalas) || payload.priceHalalas < 0 || !Number.isFinite(payload.compareAtPriceHalalas) || payload.compareAtPriceHalalas < payload.priceHalalas) { setFormError('Use 30–240 minutes, 2–30 players, and a compare-at price at least as high as the SAR player price.'); return; }
     if (startsAt.getTime() <= Date.now()) { setFormError('Match start time must be in the future.'); return; }
     try {
       setPhotoUploadBusy(true);
@@ -209,8 +209,8 @@ export default function AdminScreen() {
           <View style={styles.photoRow}>{form.imageUrls.map((uri, index) => <View key={`${index}-${uri.slice(0, 30)}`} style={styles.photoPreviewWrap}><Image source={{ uri }} style={styles.photoPreview} /><Pressable accessibilityRole="button" accessibilityLabel={`Remove pitch photo ${index + 1}`} onPress={() => removePhoto(index)} style={[styles.removePhoto, { backgroundColor: colors.background, borderColor: colors.border }]}><Feather name="x" size={15} color={colors.foreground} /></Pressable></View>)}{form.imageUrls.length < 3 ? <Pressable accessibilityRole="button" accessibilityLabel="Choose pitch photos" onPress={() => void addPhotos()} style={[styles.addPhoto, { borderColor: colors.border, backgroundColor: colors.card }]}><Feather name="image" size={19} color={colors.primary} /><Text style={[styles.addPhotoText, { color: colors.foreground }]}>Add photos</Text></Pressable> : null}</View>
           <Text style={[styles.formGroupTitle, { color: colors.primary }]}>STATUS AND INCLUSIONS</Text>
           <View style={styles.statusChoices}>{(['draft', 'published', 'cancelled'] as const).map(status => <Pressable key={status} onPress={() => change('status', status)} style={[styles.statusChoice, { borderColor: form.status === status ? colors.primary : colors.border, backgroundColor: form.status === status ? colors.accent : colors.card }]}><Text style={{ color: form.status === status ? colors.primary : colors.mutedForeground, fontSize: 10, fontWeight: '700' }}>{status.toUpperCase()}</Text></Pressable>)}</View>
-          <ToggleRow label="Referee included" value={form.refereeIncluded} onPress={() => change('refereeIncluded', !form.refereeIncluded)} />
-          <Text style={[styles.photoHint, { color: colors.mutedForeground, marginTop: 8 }]}>ASSIGNED REFEREE · OPTIONAL</Text>
+          <Text style={[styles.photoHint, { color: colors.mutedForeground, marginTop: 8 }]}>ASSIGN REFEREE</Text>
+          <Text style={[styles.meta, { color: colors.mutedForeground, marginTop: -7 }]}>Every match includes a referee. Assign one here or review referee applications below.</Text>
           {refereeLoadError ? <Text style={[styles.error, { color: colors.mutedForeground }]}>{refereeLoadError}</Text> : null}
           <View style={styles.refereeOptions}>
             {[{ id: '', name: 'Not assigned', avatarUrl: null }, ...referees].map(referee => {
@@ -237,7 +237,7 @@ function ToggleRow({ label, value, onPress }: { label: string; value: boolean; o
 
 type PitchOwnerGrant = { email: string; venueName: string; neighborhood: string; address: string };
 type RefereeGrant = { email: string; createdAt: string };
-type PitchSubmission = { id: string; ownerEmail: string; venueName: string; neighborhood: string; address: string; contactPhone: string; startsAt: string; durationMinutes: number; capacity: number; priceHalalas: number; compareAtPriceHalalas: number; refereeIncluded: boolean; waterIncluded: boolean; imageUrls: string[] };
+type PitchSubmission = { id: string; ownerEmail: string; venueName: string; neighborhood: string; address: string; contactPhone: string; startsAt: string; durationMinutes: number; capacity: number; rentalPriceHalalas: number | null; refereeIncluded: boolean; waterIncluded: boolean; imageUrls: string[] };
 
 function PitchOwnerManagement({ visible }: { visible: boolean }) {
   const colors = useColors(); const { getToken } = useAuth();
@@ -274,7 +274,7 @@ function PitchOwnerManagement({ visible }: { visible: boolean }) {
 
 function PitchSubmissionReview({ visible }: { visible: boolean }) {
   const colors = useColors(); const { getToken } = useAuth(); const qc = useQueryClient();
-  const [submissions, setSubmissions] = useState<PitchSubmission[]>([]); const [busyId, setBusyId] = useState(''); const [error, setError] = useState('');
+  const [submissions, setSubmissions] = useState<PitchSubmission[]>([]); const [ticketPrices, setTicketPrices] = useState<Record<string, string>>({}); const [busyId, setBusyId] = useState(''); const [error, setError] = useState('');
   const request = useCallback(async (path: string, init: RequestInit = {}) => {
     const token = await getToken();
     const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
@@ -288,7 +288,12 @@ function PitchSubmissionReview({ visible }: { visible: boolean }) {
   useEffect(() => { void load(); }, [load]);
   const review = (submission: PitchSubmission, action: 'approve' | 'reject') => {
     const isApprove = action === 'approve';
-    confirmAdminAction(isApprove ? 'Approve and publish this match?' : 'Reject this match request?', isApprove ? `${submission.venueName} · ${formatRiyadhDateTime(submission.startsAt)} Riyadh. It will immediately appear in Discover using the existing match card.` : `${submission.venueName} · ${formatRiyadhDateTime(submission.startsAt)} Riyadh. It will stay out of Discover.`, isApprove ? 'Approve & publish' : 'Reject request', !isApprove, () => { void (async () => { setBusyId(submission.id); setError(''); try { await request(`/admin/pitch-match-submissions/${submission.id}`, { method: 'PATCH', body: JSON.stringify({ action }) }); await load(); if (isApprove) await Promise.all([qc.invalidateQueries({ queryKey: getListAdminMatchesQueryKey() }), qc.invalidateQueries({ queryKey: getListMatchesQueryKey() })]); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not review this request.'); } finally { setBusyId(''); } })(); });
+    const enteredPrice = ticketPrices[submission.id]?.trim() ?? '';
+    const playerPriceHalalas = Math.round(Number(enteredPrice) * 100);
+    if (isApprove && (!/^\d+(?:\.\d{1,2})?$/.test(enteredPrice) || !Number.isSafeInteger(playerPriceHalalas) || playerPriceHalalas > 2_147_483_647)) { setError('Enter the player ticket price in SAR before approving this request.'); return; }
+    const body = isApprove ? { action, playerPriceHalalas } : { action };
+    const rentalPrice = submission.rentalPriceHalalas === null ? 'not recorded' : formatSar(submission.rentalPriceHalalas);
+    confirmAdminAction(isApprove ? 'Approve and publish this match?' : 'Reject this match request?', isApprove ? `${submission.venueName} · ${formatRiyadhDateTime(submission.startsAt)} Riyadh · 2 hours. Pitch rental: ${rentalPrice}. Player ticket: ${formatSar(playerPriceHalalas)}. It will appear in Discover.` : `${submission.venueName} · ${formatRiyadhDateTime(submission.startsAt)} Riyadh. It will stay out of Discover.`, isApprove ? 'Approve & publish' : 'Reject request', !isApprove, () => { void (async () => { setBusyId(submission.id); setError(''); try { await request(`/admin/pitch-match-submissions/${submission.id}`, { method: 'PATCH', body: JSON.stringify(body) }); await load(); if (isApprove) await Promise.all([qc.invalidateQueries({ queryKey: getListAdminMatchesQueryKey() }), qc.invalidateQueries({ queryKey: getListMatchesQueryKey() })]); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not review this request.'); } finally { setBusyId(''); } })(); });
   };
   if (!visible) return null;
   return <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -296,10 +301,13 @@ function PitchSubmissionReview({ visible }: { visible: boolean }) {
     {error ? <Text accessibilityRole="alert" style={[styles.error, { color: colors.destructive }]}>{error}</Text> : null}
     {submissions.length ? submissions.map(submission => <View key={submission.id} style={[styles.requestCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
       <Text style={[styles.venue, { color: colors.foreground }]}>{submission.venueName}</Text>
-      <Text style={[styles.meta, { color: colors.mutedForeground }]}>{submission.neighborhood} · {formatRiyadhDateTime(submission.startsAt)} · {submission.durationMinutes} min</Text>
+      <Text style={[styles.meta, { color: colors.mutedForeground }]}>{submission.neighborhood} · {formatRiyadhDateTime(submission.startsAt)} · 2 hours</Text>
       <Text style={[styles.meta, { color: colors.mutedForeground }]}>Owner: {submission.ownerEmail} · Contact: {submission.contactPhone}</Text>
-      <Text style={[styles.meta, { color: colors.mutedForeground }]}>{submission.capacity} players · {formatSar(submission.priceHalalas)} each · {submission.address}</Text>
+      <Text style={[styles.meta, { color: colors.mutedForeground }]}>{submission.capacity} players · Pitch rental (private): {submission.rentalPriceHalalas === null ? 'not recorded' : formatSar(submission.rentalPriceHalalas)}</Text>
+      <Text style={[styles.meta, { color: colors.mutedForeground }]}>Google Maps location: {submission.address}</Text>
       <View style={styles.requestPhotos}>{submission.imageUrls.slice(0, 3).map((uri, index) => <Image key={`${submission.id}-${index}`} source={{ uri }} style={[styles.requestPhoto, { borderColor: colors.border }]} accessibilityLabel={`Submitted pitch photo ${index + 1}`} />)}</View>
+      <Text style={[styles.formGroupTitle, { color: colors.primary, marginBottom: 6 }]}>PLAYER TICKET PRICE · SAR</Text>
+      <TextInput accessibilityLabel={`Player ticket price in SAR for ${submission.venueName}`} value={ticketPrices[submission.id] ?? ''} onChangeText={(value) => setTicketPrices((current) => ({ ...current, [submission.id]: value }))} placeholder="Enter price per player" placeholderTextColor={colors.mutedForeground} keyboardType="decimal-pad" editable={!busyId} style={[styles.ownerInput, { borderColor: colors.border, color: colors.foreground }]} />
       <View style={styles.reviewActions}>
         <Pressable accessibilityRole="button" disabled={!!busyId} onPress={() => review(submission, 'reject')} style={[styles.rejectButton, { borderColor: colors.destructive, opacity: busyId ? .5 : 1 }]}><Text style={[styles.revokeText, { color: colors.destructive }]}>{busyId === submission.id ? 'Saving…' : 'Reject'}</Text></Pressable>
         <Pressable accessibilityRole="button" disabled={!!busyId} onPress={() => review(submission, 'approve')} style={[styles.approveButton, { backgroundColor: colors.primary, opacity: busyId ? .5 : 1 }]}><Feather name="check" size={14} color={colors.primaryForeground} /><Text style={[styles.grantButtonText, { color: colors.primaryForeground }]}>{busyId === submission.id ? 'Saving…' : 'Approve & publish'}</Text></Pressable>

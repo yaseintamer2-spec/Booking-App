@@ -281,7 +281,9 @@ export default function MatchRegistrationScreen() {
   const removeFriend = (index: number) => {
     const updatedEmails = friendEmails.filter((_, emailIndex) => emailIndex !== index);
     setFriendEmails(updatedEmails);
-    setSelectedPitchSlots((current) => current.slice(0, updatedEmails.length + 1));
+    setSelectedPitchSlots((current) =>
+      current.slice(0, updatedEmails.length + (friendOnlyBooking ? 0 : 1)),
+    );
     setJoinError(null);
   };
   const selectPitchSpot = (slot: number) => {

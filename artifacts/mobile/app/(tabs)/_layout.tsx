@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { useAuth, useUser } from '@clerk/expo';
 import { AccountMenu } from '@/components/AccountMenu';
 import { useColors } from '@/hooks/useColors';
-import { IconBadge } from '@/components/IconBadge';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PositionBadge } from '@/components/PreferredPositionPicker';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
@@ -59,15 +59,15 @@ export default function TabsLayout() {
     headerShown: false,
     tabBarActiveTintColor: colors.primary,
     tabBarInactiveTintColor: colors.mutedForeground,
-    tabBarStyle: { position: 'absolute', backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.background, borderTopColor: colors.border, borderTopWidth: 1, height: Platform.OS === 'web' ? 84 : 58 + insets.bottom, paddingTop: 8, paddingBottom: Math.max(4, insets.bottom), elevation: 0 },
-    tabBarBackground: () => Platform.OS === 'ios' ? <BlurView intensity={72} tint="dark" style={StyleSheet.absoluteFill} /> : <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />,
+    tabBarStyle: { position: 'absolute', backgroundColor: Platform.OS === 'ios' ? 'transparent' : colors.card, borderTopColor: colors.border, borderTopWidth: 1, height: Platform.OS === 'web' ? 76 : 60 + insets.bottom, paddingTop: 7, paddingBottom: Math.max(4, insets.bottom), elevation: 0, shadowColor: '#20392C', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.06, shadowRadius: 10 },
+    tabBarBackground: () => Platform.OS === 'ios' ? <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} /> : <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.card }]} />,
     tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
   }}>
-    <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: () => <IconBadge name="home" tone="primary" size="small" /> }} />
-    <Tabs.Screen name="matches" options={{ title: 'Discover', tabBarIcon: () => <IconBadge name="search" tone="pink" size="small" /> }} />
-    <Tabs.Screen name="my-matches" options={{ title: 'My matches', tabBarIcon: () => <IconBadge name="calendar" tone="cyan" size="small" /> }} />
-    <Tabs.Screen name="rankings" options={{ title: 'Rankings', tabBarIcon: () => <IconBadge name="award" tone="yellow" size="small" /> }} />
-    <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarButton: (props) => <Pressable accessibilityRole="button" accessibilityLabel="Open account menu" accessibilityState={props.accessibilityState} onPress={() => setAccountMenuVisible(true)} style={props.style}>{props.children}</Pressable>, tabBarIcon: ({ color }) => user?.imageUrl ? <View style={styles.profileAvatarWrap}><Image source={{ uri: user.imageUrl }} accessibilityLabel="Your profile picture" style={{ width: 31, height: 31, borderRadius: 16, borderWidth: 2, borderColor: color, marginTop: -5 }} /><PositionBadge position={preferredPosition} style={styles.profilePositionBadge} /></View> : <IconBadge name="user" tone="violet" size="small" /> }} />
+    <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: ({ focused }) => <Feather name="home" size={19} color={focused ? colors.primary : colors.mutedForeground} /> }} />
+    <Tabs.Screen name="matches" options={{ title: 'Discover', tabBarIcon: ({ focused }) => <Feather name="search" size={19} color={focused ? colors.primary : colors.mutedForeground} /> }} />
+    <Tabs.Screen name="my-matches" options={{ title: 'My matches', tabBarIcon: ({ focused }) => <Feather name="calendar" size={19} color={focused ? colors.primary : colors.mutedForeground} /> }} />
+    <Tabs.Screen name="rankings" options={{ title: 'Rankings', tabBarIcon: ({ focused }) => <Feather name="award" size={19} color={focused ? colors.primary : colors.mutedForeground} /> }} />
+    <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarButton: (props) => <Pressable accessibilityRole="button" accessibilityLabel="Open account menu" accessibilityState={props.accessibilityState} onPress={() => setAccountMenuVisible(true)} style={props.style}>{props.children}</Pressable>, tabBarIcon: ({ focused }) => user?.imageUrl ? <View style={styles.profileAvatarWrap}><Image source={{ uri: user.imageUrl }} accessibilityLabel="Your profile picture" style={{ width: 27, height: 27, borderRadius: 14, borderWidth: 1.5, borderColor: focused ? colors.primary : colors.border, marginTop: -2 }} /><PositionBadge position={preferredPosition} style={styles.profilePositionBadge} /></View> : <Feather name="user" size={19} color={focused ? colors.primary : colors.mutedForeground} /> }} />
   </Tabs><AccountMenu visible={accountMenuVisible} onClose={() => setAccountMenuVisible(false)} /></>;
 }
 

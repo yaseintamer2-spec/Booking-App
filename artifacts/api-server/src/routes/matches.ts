@@ -15,6 +15,7 @@ import {
   UpdateAdminMatchParams,
   UpdateAdminMatchResponse,
   isMatchAgeGroup,
+  isGoogleMapsUrl,
 } from "@workspace/api-zod";
 import { adminAccessTable, db, matchAlertSubscriptionsTable, matchEventsTable, matchRatingsTable, matchesTable, notificationsTable, pitchMatchSubmissionsTable, pitchOwnerAccessTable, playerCareerStatsTable, playerProfilesTable, pushTokensTable, refereeAccessTable, refereeMatchApplicationsTable, registrationsTable } from "@workspace/db";
 import { isAdminUser, isMatchStaffUser, isOwnerUser, isPitchOwnerUser, OWNER_EMAIL, requireAdmin, requireAuth, requireOwner, requirePitchOwner } from "../middlewares/auth";
@@ -1488,29 +1489,26 @@ router.post("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (r
   const email = access?.email ?? user?.primaryEmailAddress?.emailAddress ?? OWNER_EMAIL;
   const venueName = access?.venueName ?? (typeof req.body?.venueName === "string" ? req.body.venueName.trim() : "");
   const neighborhood = access?.neighborhood ?? (typeof req.body?.neighborhood === "string" ? req.body.neighborhood.trim() : "");
-  // Pitch owners may update their map pin or full street address per match.
-  // Fall back to the assigned pitch address when they leave the field unchanged.
   const submittedAddress = typeof req.body?.address === "string" ? req.body.address.trim() : "";
-  const address = submittedAddress || access?.address || "";
-  if (!venueName || venueName.length > 120 || !neighborhood || neighborhood.length > 120 || !address || address.length > 300) { res.status(400).json({ error: "Add the pitch name, area, and address." }); return; }
+  const address = submittedAddress;
+  if (!venueName || venueName.length > 120 || !neighborhood || neighborhood.length > 120 || address.length > 300 || !isGoogleMapsUrl(address)) { res.status(400).json({ error: "Add a valid HTTPS Google Maps link for the pitch location." }); return; }
   const contactPhone = typeof req.body?.contactPhone === "string" ? req.body.contactPhone.trim() : "";
   const startsAt = new Date(req.body?.startsAt);
-  const durationMinutes = Number(req.body?.durationMinutes);
   const capacity = Number(req.body?.capacity);
   const ageGroup = req.body?.ageGroup;
-  const priceHalalas = Number(req.body?.priceHalalas);
-  const compareAtPriceHalalas = Number(req.body?.compareAtPriceHalalas);
+  const rentalPriceHalalas = Number(req.body?.rentalPriceHalalas);
   const imageUrls = req.body?.imageUrls ?? [];
   if (!/^\+?[0-9][0-9 ()-]{7,18}$/.test(contactPhone)) { res.status(400).json({ error: "Add a valid contact phone number so we can reach you about the pitch." }); return; }
   if (!Number.isFinite(startsAt.getTime()) || startsAt <= new Date()) { res.status(400).json({ error: "Choose a future match date and time." }); return; }
-  if (!Number.isInteger(durationMinutes) || durationMinutes < 30 || durationMinutes > 240 || !Number.isInteger(capacity) || capacity < 2 || capacity > 30) { res.status(400).json({ error: "Use a duration from 30 to 240 minutes and capacity from 2 to 30 players." }); return; }
-  if (!Number.isInteger(priceHalalas) || !Number.isInteger(compareAtPriceHalalas) || priceHalalas < 0 || compareAtPriceHalalas < priceHalalas) { res.status(400).json({ error: "Set a valid player price and a comparison price at least as high." }); return; }
+  if (!Number.isInteger(capacity) || capacity < 2 || capacity > 30) { res.status(400).json({ error: "Use a capacity from 2 to 30 players." }); return; }
+  if (!Number.isSafeInteger(rentalPriceHalalas) || rentalPriceHalalas <= 0 || rentalPriceHalalas > 2_147_483_647) { res.status(400).json({ error: "Enter a valid pitch rental price in SAR." }); return; }
   if (!isMatchAgeGroup(ageGroup)) { res.status(400).json({ error: "Choose an age group for this match." }); return; }
   if (!isStoredMatchImageList(imageUrls)) { res.status(400).json({ error: "Upload up to 3 pitch photos before submitting the match request." }); return; }
   const [submission] = await db.insert(pitchMatchSubmissionsTable).values({
       ownerUserId: userId, ownerEmail: email, venueName, neighborhood,
-      address, contactPhone, startsAt, durationMinutes, capacity, ageGroup, priceHalalas, compareAtPriceHalalas,
-      refereeIncluded: req.body?.refereeIncluded !== false, waterIncluded: req.body?.waterIncluded !== false,
+      address, contactPhone, startsAt, durationMinutes: 120, capacity, ageGroup,
+      priceHalalas: 0, compareAtPriceHalalas: 0, rentalPriceHalalas,
+      refereeIncluded: true, waterIncluded: req.body?.waterIncluded !== false,
       imageUrls, status: "pending",
   }).returning();
   res.status(201).json(submission);
@@ -1553,13 +1551,16 @@ router.get("/admin/pitch-match-submissions", requireAuth, requireAdmin, async (_
 router.patch("/admin/pitch-match-submissions/:id", requireAuth, requireAdmin, async (req, res): Promise<void> => {
   const id = paramId(req.params.id);
   const action = req.body?.action;
+  const playerPriceHalalas = req.body?.playerPriceHalalas;
   const reviewNote = typeof req.body?.reviewNote === "string" ? req.body.reviewNote.trim().slice(0, 300) : null;
   if (!/^[0-9a-f-]{36}$/i.test(id) || (action !== "approve" && action !== "reject")) { res.status(400).json({ error: "Choose a valid match request and review action." }); return; }
+  if (action === "approve" && (!Number.isSafeInteger(playerPriceHalalas) || playerPriceHalalas < 0 || playerPriceHalalas > 2_147_483_647)) { res.status(400).json({ error: "Enter a valid player ticket price before approving this request." }); return; }
   const userId = res.locals.userId as string;
   const recipients = action === "approve" ? await getMatchAlertRecipientIds() : [];
   const result = await db.transaction(async (tx) => {
     const [submission] = await tx.select().from(pitchMatchSubmissionsTable).where(eq(pitchMatchSubmissionsTable.id, id)).for("update").limit(1);
     if (!submission || submission.status !== "pending") return { error: "This request is no longer pending." } as const;
+    if (action === "approve" && !isGoogleMapsUrl(submission.address)) return { error: "This request needs a valid Google Maps link. Ask the pitch owner to submit the location link again." } as const;
     if (action === "approve" && !isStoredMatchImageList(submission.imageUrls)) return { error: "Move this request's photos to file storage before approving it." } as const;
     const reviewedAt = new Date();
     if (action === "reject") {
@@ -1569,8 +1570,8 @@ router.patch("/admin/pitch-match-submissions/:id", requireAuth, requireAdmin, as
     const [match] = await tx.insert(matchesTable).values({
       venueName: submission.venueName, neighborhood: submission.neighborhood, address: submission.address,
       startsAt: submission.startsAt, durationMinutes: submission.durationMinutes, capacity: submission.capacity, ageGroup: submission.ageGroup,
-      priceHalalas: submission.priceHalalas, compareAtPriceHalalas: submission.compareAtPriceHalalas,
-      status: "published", refereeIncluded: submission.refereeIncluded, waterIncluded: submission.waterIncluded,
+      priceHalalas: playerPriceHalalas, compareAtPriceHalalas: playerPriceHalalas,
+      status: "published", refereeIncluded: true, waterIncluded: submission.waterIncluded,
       imageUrls: submission.imageUrls, imageUrl: "match-card",
     }).returning();
     const [updated] = await tx.update(pitchMatchSubmissionsTable).set({ status: "approved", reviewNote: null, reviewedByUserId: userId, reviewedAt, matchId: match.id, updatedAt: reviewedAt }).where(eq(pitchMatchSubmissionsTable.id, id)).returning();
@@ -1652,7 +1653,7 @@ router.post(
     const [row] = await db.transaction(async (tx) => {
       const [created] = await tx
         .insert(matchesTable)
-        .values({ ...parsed.data, ...refereeAssignment, imageUrls, imageUrl: parsed.data.imageUrls?.length ? "match-card" : parsed.data.imageUrl })
+        .values({ ...parsed.data, ...refereeAssignment, refereeIncluded: true, imageUrls, imageUrl: parsed.data.imageUrls?.length ? "match-card" : parsed.data.imageUrl })
         .returning();
       const message = getNewMatchMessage(created);
       for (let offset = 0; offset < recipients.length; offset += 100) {
@@ -1739,6 +1740,7 @@ router.patch(
         .set({
         ...parsed.data,
         ...refereeAssignment,
+        refereeIncluded: true,
         ...(parsed.data.imageUrls !== undefined ? { imageUrls, imageUrl: "match-card" } : parsed.data.imageUrl ? { imageUrls: [] } : {}),
         updatedAt: new Date(),
         })

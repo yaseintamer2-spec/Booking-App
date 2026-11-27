@@ -150,7 +150,7 @@ export function Screen({ children, scroll = true, style, refreshing, onRefresh }
   const insets = useSafeAreaInsets();
   const content = <View style={[styles.screenContent, { paddingBottom: insets.bottom + 106 }, style]}>{children}</View>;
   return <View style={[styles.screen, { backgroundColor: colors.background }]}>
-    {scroll ? <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} /> : undefined}>{content}</ScrollView> : content}
+    {scroll ? <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} /> : undefined}>{content}</ScrollView> : content}
   </View>;
 }
 
@@ -192,7 +192,7 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
     }
   };
   return <>
-    <View style={[styles.header, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 67 : 0) + 8 }]}>
+    <View style={[styles.header, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 24 : 0) + 8 }]}>
       {back ? <Pressable onPress={handleBack} style={styles.headerIcon} accessibilityRole="button" accessibilityLabel="Go back"><Feather name="arrow-left" size={21} color={colors.foreground} /></Pressable> :
         <Pressable onPress={() => router.replace('/(tabs)')} style={styles.brandLockup}><View style={[styles.brandMark, { backgroundColor: colors.primary }]}><Feather name="activity" size={15} color={colors.primaryForeground} /></View><Text style={[styles.brand, { color: colors.foreground }]}>{title}</Text></Pressable>}
       <View style={styles.headerRight}>
@@ -206,7 +206,7 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
     {!hideMenu ? <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
       <View style={styles.drawerBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
-        <ScrollView showsVerticalScrollIndicator={false} style={[styles.drawer, { backgroundColor: colors.card }]} contentContainerStyle={[styles.drawerContent, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 67 : 0) + 20, paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 34 : 0) + 24 }]}>
+        <ScrollView showsVerticalScrollIndicator={false} style={[styles.drawer, { backgroundColor: colors.card }]} contentContainerStyle={[styles.drawerContent, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 24 : 0) + 20, paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 34 : 0) + 24 }]}>
           <View style={styles.drawerTop}><Text style={[styles.drawerTitle, { color: colors.foreground }]}>Menu</Text><Pressable onPress={() => setOpen(false)} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close navigation menu"><Feather name="x" size={20} color={colors.foreground} /></Pressable></View>
           <View style={[styles.drawerProfile, { borderColor: colors.border }]}>
             <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
@@ -274,7 +274,7 @@ export function MatchCard({ match, compact = false, recommended = false, onPress
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingTop: 12 }}><Text style={[styles.ageGroupPill, { color: colors.violet, backgroundColor: `${colors.violet}20` }]}>AGES {match.ageGroup.replace('-', '–')}</Text>{recommended ? <Text accessibilityLabel="Recommended age group for you" style={[styles.ageGroupPill, { color: colors.primaryForeground, backgroundColor: colors.primary }]}>RECOMMENDED</Text> : null}</View>
     <View style={styles.matchInfo}>
       <View style={styles.matchTitleLocation}><Text numberOfLines={1} style={[styles.venueName, { color: colors.foreground }]}>{match.venueName}</Text><View style={styles.cardLocation}><Feather name="map-pin" size={14} color={colors.pink} /><Text numberOfLines={1} style={[styles.venueLocation, { color: colors.mutedForeground }]}>{match.neighborhood} · {/^https?:\/\//i.test(match.address || '') ? 'Google Maps location' : match.address}</Text></View><View style={styles.matchMetaRow}><View accessibilityLabel={match.pitchRatingAverage === null ? 'Pitch has no ratings yet' : `Pitch rating ${match.pitchRatingAverage.toFixed(1)} out of 5, ${match.pitchRatingCount} ratings`} style={[styles.pitchRating, { backgroundColor: `${colors.yellow}20` }]}><Feather name="star" size={13} color={colors.yellow} /><Text style={[styles.pitchRatingText, { color: colors.foreground }]}>{match.pitchRatingAverage === null ? 'New pitch' : `${match.pitchRatingAverage.toFixed(1)} · ${match.pitchRatingCount}`}</Text></View>{match.refereeName ? <View style={styles.refereeBadge}>{match.refereeAvatarUrl ? <Image accessibilityLabel={`${match.refereeName}, assigned referee`} source={{ uri: match.refereeAvatarUrl }} style={styles.refereePhoto} /> : <View style={[styles.refereePhoto, { backgroundColor: colors.secondary, alignItems: 'center', justifyContent: 'center' }]}><Feather name="user" size={11} color={colors.mutedForeground} /></View>}<Text numberOfLines={1} style={[styles.refereeText, { color: colors.mutedForeground }]}>{match.refereeName}</Text></View> : null}</View></View>
-      <View style={styles.matchInfoRight}><View style={styles.matchFacts}><Feather name="clock" size={15} color={colors.cyan} /><Text style={[styles.factText, { color: colors.foreground }]}>{time}</Text><View style={[styles.factDot, { backgroundColor: colors.border }]} /><Text style={[styles.factText, { color: colors.mutedForeground }]}>{match.durationMinutes} min</Text></View><View style={styles.priceBlock}><Text style={[styles.priceCaption, { color: colors.mutedForeground }]}>PER PLAYER</Text><Text style={[styles.oldPrice, { color: colors.destructive }]}>{compare}</Text><View style={styles.priceValue}><Feather name="credit-card" size={14} color={colors.orange} /><Text style={[styles.price, { color: colors.orange }]}>{price}</Text></View></View></View>
+      <View style={styles.matchInfoRight}><View style={styles.matchFacts}><Feather name="clock" size={15} color={colors.cyan} /><Text style={[styles.factText, { color: colors.foreground }]}>{time}</Text><View style={[styles.factDot, { backgroundColor: colors.border }]} /><Text style={[styles.factText, { color: colors.mutedForeground }]}>{match.durationMinutes === 120 ? '2 hours' : `${match.durationMinutes} min`}</Text></View><View style={styles.priceBlock}><Text style={[styles.priceCaption, { color: colors.mutedForeground }]}>PER PLAYER</Text>{match.compareAtPriceHalalas > match.priceHalalas ? <Text style={[styles.oldPrice, { color: colors.destructive }]}>{compare}</Text> : null}<View style={styles.priceValue}><Feather name="credit-card" size={14} color={colors.orange} /><Text style={[styles.price, { color: colors.orange }]}>{price}</Text></View></View></View>
     </View>
     <View style={[styles.perksRow, { borderTopColor: colors.border }]}>
       <Perk icon="check-circle" label={match.refereeIncluded ? 'Referee included' : 'No referee'} active={match.refereeIncluded} />
@@ -297,13 +297,13 @@ function Perk({ icon, label, active }: { icon: string; label: string; active: bo
   return <View style={styles.perk}><Feather name={icon as never} size={14} color={active ? colors.primary : colors.mutedForeground} /><Text style={[styles.perkText, { color: colors.mutedForeground }]}>{label}</Text></View>;
 }
 
-export function Field({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, multiline, autoComplete }: { label: string; value: string; onChangeText: (v: string) => void; placeholder?: string; secureTextEntry?: boolean; keyboardType?: 'default' | 'email-address' | 'numeric' | 'phone-pad'; multiline?: boolean; autoComplete?: 'email' | 'current-password' | 'new-password' | 'off' }) {
+export function Field({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, multiline, autoComplete, autoCapitalize, autoCorrect }: { label: string; value: string; onChangeText: (v: string) => void; placeholder?: string; secureTextEntry?: boolean; keyboardType?: 'default' | 'email-address' | 'numeric' | 'phone-pad'; multiline?: boolean; autoComplete?: 'email' | 'current-password' | 'new-password' | 'off'; autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters'; autoCorrect?: boolean }) {
   const colors = useColors();
   const [passwordVisible, setPasswordVisible] = useState(false);
   return <View style={{ gap: 8, marginBottom: 16 }}>
     <Text style={[styles.fieldLabel, { color: colors.secondaryForeground }]}>{label}</Text>
     <View style={styles.inputWrap}>
-      <TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={colors.mutedForeground} secureTextEntry={secureTextEntry && !passwordVisible} keyboardType={keyboardType} autoCapitalize={keyboardType === 'email-address' || secureTextEntry || keyboardType === 'numeric' || keyboardType === 'phone-pad' ? 'none' : 'sentences'} autoCorrect={keyboardType === 'email-address' || secureTextEntry ? false : undefined} autoComplete={autoComplete} multiline={multiline} style={[styles.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }, secureTextEntry && styles.passwordInput, multiline && { minHeight: 84, textAlignVertical: 'top' }]} />
+      <TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={colors.mutedForeground} secureTextEntry={secureTextEntry && !passwordVisible} keyboardType={keyboardType} autoCapitalize={autoCapitalize ?? (keyboardType === 'email-address' || secureTextEntry || keyboardType === 'numeric' || keyboardType === 'phone-pad' ? 'none' : 'sentences')} autoCorrect={autoCorrect ?? (keyboardType === 'email-address' || secureTextEntry ? false : undefined)} autoComplete={autoComplete} multiline={multiline} style={[styles.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border }, secureTextEntry && styles.passwordInput, multiline && { minHeight: 84, textAlignVertical: 'top' }]} />
       {secureTextEntry ? <Pressable accessibilityRole="button" accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'} onPress={() => setPasswordVisible(value => !value)} style={styles.passwordToggle}><Feather name={passwordVisible ? 'eye-off' : 'eye'} size={17} color={colors.mutedForeground} /></Pressable> : null}
     </View>
   </View>;
@@ -326,17 +326,18 @@ export function LoadingState() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  screenContent: { paddingHorizontal: 20, paddingTop: 8 },
-  header: { minHeight: 68, paddingHorizontal: 0, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  scrollContent: { flexGrow: 1, alignItems: 'center' },
+  screenContent: { width: '100%', maxWidth: 760, alignSelf: 'center', paddingHorizontal: 24, paddingTop: 8 },
+  header: { minHeight: 62, paddingHorizontal: 0, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brandLockup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   brandMark: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   brand: { fontSize: 15, letterSpacing: 2.2, fontWeight: '700' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerSubtitle: { fontSize: 12, letterSpacing: 0.4, flexShrink: 1, maxWidth: 120, textAlign: 'right' },
-  menuButton: { height: 42, width: 46, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  menuButton: { height: 42, width: 42, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#FFFFFF' },
   menuLine: { height: 1.5, width: 17, borderRadius: 1 },
   headerIcon: { width: 42, height: 42, justifyContent: 'center' },
-  drawerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.62)', flexDirection: 'row', justifyContent: 'flex-end' },
+  drawerBackdrop: { flex: 1, backgroundColor: 'rgba(17,34,25,0.38)', flexDirection: 'row', justifyContent: 'flex-end' },
   drawer: { width: '86%', maxWidth: 370, height: '100%' },
   drawerContent: { flexGrow: 1, paddingHorizontal: 24 },
   drawerSpacer: { flexGrow: 1, minHeight: 24 },
@@ -358,9 +359,9 @@ const styles = StyleSheet.create({
   sectionTitleRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 26, marginBottom: 14 },
   sectionTitle: { fontSize: 21, fontWeight: '800', marginTop: 2 },
   actionText: { fontSize: 12, fontWeight: '700', marginBottom: 3 },
-  matchCard: { borderWidth: 1, borderRadius: 18, overflow: 'hidden', marginBottom: 16 },
-  gallery: { height: 280, overflow: 'hidden' },
-  matchPhoto: { height: 280, justifyContent: 'space-between', padding: 16 },
+  matchCard: { borderWidth: 1, borderRadius: 20, overflow: 'hidden', marginBottom: 18, shadowColor: '#20392C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 2 },
+  gallery: { height: 240, overflow: 'hidden' },
+  matchPhoto: { height: 240, justifyContent: 'space-between', padding: 18 },
   galleryDots: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   galleryDotHit: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   galleryDot: { width: 7, height: 7, borderRadius: 4 },
@@ -395,13 +396,13 @@ const styles = StyleSheet.create({
   perk: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   perkText: { fontSize: 11 },
   fieldLabel: { fontSize: 12, fontWeight: '600', letterSpacing: 0.3 },
-  input: { minHeight: 50, borderWidth: 1, borderRadius: 13, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
+  input: { minHeight: 52, borderWidth: 1, borderRadius: 14, paddingHorizontal: 15, paddingVertical: 12, fontSize: 14 },
   inputWrap: { justifyContent: 'center' },
   passwordInput: { paddingRight: 48 },
   passwordToggle: { position: 'absolute', right: 4, width: 42, height: 46, alignItems: 'center', justifyContent: 'center' },
   button: { minHeight: 54, borderRadius: 15, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  buttonText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.2 },
-  emptyState: { padding: 16, borderRadius: 16, borderWidth: 1, alignItems: 'stretch', marginTop: 10, overflow: 'hidden' },
+  buttonText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.1 },
+  emptyState: { padding: 18, borderRadius: 18, borderWidth: 1, alignItems: 'stretch', marginTop: 10, overflow: 'hidden' },
   emptyHeading: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   emptyIcon: { width: 34, height: 34, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
   emptyTitle: { flex: 1, fontSize: 16, lineHeight: 21, fontWeight: '800' },
