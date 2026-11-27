@@ -71,11 +71,11 @@ export default function EntryRoute() {
   if (locationState === 'checking') return <View style={{ flex: 1, backgroundColor: colors.background }} />;
 
   return <Screen style={styles.gate}>
-    <BrandHeader subtitle="WELCOME TO KICKOFF" />
+    <BrandHeader subtitle="WELCOME TO KORZA" />
     <View style={[styles.locationIcon, { backgroundColor: colors.accent }]}><Feather name="map-pin" size={27} color={colors.primary} /></View>
     <Text style={[styles.kicker, { color: colors.primary }]}>OPTIONAL FOR NEARBY GAMES</Text>
     <Text style={[styles.title, { color: colors.foreground }]}>Find games{ '\n' }close to you.</Text>
-    <Text style={[styles.body, { color: colors.mutedForeground }]}>Location helps find nearby games, but it is optional. Your coordinates stay on this device and are not sent to KICKOFF servers or other players. You can enable it later in Account settings.</Text>
+    <Text style={[styles.body, { color: colors.mutedForeground }]}>Location helps find nearby games, but it is optional. Your coordinates stay on this device and are not sent to KORZA servers or other players. You can enable it later in Account settings.</Text>
     {message ? <Text accessibilityRole="alert" style={[styles.message, { color: colors.destructive }]}>{message}</Text> : null}
     <Button label={busy ? 'Getting your location…' : locationState === 'denied' ? 'Open location settings' : 'Share location & continue'} onPress={() => locationState === 'denied' ? void Linking.openSettings() : void requestLocation()} disabled={busy} icon={locationState === 'denied' ? 'settings' : 'map-pin'} />
     <Pressable accessibilityRole="button" onPress={() => void continueWithoutLocation()} disabled={busy} style={styles.skip}>

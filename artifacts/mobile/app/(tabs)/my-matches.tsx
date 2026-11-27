@@ -82,7 +82,7 @@ export default function MyMatchesScreen() {
   );
   const loadMoreHistory = async () => { if (historyNextOffset == null || historyLoading) return; setHistoryLoading(true); try { const page = await request(`/me/match-history?offset=${historyNextOffset}`); setHistoryMatches(current => [...current, ...page.items]); setHistoryNextOffset(page.nextOffset); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load older matches.'); } finally { setHistoryLoading(false); } };
   const enablePush = async () => {
-    if (Platform.OS !== 'ios' && Platform.OS !== 'android') { Alert.alert('Push alerts need the app', 'Open KICKOFF on an iPhone or Android device to enable match alerts.'); return; }
+    if (Platform.OS !== 'ios' && Platform.OS !== 'android') { Alert.alert('Push alerts need the app', 'Open KORZA | كورزا on an iPhone or Android device to enable match alerts.'); return; }
     try {
       if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync('match-updates', { name: 'Match updates', importance: Notifications.AndroidImportance.HIGH, vibrationPattern: [0, 250, 250, 250] });
       let permission = await Notifications.getPermissionsAsync();

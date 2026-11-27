@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "KICKOFF",
+    "name": "KORZA | كورزا",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/korza-logo.png",
     "scheme": "kickoff",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/images/icon.png",
+      "image": "./assets/images/korza-logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#0A100E"
     },
@@ -17,12 +17,12 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
+        "foregroundImage": "./assets/images/korza-logo.png",
         "backgroundColor": "#0A100E"
       }
     },
     "web": {
-      "favicon": "./assets/images/icon.png",
+      "favicon": "./assets/images/korza-logo.png",
       "output": "single"
     },
     "plugins": [
@@ -31,20 +31,20 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow KICKOFF admins to choose match photos and players to choose a profile picture.",
+          "photosPermission": "Allow KORZA | كورزا admins to choose match photos and players to choose a profile picture.",
           "microphonePermission": false
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow KICKOFF to use your location while you are using the app."
+          "locationWhenInUsePermission": "Allow KORZA | كورزا to use your location while you are using the app."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow KICKOFF to scan match check-in codes.",
+          "cameraPermission": "Allow KORZA | كورزا to scan match check-in codes.",
           "microphonePermission": false,
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true

@@ -539,7 +539,7 @@ export default function MatchRegistrationScreen() {
           {liveMatchId && !readOnly ? <>
             {joined && !friendOnlyBooking ? <>
               <SectionLabel colors={colors}>BOOK FOR A FRIEND</SectionLabel>
-              <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>Your place is confirmed. You can book one additional friend at a time; they need a KICKOFF account with a verified email.</Text>
+              <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>Your place is confirmed. You can book one additional friend at a time; they need a KORZA | كورزا account with a verified email.</Text>
               <Pressable accessibilityRole="button" accessibilityState={{ disabled: isFull }} disabled={isFull || isCancelled} onPress={beginFriendBooking} style={[styles.addFriendButton, { borderColor: colors.border, opacity: isFull || isCancelled ? 0.5 : 1 }]}>
                 <Feather name="user-plus" size={15} color={colors.primary} />
                 <Text style={[styles.addFriendText, { color: colors.primary }]}>{isFull ? 'No places left for a friend' : 'Book another friend'}</Text>
@@ -548,7 +548,7 @@ export default function MatchRegistrationScreen() {
             {(!joined || friendOnlyBooking) ? <>
             <SectionLabel colors={colors}>{friendOnlyBooking ? 'FRIEND DETAILS' : 'BOOK FOR FRIENDS'}</SectionLabel>
             <Text style={[styles.preferenceNote, { color: colors.mutedForeground }]}>
-              {friendOnlyBooking ? 'Enter one friend’s verified KICKOFF account email. They get their own ticket and check-in QR.' : 'Friends need a KICKOFF account with a verified email. Each person gets their own ticket and QR code.'}
+              {friendOnlyBooking ? 'Enter one friend’s verified KORZA | كورزا account email. They get their own ticket and check-in QR.' : 'Friends need a KORZA | كورزا account with a verified email. Each person gets their own ticket and QR code.'}
             </Text>
             {friendEmails.map((email, index) => (
               <View key={`friend-${index}`} style={[styles.friendRow, { borderColor: colors.border, backgroundColor: colors.card }]}>

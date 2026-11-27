@@ -75,14 +75,14 @@ export default function PreferredPositionScreen() {
   };
 
   return <Screen>
-    <BrandHeader title="KICKOFF" hideMenu />
+    <BrandHeader title="KORZA | كورزا" hideMenu />
     <Text style={[styles.title, { color: colors.foreground }]}>Choose a profile position</Text>
     <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>This appears on your profile photo. It won’t affect match registration or team selection.</Text>
     {syncMessage ? <View accessibilityRole="status" style={[styles.syncNotice, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name={savedOffline ? 'check-circle' : 'wifi-off'} size={15} color={colors.primary} /><Text style={[styles.noteText, { color: colors.mutedForeground }]}>{syncMessage}</Text></View> : null}
     <>
       <PreferredPositionPicker selected={selected} onSelect={setSelected} />
       {error ? <View style={styles.errorRow}><Text accessibilityRole="alert" style={[styles.error, { color: colors.destructive }]}>{error}</Text><Pressable accessibilityRole="button" onPress={() => void load()} style={styles.retry}><Text style={[styles.retryText, { color: colors.primary }]}>Retry</Text></Pressable></View> : null}
-      {savedOffline ? <Button label="Continue to KICKOFF" onPress={() => router.replace('/(tabs)')} icon="arrow-right" /> : <Button label={saving ? 'Saving your profile…' : 'Save my position'} onPress={() => void save()} disabled={saving} icon="arrow-right" />}
+      {savedOffline ? <Button label="Continue to KORZA | كورزا" onPress={() => router.replace('/(tabs)')} icon="arrow-right" /> : <Button label={saving ? 'Saving your profile…' : 'Save my position'} onPress={() => void save()} disabled={saving} icon="arrow-right" />}
     </>
   </Screen>;
 }

@@ -124,7 +124,7 @@ export default function AdminScreen() {
     } catch (error) { setImageMigrationMessage(error instanceof Error ? error.message : 'Could not move existing photos.'); }
     finally { setImageMigrationBusy(false); }
   };
-  const deleteMatch = (match: Match) => Alert.alert('Remove this match?', `${match.venueName} will be removed from KICKOFF.`, [{ text: 'Keep match', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: async () => { try { await remove.mutateAsync({ id: match.id }); await refresh(); } catch { Alert.alert('Could not remove match', 'Try again shortly.'); } } }]);
+  const deleteMatch = (match: Match) => Alert.alert('Remove this match?', `${match.venueName} will be removed from KORZA | كورزا.`, [{ text: 'Keep match', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: async () => { try { await remove.mutateAsync({ id: match.id }); await refresh(); } catch { Alert.alert('Could not remove match', 'Try again shortly.'); } } }]);
   const grantAdminAccess = () => {
     const email = adminEmail.trim().toLowerCase();
     if (!email) { setAdminAccessError('Enter the person’s verified sign-in email.'); return; }
@@ -151,11 +151,11 @@ export default function AdminScreen() {
     setFormError('');
   };
   const removePhoto = (index: number) => setForm(old => { const imageUrls = old.imageUrls.filter((_, photoIndex) => photoIndex !== index); return { ...old, imageUrls, imageUrl: imageUrls[0] || '' }; });
-  if (me.isLoading && !ownerFromVerifiedEmail) return <Screen><BrandHeader back user={me.data} subtitle="KICKOFF OPERATIONS" /><LoadingState /></Screen>;
-  if (me.data && !isAdmin) return <Screen><BrandHeader back user={me.data} /><EmptyState icon="shield" title="Admin access only." body="Your account is not allowlisted for the KICKOFF admin console." /></Screen>;
-  if ((me.error || !me.data) && !ownerFromVerifiedEmail) return <Screen><BrandHeader back subtitle="KICKOFF OPERATIONS" /><EmptyState icon="alert-circle" title="Admin data unavailable." body="Sign in with an administrator account to use the match console." /></Screen>;
+  if (me.isLoading && !ownerFromVerifiedEmail) return <Screen><BrandHeader back user={me.data} subtitle="KORZA OPERATIONS" /><LoadingState /></Screen>;
+  if (me.data && !isAdmin) return <Screen><BrandHeader back user={me.data} /><EmptyState icon="shield" title="Admin access only." body="Your account is not allowlisted for the KORZA | كورزا admin console." /></Screen>;
+  if ((me.error || !me.data) && !ownerFromVerifiedEmail) return <Screen><BrandHeader back subtitle="KORZA OPERATIONS" /><EmptyState icon="alert-circle" title="Admin data unavailable." body="Sign in with an administrator account to use the match console." /></Screen>;
   return <>
-    <Screen><BrandHeader back user={me.data} subtitle="KICKOFF OPERATIONS" />
+    <Screen><BrandHeader back user={me.data} subtitle="KORZA OPERATIONS" />
       <View style={styles.headingRow}><Text style={[styles.title, { color: colors.foreground }]}>Admin console</Text><Pressable accessibilityRole="button" accessibilityLabel="Create a match" onPress={openCreate} style={[styles.addButton, { backgroundColor: colors.primary }]} testID="create-match"><Feather name="plus" size={19} color={colors.primaryForeground} /></Pressable></View>
       <View style={[styles.adminNote, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="shield" size={15} color={colors.primary} /><Text style={[styles.noteText, { color: colors.mutedForeground }]}>Admin and owner permissions are checked when you save changes.</Text></View>
       {isOwner ? <View style={[styles.accessCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -247,7 +247,7 @@ function PitchOwnerManagement({ visible }: { visible: boolean }) {
     const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
     let body;
     try { body = response.status === 204 ? null : await response.json(); }
-    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KICKOFF API server, not the static app or Supabase URL.'); }
+    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KORZA API server, not the static app or Supabase URL.'); }
     if (!response.ok) throw new Error(body?.error || 'Could not update pitch-owner access.');
     return body;
   }, [getToken]);
@@ -280,7 +280,7 @@ function PitchSubmissionReview({ visible }: { visible: boolean }) {
     const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
     let body;
     try { body = response.status === 204 ? null : await response.json(); }
-    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KICKOFF API server, not the static app or Supabase URL.'); }
+    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KORZA API server, not the static app or Supabase URL.'); }
     if (!response.ok) throw new Error(body?.error || 'Could not review this match request.');
     return body;
   }, [getToken]);
@@ -324,7 +324,7 @@ function RefereeAccessManagement({ visible, onChanged }: { visible: boolean; onC
     const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
     let body;
     try { body = response.status === 204 ? null : await response.json(); }
-    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KICKOFF API server, not the static app or Supabase URL.'); }
+    catch { throw new Error('The match API returned an invalid response. Check that EXPO_PUBLIC_API_URL points to the KORZA API server, not the static app or Supabase URL.'); }
     if (!response.ok) throw new Error(body?.error || 'Could not update referee access.');
     return body;
   }, [getToken]);

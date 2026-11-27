@@ -70,7 +70,7 @@ export default function PitchOwnerScreen() {
     finally { setBusy(false); }
   };
   if (loading) return <Screen><BrandHeader back subtitle="PITCH OWNER DESK" /><LoadingState /></Screen>;
-  if (!pitch) return <Screen><BrandHeader back subtitle="PITCH OWNER DESK" /><EmptyState icon="lock" title="Pitch owner access needed." body={error || 'Ask KICKOFF to assign your account to a pitch.'} /></Screen>;
+  if (!pitch) return <Screen><BrandHeader back subtitle="PITCH OWNER DESK" /><EmptyState icon="lock" title="Pitch owner access needed." body={error || 'Ask KORZA | كورزا to assign your account to a pitch.'} /></Screen>;
   return <Screen refreshing={false} onRefresh={() => { void load(); }}>
     <BrandHeader back subtitle="PITCH OWNER DESK" />
     <View style={[styles.hero, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -108,7 +108,7 @@ export default function PitchOwnerScreen() {
       <Text style={[styles.meta, { color: colors.mutedForeground }]}>Contact: {item.contactPhone}</Text>
       <Pressable accessibilityRole="link" accessibilityLabel={`Open map for ${item.venueName}`} onPress={() => void Linking.openURL(/^https?:\/\//i.test(item.address) ? item.address : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.venueName}, ${item.address}, Riyadh`)}`)} style={styles.addressLink}><Feather name="map" size={17} color={colors.cyan} /><View style={{ flex: 1 }}><Text style={[styles.addressCaption, { color: colors.cyan }]}>PITCH LOCATION · OPEN MAP</Text><Text numberOfLines={2} style={[styles.meta, { color: colors.foreground, marginTop: 2 }]}>{item.address}</Text></View><Feather name="arrow-up-right" size={15} color={colors.cyan} /></Pressable>
       {item.status === 'pending' ? <Text style={[styles.reviewCopy, { color: colors.mutedForeground }]}>Waiting for admin review. Not visible to players yet.</Text> : null}
-      {item.status === 'rejected' ? <Text style={[styles.reviewCopy, { color: colors.destructive }]}>{item.reviewNote || 'Not approved. Contact the KICKOFF team if you need help.'}</Text> : null}
+      {item.status === 'rejected' ? <Text style={[styles.reviewCopy, { color: colors.destructive }]}>{item.reviewNote || 'Not approved. Contact the KORZA | كورزا team if you need help.'}</Text> : null}
       {item.status === 'approved' && item.matchId ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/match-registration', params: { id: item.matchId! } })} style={[styles.openMatch, { borderColor: colors.border }]}><Text style={[styles.openMatchText, { color: colors.primary }]}>Open published match</Text><Feather name="arrow-up-right" size={14} color={colors.primary} /></Pressable> : null}
     </View>) : <Text style={[styles.meta, { color: colors.mutedForeground }]}>Submitted match times will appear here with their review status.</Text>}
   </Screen>;

@@ -1,10 +1,10 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
-import { BrandHeader, EmptyState, Screen } from '@/components/KickoffUI';
+import { brandImage, BrandHeader, EmptyState, Screen } from '@/components/KickoffUI';
 import { useColors } from '@/hooks/useColors';
 
 export default function WalletScreen() {
@@ -21,7 +21,7 @@ export default function WalletScreen() {
 
     <LinearGradient colors={[colors.card, colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.walletCard}>
       <View style={styles.cardTop}>
-        <View style={styles.brandLockup}><View style={[styles.brandMark, { backgroundColor: colors.primary }]}><Feather name="activity" size={16} color={colors.primaryForeground} /></View><View><Text style={styles.brand}>KICKOFF</Text><Text style={styles.cardCaption}>MATCH WALLET</Text></View></View>
+        <View style={styles.brandLockup}><Image source={brandImage} style={styles.brandLogo} accessibilityLabel="KORZA | كورزا logo" /><View><Text style={styles.brand}>KORZA | كورزا</Text><Text style={styles.cardCaption}>MATCH WALLET</Text></View></View>
         <View style={[styles.previewBadge, { borderColor: `${colors.yellow}66`, backgroundColor: `${colors.yellow}18` }]}><Text style={[styles.previewBadgeText, { color: colors.yellow }]}>PREVIEW</Text></View>
       </View>
       <View style={styles.cardMessage}>
@@ -48,8 +48,8 @@ const styles = StyleSheet.create({
   walletCard: { minHeight: 218, borderRadius: 20, padding: 19, justifyContent: 'space-between', overflow: 'hidden' },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   brandLockup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  brandMark: { height: 34, width: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  brand: { color: '#F7F4FF', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
+  brandLogo: { height: 40, width: 40, borderRadius: 11 },
+  brand: { color: '#F7F4FF', fontSize: 12, fontWeight: '900' },
   cardCaption: { color: '#D7D0F5', fontSize: 10, fontWeight: '700', letterSpacing: .5, marginTop: 3 },
   previewBadge: { minHeight: 28, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 10, borderWidth: 1 },
   previewBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: .4 },

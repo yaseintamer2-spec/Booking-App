@@ -19,6 +19,7 @@ WebBrowser.maybeCompleteAuthSession();
 export const heroImage = require('../assets/images/riyadh-pitch-hero.jpg');
 export const homeHeroImage = heroImage;
 export const cardImage = require('../assets/images/football-match-card.jpg');
+export const brandImage = require('../assets/images/korza-logo.png');
 export const formatSar = (halalas: number) => {
   const amount = halalas / 100;
   return `SAR ${Number.isInteger(amount) ? amount.toFixed(0) : amount.toFixed(2)}`;
@@ -107,7 +108,7 @@ export function GoogleSignInButton({ disabled = false, legalConsent = false }: {
         session: createdSessionId,
         navigate: ({ session, decorateUrl }) => {
           if (session?.currentTask) {
-            setError('Finish the required account step, then return to KICKOFF.');
+            setError('Finish the required account step, then return to KORZA | كورزا.');
             return;
           }
           router.replace(decorateUrl(legalConsent ? '/legal/accept?consent=1' : '/(auth)/preferred-position') as never);
@@ -154,7 +155,7 @@ export function Screen({ children, scroll = true, style, refreshing, onRefresh }
   </View>;
 }
 
-export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, hideMenu = false, onBack, backFallback = '/(tabs)' }: { title?: string; subtitle?: string; user?: CurrentUser; back?: boolean; hideMenu?: boolean; onBack?: () => void; backFallback?: Href }) {
+export function BrandHeader({ title = 'KORZA | كورزا', subtitle, user, back = false, hideMenu = false, onBack, backFallback = '/(tabs)' }: { title?: string; subtitle?: string; user?: CurrentUser; back?: boolean; hideMenu?: boolean; onBack?: () => void; backFallback?: Href }) {
   const colors = useColors();
   const router = useRouter();
   const { signOut } = useClerk();
@@ -194,7 +195,7 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
   return <>
     <View style={[styles.header, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 24 : 0) + 8 }]}>
       {back ? <Pressable onPress={handleBack} style={styles.headerIcon} accessibilityRole="button" accessibilityLabel="Go back"><Feather name="arrow-left" size={21} color={colors.foreground} /></Pressable> :
-        <Pressable onPress={() => router.replace('/(tabs)')} style={styles.brandLockup}><View style={[styles.brandMark, { backgroundColor: colors.primary }]}><Feather name="activity" size={15} color={colors.primaryForeground} /></View><Text style={[styles.brand, { color: colors.foreground }]}>{title}</Text></Pressable>}
+        <Pressable onPress={() => router.replace('/(tabs)')} style={styles.brandLockup}><Image source={brandImage} style={styles.brandLogo} accessibilityLabel="KORZA | كورزا logo" /><Text style={[styles.brand, { color: colors.foreground }]}>{title}</Text></Pressable>}
       <View style={styles.headerRight}>
         {subtitle ? <Text style={[styles.headerSubtitle, { color: colors.mutedForeground }]}>{subtitle}</Text> : null}
         <NotificationsButton />
@@ -222,7 +223,7 @@ export function BrandHeader({ title = 'KICKOFF', subtitle, user, back = false, h
           <View style={styles.drawerSpacer} />
           <Pressable onPress={handleSignOut} disabled={signingOut} accessibilityRole="button" testID="drawer-sign-out" style={[styles.signOutButton, { borderColor: colors.border, opacity: signingOut ? 0.55 : 1 }]}><Feather name="log-out" size={16} color={colors.destructive} /><Text style={[styles.signOutText, { color: colors.destructive }]}>{signingOut ? 'Signing out…' : 'Sign out'}</Text></Pressable>
           {signOutError ? <Text style={[styles.small, { color: colors.destructive, marginTop: 8 }]}>Could not sign out. Please try again.</Text> : null}
-          <View style={[styles.drawerFoot, { borderColor: colors.border }]}><Text style={[styles.small, { color: colors.mutedForeground }]}>KICKOFF · RIYADH</Text></View>
+          <View style={[styles.drawerFoot, { borderColor: colors.border }]}><Text style={[styles.small, { color: colors.mutedForeground }]}>KORZA | كورزا · RIYADH</Text></View>
         </ScrollView>
       </View>
     </Modal> : null}
@@ -329,9 +330,9 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1, alignItems: 'center' },
   screenContent: { width: '100%', maxWidth: 760, alignSelf: 'center', paddingHorizontal: 24, paddingTop: 8 },
   header: { minHeight: 62, paddingHorizontal: 0, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  brandLockup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  brandMark: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  brand: { fontSize: 15, letterSpacing: 2.2, fontWeight: '700' },
+  brandLockup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brandLogo: { width: 32, height: 32, borderRadius: 9 },
+  brand: { fontSize: 12, letterSpacing: 0.2, fontWeight: '800' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerSubtitle: { fontSize: 12, letterSpacing: 0.4, flexShrink: 1, maxWidth: 120, textAlign: 'right' },
   menuButton: { height: 42, width: 42, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: '#FFFFFF' },

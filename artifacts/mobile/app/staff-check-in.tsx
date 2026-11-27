@@ -40,7 +40,7 @@ export default function StaffCheckInScreen() {
   const checkIn = async (rawCode: string) => {
     if (busy) return;
     const parsed = readCheckInCode(rawCode);
-    if (!parsed) { setScannerMessage('That QR code isn’t a KICKOFF player ticket. Try another code.'); return; }
+    if (!parsed) { setScannerMessage('That QR code isn’t a KORZA | كورزا player ticket. Try another code.'); return; }
     if (targetMatchId && parsed.matchId !== targetMatchId) { setScannerMessage('This ticket belongs to a different match. Scan a ticket for this match.'); return; }
     closeScanner();
     setBusy(true); setMessage('');

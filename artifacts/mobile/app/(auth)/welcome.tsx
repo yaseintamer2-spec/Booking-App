@@ -1,16 +1,13 @@
 import React from 'react';
-import { ImageBackground, Platform, StyleSheet, Text, View } from 'react-native';
+import { Image, ImageBackground, Platform, StyleSheet, Text, View } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { useAuth } from '@clerk/expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { heroImage } from '@/components/KickoffUI';
-import { Button } from '@/components/KickoffUI';
-import { GoogleSignInButton } from '@/components/KickoffUI';
-import { useColors } from '@/hooks/useColors';
+import { brandImage, heroImage } from '@/components/KickoffUI';
+import { Button, GoogleSignInButton } from '@/components/KickoffUI';
 
 export default function WelcomeScreen() {
-  const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isLoaded, isSignedIn } = useAuth();
@@ -18,7 +15,7 @@ export default function WelcomeScreen() {
   return <ImageBackground source={heroImage} resizeMode="cover" style={styles.background}>
     <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(6,13,10,0.46)' }]} />
     <View style={[styles.content, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 32 : 0) + 18, paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 24 : 0) + 24 }]}>
-      <View style={styles.topline}><View style={[styles.mark, { backgroundColor: colors.primary }]}><Feather name="activity" size={18} color={colors.primaryForeground} /></View><Text style={styles.wordmark}>KICKOFF</Text><View style={styles.cityBadge}><Feather name="map-pin" size={11} color="#FFFFFF" /><Text style={styles.city}>RIYADH, SA</Text></View></View>
+      <View style={styles.topline}><Image source={brandImage} style={styles.mark} accessibilityLabel="KORZA | كورزا logo" /><Text style={styles.wordmark}>KORZA | كورزا</Text><View style={styles.cityBadge}><Feather name="map-pin" size={11} color="#FFFFFF" /><Text style={styles.city}>RIYADH, SA</Text></View></View>
       <View style={styles.hero}><Text style={styles.eyebrow}>THE CITY IS YOUR PITCH</Text><Text style={styles.title}>Find your people.{'\n'}Play your game.</Text><Text style={styles.body}>Book a well-organized 7v7 match in Riyadh. Real pitches, clear details, no guesswork.</Text></View>
       <View style={{ gap: 10 }}>
         <GoogleSignInButton />
@@ -35,8 +32,8 @@ const styles = StyleSheet.create({
   background: { flex: 1, justifyContent: 'flex-end' },
   content: { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 24, justifyContent: 'space-between' },
   topline: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  mark: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  wordmark: { color: '#FFFFFF', fontSize: 14, letterSpacing: 2.1, fontWeight: '800' },
+  mark: { width: 40, height: 40, borderRadius: 12 },
+  wordmark: { color: '#FFFFFF', fontSize: 12, letterSpacing: 0.2, fontWeight: '800' },
   cityBadge: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 5, marginLeft: 'auto', paddingHorizontal: 10, borderRadius: 16, backgroundColor: 'rgba(255,255,255,.14)' },
   city: { color: '#FFFFFF', fontSize: 9, letterSpacing: 1, fontWeight: '800' },
   hero: { marginTop: 'auto', marginBottom: 34, maxWidth: 450 },

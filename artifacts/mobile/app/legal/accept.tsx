@@ -39,7 +39,7 @@ export default function LegalAcceptanceScreen() {
   };
   useEffect(() => { if (consent === '1') void save(); }, [consent]);
   return <Screen>
-    <BrandHeader title="KICKOFF" hideMenu />
+    <BrandHeader title="KORZA | كورزا" hideMenu />
     <View style={[styles.icon, { backgroundColor: colors.secondary }]}><Feather name="shield" size={23} color={colors.primary} /></View>
     <Text style={[styles.eyebrow, { color: colors.primary }]}>BEFORE YOU CONTINUE</Text>
     <Text style={[styles.title, { color: colors.foreground }]}>A quick look at the ground rules.</Text>

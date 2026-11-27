@@ -22,7 +22,7 @@ export default function SignInScreen() {
       if (signIn.status === 'complete') {
         await signIn.finalize({ navigate: ({ decorateUrl }) => router.replace(decorateUrl('/(auth)/preferred-position') as never) });
       } else {
-        setMessage('This account requires an extra sign-in check. KICKOFF uses password sign-in without email codes; try Google or contact support.');
+        setMessage('This account requires an extra sign-in check. KORZA | كورزا uses password sign-in without email codes; try Google or contact support.');
       }
     } catch {
       setMessage('Sign-in could not finish. Check your connection and try again.');
@@ -30,7 +30,7 @@ export default function SignInScreen() {
   };
   const errorField = errors.fields.identifier?.message || errors.fields.password?.message;
   return <View style={[styles.background, { backgroundColor: colors.background }]}>
-    <View style={styles.headerWrap}><BrandHeader title="KICKOFF" back backFallback="/(auth)/welcome" hideMenu /></View>
+    <View style={styles.headerWrap}><BrandHeader title="KORZA | كورزا" back backFallback="/(auth)/welcome" hideMenu /></View>
     <KeyboardAwareScrollViewCompat bottomOffset={72} contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 28 }]}>
       <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Text style={[styles.title, { color: colors.foreground }]}>Welcome back</Text><Text style={[styles.copy, { color: colors.mutedForeground }]}>Sign in to find matches and keep your bookings together.</Text>
@@ -39,7 +39,7 @@ export default function SignInScreen() {
       <Button label={busy ? 'Signing in…' : 'Sign in'} onPress={submit} disabled={!email || !password || busy} icon="arrow-right" />
       <View style={styles.divider}><View style={[styles.rule, { backgroundColor: colors.border }]} /><Text style={[styles.or, { color: colors.mutedForeground }]}>OR CONTINUE WITH</Text><View style={[styles.rule, { backgroundColor: colors.border }]} /></View>
       <GoogleSignInButton />
-      <View style={styles.footer}><Text style={[styles.copy, { color: colors.mutedForeground }]}>New to KICKOFF? </Text><Link href="/(auth)/sign-up" style={{ color: colors.primary, fontWeight: '700' }}>Create account</Link></View>
+      <View style={styles.footer}><Text style={[styles.copy, { color: colors.mutedForeground }]}>New to KORZA | كورزا? </Text><Link href="/(auth)/sign-up" style={{ color: colors.primary, fontWeight: '700' }}>Create account</Link></View>
       </View>
     </KeyboardAwareScrollViewCompat>
   </View>;

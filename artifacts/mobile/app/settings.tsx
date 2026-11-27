@@ -12,7 +12,7 @@ import { saveCurrentDeviceLocation } from '@/lib/deviceLocation';
 export default function SettingsScreen() {
   const colors = useColors(); const router = useRouter(); const { signOut } = useClerk(); const [working, setWorking] = useState(false); const [locationWorking, setLocationWorking] = useState(false); const [locationMessage, setLocationMessage] = useState('');
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
-  const logout = () => Alert.alert('Sign out of KICKOFF?', 'You can come back whenever the next game calls.', [{ text: 'Stay', style: 'cancel' }, { text: 'Sign out', style: 'destructive', onPress: async () => { setWorking(true); try { await signOut(); router.replace('/(auth)/welcome'); } catch { setWorking(false); Alert.alert('Could not sign out', 'Please try again.'); } } }]);
+  const logout = () => Alert.alert('Sign out of KORZA | كورزا?', 'You can come back whenever the next game calls.', [{ text: 'Stay', style: 'cancel' }, { text: 'Sign out', style: 'destructive', onPress: async () => { setWorking(true); try { await signOut(); router.replace('/(auth)/welcome'); } catch { setWorking(false); Alert.alert('Could not sign out', 'Please try again.'); } } }]);
   const enableLocation = async () => {
     if (locationWorking) return;
     setLocationWorking(true);

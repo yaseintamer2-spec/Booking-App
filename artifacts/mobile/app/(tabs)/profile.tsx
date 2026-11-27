@@ -124,11 +124,18 @@ export default function ProfileScreen() {
               {(user.data?.name || 'K').slice(0, 1).toUpperCase()}
             </Text>
           )}
-          <View style={[styles.cameraBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
-            {uploadingImage
-              ? <ActivityIndicator size="small" color={colors.primaryForeground} />
-              : <Feather name="camera" size={13} color={colors.primaryForeground} />}
-          </View>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={imageLabel}
+          accessibilityState={{ disabled: !clerkUser || uploadingImage, busy: uploadingImage }}
+          disabled={!clerkUser || uploadingImage}
+          onPress={chooseProfileImage}
+          style={[styles.cameraBadge, { backgroundColor: colors.primary, borderColor: colors.card, opacity: uploadingImage ? 0.7 : 1 }]}
+        >
+          {uploadingImage
+            ? <ActivityIndicator size="small" color={colors.primaryForeground} />
+            : <Feather name="camera" size={14} color={colors.primaryForeground} />}
         </Pressable>
         <PositionBadge position={preferredPosition} style={styles.avatarPositionBadge} />
         </View>
@@ -207,7 +214,7 @@ const styles = StyleSheet.create({
   avatar: { width: 88, height: 88, borderRadius: 44, borderWidth: 3, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarImage: { width: '100%', height: '100%', borderRadius: 44 },
   avatarPositionBadge: { position: 'absolute', left: -7, bottom: -4 },
-  cameraBadge: { position: 'absolute', right: 0, bottom: 0, width: 27, height: 27, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
+  cameraBadge: { position: 'absolute', right: -7, bottom: -7, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
   initial: { fontSize: 37, fontWeight: '800' },
   photoAction: { paddingVertical: 8, paddingHorizontal: 10 },
   photoActionText: { fontSize: 12, fontWeight: '700' },
