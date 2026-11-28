@@ -35,63 +35,70 @@ type PublicMatchRow = {
   created_at: string;
 };
 
+async function loadSupabaseMatches(): Promise<Match[]> {
+  const response = await fetchWithTimeout(`${supabaseUrl}/rest/v1/rpc/list_published_matches`, {
+    method: 'POST',
+    headers: {
+      apikey: publishableKey,
+      Authorization: `Bearer ${publishableKey}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: '{}',
+  }, 8_000);
+
+  if (!response.ok) {
+    let message = 'Could not load matches from Supabase.';
+    try {
+      const body = await response.json();
+      if (typeof body?.message === 'string') message = body.message;
+      else if (typeof body?.error === 'string') message = body.error;
+    } catch { /* Keep the readable fallback for non-JSON gateway errors. */ }
+    throw new Error(message);
+  }
+
+  const rows = await response.json() as PublicMatchRow[];
+  return rows.map((row) => ({
+    id: row.id,
+    venueName: row.venue_name,
+    neighborhood: row.neighborhood,
+    address: row.address,
+    startsAt: row.starts_at,
+    durationMinutes: row.duration_minutes,
+    format: row.format,
+    capacity: row.capacity,
+    ageGroup: row.age_group,
+    bookedCount: row.booked_count,
+    spotsRemaining: row.spots_remaining,
+    priceHalalas: row.price_halalas,
+    compareAtPriceHalalas: row.compare_at_price_halalas,
+    status: row.status,
+    refereeIncluded: row.referee_included,
+    refereeUserId: row.referee_user_id,
+    refereeName: row.referee_name,
+    refereeAvatarUrl: row.referee_avatar_url,
+    pitchRatingAverage: row.pitch_rating_average,
+    pitchRatingCount: row.pitch_rating_count,
+    waterIncluded: row.water_included,
+    imageUrl: row.image_url,
+    imageUrls: row.image_urls || [],
+    isDemo: row.is_demo,
+    createdAt: row.created_at,
+  }));
+}
+
 async function loadPublicMatches(): Promise<Match[]> {
   try {
-    const response = await fetchWithTimeout(`${supabaseUrl}/rest/v1/rpc/list_published_matches`, {
-      method: 'POST',
-      headers: {
-        apikey: publishableKey,
-        Authorization: `Bearer ${publishableKey}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: '{}',
-    }, 8_000);
-
-    if (!response.ok) {
-      let message = 'Could not load matches from Supabase.';
-      try {
-        const body = await response.json();
-        if (typeof body?.message === 'string') message = body.message;
-        else if (typeof body?.error === 'string') message = body.error;
-      } catch { /* Keep the readable fallback for non-JSON gateway errors. */ }
-      throw new Error(message);
-    }
-
-    const rows = await response.json() as PublicMatchRow[];
-    return rows.map((row) => ({
-      id: row.id,
-      venueName: row.venue_name,
-      neighborhood: row.neighborhood,
-      address: row.address,
-      startsAt: row.starts_at,
-      durationMinutes: row.duration_minutes,
-      format: row.format,
-      capacity: row.capacity,
-      ageGroup: row.age_group,
-      bookedCount: row.booked_count,
-      spotsRemaining: row.spots_remaining,
-      priceHalalas: row.price_halalas,
-      compareAtPriceHalalas: row.compare_at_price_halalas,
-      status: row.status,
-      refereeIncluded: row.referee_included,
-      refereeUserId: row.referee_user_id,
-      refereeName: row.referee_name,
-      refereeAvatarUrl: row.referee_avatar_url,
-      pitchRatingAverage: row.pitch_rating_average,
-      pitchRatingCount: row.pitch_rating_count,
-      waterIncluded: row.water_included,
-      imageUrl: row.image_url,
-      imageUrls: row.image_urls || [],
-      isDemo: row.is_demo,
-      createdAt: row.created_at,
-    }));
+    const matches = await loadSupabaseMatches();
+    if (matches.length) return matches;
   } catch (supabaseError) {
-    // Preserve the existing API as a fallback until every screen has a safe
-    // direct Supabase path and the deployed API origin is no longer needed.
+    // Preserve the API as a fallback if the Supabase public feed is unavailable.
     try { return await listMatches(); }
     catch { throw supabaseError; }
   }
+
+  // The Supabase and API feeds can temporarily differ.
+  return listMatches();
 }
 
 /** Reads public match cards directly from Supabase's Data API. */

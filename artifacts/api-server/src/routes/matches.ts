@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { clerkClient } from "@clerk/express";
+import { clerkClient, getAuth } from "@clerk/express";
 import { createHash, randomBytes } from "node:crypto";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import {
@@ -18,7 +18,7 @@ import {
   isGoogleMapsUrl,
 } from "@workspace/api-zod";
 import { adminAccessTable, db, matchAlertSubscriptionsTable, matchEventsTable, matchRatingsTable, matchesTable, notificationsTable, pitchMatchSubmissionsTable, pitchOwnerAccessTable, playerCareerStatsTable, playerProfilesTable, pushTokensTable, refereeAccessTable, refereeMatchApplicationsTable, registrationsTable } from "@workspace/db";
-import { isAdminUser, isMatchStaffUser, isOwnerUser, isPitchOwnerUser, OWNER_EMAIL, requireAdmin, requireAuth, requireOwner, requirePitchOwner } from "../middlewares/auth";
+import { getVerifiedEmailsForUser, isAdminUser, isMatchStaffUser, isOwnerUser, isPitchOwnerUser, OWNER_EMAIL, requireAdmin, requireAuth, requireOwner, requirePitchOwner } from "../middlewares/auth";
 import { getMatchEndAt, WAITLIST_OFFER_TTL_MS, canConfirmPaidRegistration, canReserveSeat, isCheckInTokenValid, isOfferExpired, isStoredMatchImageList } from "../lib/registration-rules";
 import { isMatchImageStorageConfigured, uploadMatchImage } from "../lib/match-image-storage";
 const MATCH_ARCHIVE_HOURS = 12;
@@ -68,8 +68,7 @@ function paramId(value: string | string[] | undefined): string {
 }
 
 async function getPitchOwnerAccess(userId: string) {
-  const user = await clerkClient.users.getUser(userId);
-  const emails = user.emailAddresses.filter((address) => address.verification?.status === "verified").map((address) => address.emailAddress.trim().toLowerCase());
+  const emails = await getVerifiedEmailsForUser(userId);
   if (!emails.length) return null;
   const [access] = await db.select().from(pitchOwnerAccessTable).where(inArray(pitchOwnerAccessTable.email, emails)).limit(1);
   return access ?? null;
@@ -1362,7 +1361,7 @@ router.get("/matches/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [row] = await db
+  let [row] = await db
     .select()
     .from(matchesTable)
     .where(
@@ -1372,6 +1371,22 @@ router.get("/matches/:id", async (req, res): Promise<void> => {
       ),
     )
     .limit(1);
+
+  if (!row && process.env.CLERK_SECRET_KEY?.trim()) {
+    const userId = getAuth(req).userId;
+    if (userId) {
+      const [registration] = await db.select({ id: registrationsTable.id }).from(registrationsTable)
+        .where(and(
+          eq(registrationsTable.matchId, params.data.id),
+          or(eq(registrationsTable.userId, userId), eq(registrationsTable.bookedByUserId, userId)),
+          sql`${registrationsTable.status} IN ('joined', 'offered', 'waitlisted', 'checked_in')`,
+        ))
+        .limit(1);
+      if (registration) {
+        [row] = await db.select().from(matchesTable).where(eq(matchesTable.id, params.data.id)).limit(1);
+      }
+    }
+  }
 
   if (!row) {
     res.status(404).json({ error: "Match not found." });
@@ -1487,9 +1502,9 @@ router.get("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (_r
 router.post("/pitch-owner/submissions", requireAuth, requirePitchOwner, async (req, res): Promise<void> => {
   const userId = res.locals.userId as string;
   const access = await getPitchOwnerAccess(userId);
-  const canManageAnyPitch = await isAdminUser(userId) || (!!access && (!access.venueName.trim() || !access.neighborhood.trim()));
+  const canManageAnyPitch = (!!access && (!access.venueName.trim() || !access.neighborhood.trim())) || await isAdminUser(userId);
   if (!access && !canManageAnyPitch) { res.status(403).json({ error: "Pitch owner access is required." }); return; }
-  const user = canManageAnyPitch ? await clerkClient.users.getUser(userId) : null;
+  const user = canManageAnyPitch && !access ? await clerkClient.users.getUser(userId) : null;
   const email = access?.email ?? user?.primaryEmailAddress?.emailAddress ?? OWNER_EMAIL;
   const venueName = access?.venueName.trim() || (typeof req.body?.venueName === "string" ? req.body.venueName.trim() : "");
   const neighborhood = access?.neighborhood.trim() || (typeof req.body?.neighborhood === "string" ? req.body.neighborhood.trim() : "");

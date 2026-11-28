@@ -5,6 +5,13 @@ import type { RequestHandler } from "express";
 
 export const OWNER_EMAIL = "yaseintamer2@gmail.com";
 
+export async function getVerifiedEmailsForUser(userId: string): Promise<string[]> {
+  const user = await clerkClient.users.getUser(userId);
+  return user.emailAddresses
+    .filter((address) => address.verification?.status === "verified")
+    .map((address) => address.emailAddress.trim().toLowerCase());
+}
+
 function authenticatedUserId(req: Parameters<RequestHandler>[0], res: Parameters<RequestHandler>[1]): string | null {
   if (!process.env.CLERK_SECRET_KEY?.trim()) {
     res.status(503).json({ error: "Authentication is not configured on the API. Add CLERK_SECRET_KEY to the server environment." });
@@ -28,18 +35,12 @@ export const requireAuth: RequestHandler = (req, res, next) => {
 };
 
 export async function isOwnerUser(userId: string): Promise<boolean> {
-  const user = await clerkClient.users.getUser(userId);
-  return user.emailAddresses.some(
-    (address) => address.verification?.status === "verified" && address.emailAddress.trim().toLowerCase() === OWNER_EMAIL,
-  );
+  return (await getVerifiedEmailsForUser(userId)).includes(OWNER_EMAIL);
 }
 
 export async function isAdminUser(userId: string): Promise<boolean> {
-  if (await isOwnerUser(userId)) return true;
-  const user = await clerkClient.users.getUser(userId);
-  const verifiedEmails = user.emailAddresses
-    .filter((address) => address.verification?.status === "verified")
-    .map((address) => address.emailAddress.trim().toLowerCase());
+  const verifiedEmails = await getVerifiedEmailsForUser(userId);
+  if (verifiedEmails.includes(OWNER_EMAIL)) return true;
   if (!verifiedEmails.length) return false;
   const [grant] = await db.select({ email: adminAccessTable.email }).from(adminAccessTable).where(inArray(adminAccessTable.email, verifiedEmails)).limit(1);
   return !!grant;
@@ -62,13 +63,12 @@ export async function isMatchStaffUser(userId: string): Promise<boolean> {
 }
 
 export async function isPitchOwnerUser(userId: string): Promise<boolean> {
-  // Admins, including the permanent owner account, can use all pitch-owner tools.
-  if (await isAdminUser(userId)) return true;
-  const user = await clerkClient.users.getUser(userId);
-  const verifiedEmails = user.emailAddresses
-    .filter((address) => address.verification?.status === "verified")
-    .map((address) => address.emailAddress.trim().toLowerCase());
+  const verifiedEmails = await getVerifiedEmailsForUser(userId);
   if (!verifiedEmails.length) return false;
+  if (verifiedEmails.includes(OWNER_EMAIL)) return true;
+  const [adminGrant] = await db.select({ email: adminAccessTable.email }).from(adminAccessTable)
+    .where(inArray(adminAccessTable.email, verifiedEmails)).limit(1);
+  if (adminGrant) return true;
   const [access] = await db.select({ email: pitchOwnerAccessTable.email }).from(pitchOwnerAccessTable)
     .where(inArray(pitchOwnerAccessTable.email, verifiedEmails)).limit(1);
   return !!access;

@@ -16,12 +16,14 @@ import type { ScrollViewInstance } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { getGetCurrentUserQueryKey, getGetMatchQueryKey, useGetCurrentUser, useGetMatch } from '@workspace/api-client-react';
+import { useQuery } from '@tanstack/react-query';
+import { getGetCurrentUserQueryKey, getGetMatchQueryKey, getMatch, useGetCurrentUser } from '@workspace/api-client-react';
 import { useAuth, useUser } from '@clerk/expo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { NotificationsButton } from '@/components/NotificationsButton';
 import { LiveScoreboard, type LiveView } from '@/components/LiveScoreboard';
+import { EmptyState, LoadingState, Screen } from '@/components/KickoffUI';
 import { apiBaseUrl } from '@/lib/apiBaseUrl';
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { useColors } from '@/hooks/useColors';
@@ -114,7 +116,14 @@ export default function MatchRegistrationScreen() {
   const readOnly = routeView === 'played';
   const { getToken, userId } = useAuth();
   const { user: clerkUser } = useUser();
-  const remoteMatch = useGetMatch(liveMatchId || '', { query: { queryKey: getGetMatchQueryKey(liveMatchId || ''), enabled: !!liveMatchId && !localSampleMatch } });
+  const remoteMatch = useQuery({
+    queryKey: getGetMatchQueryKey(liveMatchId || ''),
+    enabled: !!liveMatchId && !localSampleMatch,
+    queryFn: async () => {
+      const token = await getToken();
+      return getMatch(liveMatchId || '', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    },
+  });
   const account = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: !isLocalPreviewMode, retry: false } });
   const match = remoteMatch.data ? {
     ...matchRegistrationMock.match,
@@ -133,7 +142,7 @@ export default function MatchRegistrationScreen() {
     pitchRatingCount: remoteMatch.data.pitchRatingCount,
     refereeName: remoteMatch.data.refereeName,
     refereeAvatarUrl: remoteMatch.data.refereeAvatarUrl,
-    status: remoteMatch.data.status === 'cancelled' ? 'cancelled' as const : remoteMatch.data.bookedCount >= remoteMatch.data.capacity ? 'full' as const : 'open' as const,
+    status: remoteMatch.data.status !== 'published' ? 'cancelled' as const : remoteMatch.data.bookedCount >= remoteMatch.data.capacity ? 'full' as const : 'open' as const,
   } : matchRegistrationMock.match;
   const matchPhotoList = match.imageUrls?.filter((url) => typeof url === 'number' || (typeof url === 'string' && (/^https:\/\//i.test(url) || /^data:image\//i.test(url)))).slice(0, 3) || [];
   const legacyPitchPhoto = match.imageUrl && (/^https:\/\//i.test(match.imageUrl) || /^data:image\//i.test(match.imageUrl)) ? match.imageUrl : null;
@@ -419,6 +428,13 @@ export default function MatchRegistrationScreen() {
   const selectedSpotSummary = selectedPitchSlots.map((slot, index) =>
     `${index === 0 ? 'You' : friendEmails[index - 1]?.trim() || `Friend ${index}`} · spot ${slot + 1}`,
   ).join('  |  ');
+
+  if (liveMatchId && !localSampleMatch && remoteMatch.isLoading) {
+    return <Screen><LoadingState /></Screen>;
+  }
+  if (liveMatchId && !localSampleMatch && !remoteMatch.data) {
+    return <Screen><EmptyState title="Match unavailable" body={remoteMatch.error instanceof Error ? remoteMatch.error.message : 'This match could not be loaded. It may no longer be published.'} action="Back to matches" onAction={() => router.replace('/(tabs)/matches')} /></Screen>;
+  }
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>

@@ -1,20 +1,66 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { useAuth } from '@clerk/expo';
 import { getGetCurrentUserQueryKey, useGetCurrentUser } from '@workspace/api-client-react';
-import { BrandHeader, EmptyState, LoadingState, MatchCard, Screen, SectionTitle } from '@/components/KickoffUI';
+import { BrandHeader, EmptyState, LoadingState, MatchCard, Screen, SectionTitle, formatRiyadhDate, formatRiyadhTime } from '@/components/KickoffUI';
 import { homeHeroImage } from '@/components/KickoffUI';
+import { apiBaseUrl } from '@/lib/apiBaseUrl';
+import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { useColors } from '@/hooks/useColors';
 import { sampleMatchListing } from '@/data/matchRegistrationMock';
 import { isLocalPreviewMode } from '@/lib/localPreview';
 import { usePublicMatches } from '@/hooks/usePublicMatches';
 
+type HomeRegistration = {
+  status: 'joined' | 'offered' | 'waitlisted' | 'checked_in';
+  match: { id: string; venueName: string; neighborhood: string; startsAt: string; liveStatus: string };
+};
+
 export default function HomeScreen() {
   const colors = useColors(); const router = useRouter();
+  const { getToken, isSignedIn } = useAuth();
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   const matches = usePublicMatches();
-  const listedMatches = matches.data?.length ? matches.data.slice(0, 2) : isLocalPreviewMode ? [sampleMatchListing] : [];
+  const [nextMatch, setNextMatch] = useState<HomeRegistration['match'] | null>(null);
+  const [nextMatchError, setNextMatchError] = useState('');
+  useEffect(() => {
+    let active = true;
+    if (isLocalPreviewMode || !isSignedIn) {
+      setNextMatch(null);
+      setNextMatchError('');
+      return () => { active = false; };
+    }
+    void (async () => {
+      const token = await getToken();
+      const response = await fetchWithTimeout(`${apiBaseUrl}/api/me/registrations`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }, 8_000);
+      const payload: unknown = await response.json();
+      if (!response.ok) {
+        const message = payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string'
+          ? payload.error
+          : 'Could not load your upcoming match.';
+        throw new Error(message);
+      }
+      if (!Array.isArray(payload)) throw new Error('The API returned an invalid registrations response.');
+      const upcoming = (payload as HomeRegistration[])
+        .filter((registration) => registration.status !== 'waitlisted')
+        .map((registration) => registration.match)
+        .filter((match) => !!match?.id && match.liveStatus !== 'full_time' && Date.parse(match.startsAt) > Date.now())
+        .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+      if (active) {
+        setNextMatch(upcoming[0] ?? null);
+        setNextMatchError('');
+      }
+    })().catch((error: unknown) => {
+      if (active) setNextMatchError(error instanceof Error ? error.message : 'Could not load your upcoming match.');
+    });
+    return () => { active = false; };
+  }, [getToken, isSignedIn]);
+  const publicMatches = matches.data?.filter((match) => match.id !== nextMatch?.id) ?? [];
+  const listedMatches = publicMatches.length ? publicMatches.slice(0, 2) : isLocalPreviewMode ? [sampleMatchListing] : [];
   const firstName = user.data?.name.trim().split(/\s+/)[0];
   const openMatch = (id: string) => router.push(id === sampleMatchListing.id ? '/match-registration' : { pathname: '/match-registration', params: { id } });
   const quickActions = [
@@ -35,6 +81,9 @@ export default function HomeScreen() {
     </ImageBackground>
 
     <View style={styles.quickGrid}>{quickActions.map((action) => <Pressable key={action.label} accessibilityRole="button" onPress={() => router.push(action.path as never)} style={({ pressed }) => [styles.quickAction, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? .78 : 1 }]}><View style={[styles.quickIcon, { backgroundColor: `${colors[action.tone]}14` }]}><Feather name={action.icon} size={18} color={colors[action.tone]} /></View><Text style={[styles.quickTitle, { color: colors.foreground }]}>{action.label}</Text><Text style={[styles.quickCaption, { color: colors.mutedForeground }]}>{action.caption}</Text></Pressable>)}</View>
+
+    {nextMatchError ? <Text accessibilityRole="alert" style={[styles.nextMatchError, { color: colors.destructive }]}>{nextMatchError}</Text> : null}
+    {nextMatch ? <Pressable accessibilityRole="button" accessibilityLabel={`Open your next match at ${nextMatch.venueName}`} onPress={() => router.push({ pathname: '/match-registration', params: { id: nextMatch.id } })} style={({ pressed }) => [styles.nextMatchCard, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? .78 : 1 }]}><View style={[styles.nextMatchIcon, { backgroundColor: `${colors.primary}18` }]}><Feather name="calendar" size={18} color={colors.primary} /></View><View style={{ flex: 1 }}><Text style={[styles.nextMatchKicker, { color: colors.primary }]}>YOUR NEXT MATCH</Text><Text style={[styles.nextMatchTitle, { color: colors.foreground }]}>{nextMatch.venueName}</Text><Text style={[styles.nextMatchMeta, { color: colors.mutedForeground }]}>{nextMatch.neighborhood} · {formatRiyadhDate(nextMatch.startsAt)} · {formatRiyadhTime(nextMatch.startsAt)}</Text></View><Feather name="chevron-right" size={18} color={colors.primary} /></Pressable> : null}
 
     <SectionTitle kicker="PICK UP WHERE YOU LEFT OFF" title="Upcoming matches" action="See all" onAction={() => router.push('/(tabs)/matches')} />
     {matches.isLoading && !isLocalPreviewMode ? <LoadingState /> : listedMatches.length ? listedMatches.map(match => <MatchCard key={match.id} match={match} onPress={() => openMatch(match.id)} />) :
@@ -62,6 +111,12 @@ const styles = StyleSheet.create({
   quickIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   quickTitle: { fontSize: 13, fontWeight: '800' },
   quickCaption: { fontSize: 11, lineHeight: 15 },
+  nextMatchCard: { minHeight: 82, borderWidth: 1, borderRadius: 17, padding: 13, marginTop: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  nextMatchIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  nextMatchKicker: { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  nextMatchTitle: { fontSize: 14, fontWeight: '800', marginTop: 4 },
+  nextMatchMeta: { fontSize: 10, lineHeight: 15, marginTop: 3 },
+  nextMatchError: { marginTop: 14, fontSize: 12 },
 });
 
 
