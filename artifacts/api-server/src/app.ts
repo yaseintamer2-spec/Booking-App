@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type ErrorRequestHandler, type Express } from "express";
 import cors from "cors";
 import { clerkMiddleware } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
@@ -59,5 +59,17 @@ if (process.env.CLERK_SECRET_KEY?.trim()) {
 }
 
 app.use("/api", router);
+
+const apiErrorHandler: ErrorRequestHandler = (error, req, res, next) => {
+  const requestId = typeof req.id === "string" ? req.id : undefined;
+  logger.error({ err: error, requestId, method: req.method, path: req.path }, "Unhandled API request error");
+  if (res.headersSent) {
+    next(error);
+    return;
+  }
+  res.status(500).json({ error: "The API encountered an unexpected error.", requestId });
+};
+
+app.use(apiErrorHandler);
 
 export default app;

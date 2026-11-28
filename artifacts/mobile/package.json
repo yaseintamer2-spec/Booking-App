@@ -64,6 +64,7 @@
     "expo-crypto": "58.0.7",
     "expo-notifications": "~58.1.9",
     "expo-secure-store": "58.0.2",
+    "react-easy-crop": "^6.2.5",
     "react-native-qrcode-svg": "^6.3.54"
   }
 }

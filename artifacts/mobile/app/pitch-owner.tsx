@@ -22,16 +22,24 @@ const freshForm = (): Form => ({ venueName: '', neighborhood: '', address: '', s
 export default function PitchOwnerScreen() {
   const colors = useColors(); const router = useRouter(); const { getToken } = useAuth();
   const [pitch, setPitch] = useState<Pitch | null>(null); const [submissions, setSubmissions] = useState<Submission[]>([]); const [form, setForm] = useState<Form>(freshForm); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  const request = useCallback(async (path: string, init: RequestInit = {}) => {
+  const request = useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
     const token = await getToken();
     const response = await fetchWithTimeout(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
-    const body = response.status === 204 ? null : await response.json();
-    if (!response.ok) throw new Error(body?.error || 'Could not complete the pitch request.');
-    return body;
+    let body: unknown;
+    try { body = response.status === 204 ? null : await response.json(); }
+    catch { throw new Error(`Pitch-owner API request ${path} returned a non-JSON response (HTTP ${response.status}, ${response.headers.get('content-type') || 'unknown content type'}). Check the API URL and server logs.`); }
+    if (!response.ok) {
+      const message = body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
+        ? body.error
+        : `Could not complete the pitch request (HTTP ${response.status}).`;
+      const requestId = body && typeof body === 'object' && 'requestId' in body && typeof body.requestId === 'string' ? body.requestId : '';
+      throw new Error(requestId ? `${message} (Request ID ${requestId}; check the API logs.)` : message);
+    }
+    return body as T;
   }, [getToken]);
   const load = useCallback(async () => {
     try {
-      const [assignment, history] = await Promise.all([request('/me/pitch-owner'), request('/pitch-owner/submissions')]);
+      const [assignment, history] = await Promise.all([request<Pitch>('/me/pitch-owner'), request<Submission[]>('/pitch-owner/submissions')]);
       setPitch(assignment); setSubmissions(history); setError('');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load your pitch.'); }
     finally { setLoading(false); }

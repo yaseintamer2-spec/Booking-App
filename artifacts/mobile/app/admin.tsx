@@ -247,12 +247,13 @@ function PitchOwnerManagement({ visible }: { visible: boolean }) {
     const response = await fetch(`${apiBaseUrl}/api${path}`, { ...init, headers: { ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers } });
     let body: unknown;
     try { body = response.status === 204 ? null : await response.json(); }
-    catch { throw new Error(`Pitch-owner API returned a non-JSON response (HTTP ${response.status}, ${response.headers.get('content-type') || 'unknown content type'}). Check the Render API logs.`); }
+    catch { throw new Error(`Pitch-owner API request ${path} returned a non-JSON response (HTTP ${response.status}, ${response.headers.get('content-type') || 'unknown content type'}). Check the Render API logs.`); }
     if (!response.ok) {
       const message = body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
         ? body.error
         : `Could not update pitch-owner access (HTTP ${response.status}).`;
-      throw new Error(message);
+      const requestId = body && typeof body === 'object' && 'requestId' in body && typeof body.requestId === 'string' ? body.requestId : '';
+      throw new Error(requestId ? `${message} (Request ID ${requestId}; check the API logs.)` : message);
     }
     return body;
   }, [getToken]);

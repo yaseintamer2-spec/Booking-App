@@ -11,6 +11,7 @@ import { useColors } from '@/hooks/useColors';
 import { hasVerifiedOwnerEmail } from '@/lib/roles';
 import { isLocalPreviewMode } from '@/lib/localPreview';
 import { PLAYER_POSITIONS, PositionBadge, PreferredPositionPicker, isPlayerPosition, type PlayerPosition } from '@/components/PreferredPositionPicker';
+import { ProfilePhotoCropper } from '@/components/ProfilePhotoCropper';
 
 export default function ProfileScreen() {
   const colors = useColors();
@@ -22,6 +23,7 @@ export default function ProfileScreen() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [imageSaved, setImageSaved] = useState(false);
+  const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
   const [preferredPosition, setPreferredPosition] = useState<PlayerPosition | null>(null);
   const [positionDraft, setPositionDraft] = useState<PlayerPosition>('striker');
   const [editingPosition, setEditingPosition] = useState(false);
@@ -30,6 +32,10 @@ export default function ProfileScreen() {
   const user = useGetCurrentUser({ query: { queryKey: getGetCurrentUserQueryKey(), enabled: true, retry: false } });
   useEffect(() => { let active = true; (async () => { if (isPreviewOwner) { setIsMatchStaff(true); return; } try { const token = await getToken(); const response = await fetch(`${apiBaseUrl}/api/me/match-staff`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (active) setIsMatchStaff(response.ok && result.isStaff === true); } catch { if (active) setIsMatchStaff(false); } })(); return () => { active = false; }; }, [getToken, isPreviewOwner]);
   useEffect(() => { let active = true; (async () => { try { const token = await getToken(); const response = await fetch(`${apiBaseUrl}/api/me/preferred-position`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); const result = await response.json(); if (response.ok && active && isPlayerPosition(result.preferredPosition)) { setPreferredPosition(result.preferredPosition); setPositionDraft(result.preferredPosition); } } catch { /* Keep the position editable if it cannot be loaded yet. */ } })(); return () => { active = false; }; }, [getToken]);
+  useEffect(() => {
+    if (!cropImageUrl) return;
+    return () => URL.revokeObjectURL(cropImageUrl);
+  }, [cropImageUrl]);
   const savePosition = async () => {
     setSavingPosition(true); setPositionError('');
     try {
@@ -41,57 +47,77 @@ export default function ProfileScreen() {
     } catch (error) { setPositionError(error instanceof Error ? error.message : 'Could not save your preferred position.'); }
     finally { setSavingPosition(false); }
   };
+  const saveProfileImage = async (file: File | string) => {
+    if (!clerkUser) return;
+    await clerkUser.setProfileImage({ file });
+    await clerkUser.reload();
+    setImageSaved(true);
+    try {
+      const token = await getToken();
+      const response = await fetch(`${apiBaseUrl}/api/me/avatar`, {
+        method: 'PATCH',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Could not refresh match lineups.');
+    } catch (syncError) {
+      setImageError(syncError instanceof Error
+        ? `Profile picture updated, but match lineups could not be refreshed: ${syncError.message}`
+        : 'Profile picture updated, but match lineups could not be refreshed. Try again later.');
+    }
+  };
+
   const chooseProfileImage = async () => {
     if (!clerkUser || uploadingImage) return;
-
-    setUploadingImage(true);
     setImageError(null);
     setImageSaved(false);
-    try {
-      let file: File | string;
-      if (Platform.OS === 'web') {
-        const browserFile = await chooseBrowserImage();
-        if (!browserFile) return;
-        file = browserFile;
-      } else {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-          setImageError('Photo access was not granted. Allow access in your device settings to choose a photo.');
-          return;
-        }
 
-        const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ['images'],
-          allowsEditing: true,
-          aspect: [1, 1],
-          quality: 0.8,
-        });
-        if (result.canceled) return;
-
-        const image = result.assets[0];
-        if (!image?.uri) {
-          throw new Error('The selected image could not be read.');
-        }
-
-        file = image.uri;
-      }
-
-      await clerkUser.setProfileImage({ file });
-      await clerkUser.reload();
-      setImageSaved(true);
+    if (Platform.OS === 'web') {
       try {
-        const token = await getToken();
-        const response = await fetch(`${apiBaseUrl}/api/me/avatar`, {
-          method: 'PATCH',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || 'Could not refresh match lineups.');
-      } catch (syncError) {
-        setImageError(syncError instanceof Error
-          ? `Profile picture updated, but match lineups could not be refreshed: ${syncError.message}`
-          : 'Profile picture updated, but match lineups could not be refreshed. Try again later.');
+        const browserFile = await chooseBrowserImage();
+        if (browserFile) setCropImageUrl(URL.createObjectURL(browserFile));
+      } catch (error) {
+        setImageError(error instanceof Error ? error.message : 'Could not open the photo picker.');
       }
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setImageError('Photo access was not granted. Allow access in your device settings to choose a photo.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+
+      const image = result.assets[0];
+      if (!image?.uri) {
+        throw new Error('The selected image could not be read.');
+      }
+      await saveProfileImage(image.uri);
+    } catch (error) {
+      console.error('Failed to update profile picture:', error);
+      setImageError(error instanceof Error ? error.message : 'Could not update your profile picture. Please try again.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const saveCroppedProfileImage = async (file: File) => {
+    if (!clerkUser || uploadingImage) return;
+    setUploadingImage(true);
+    setImageError(null);
+    try {
+      await saveProfileImage(file);
+      setCropImageUrl(null);
     } catch (error) {
       console.error('Failed to update profile picture:', error);
       setImageError(error instanceof Error ? error.message : 'Could not update your profile picture. Please try again.');
@@ -168,6 +194,7 @@ export default function ProfileScreen() {
         <View style={styles.positionCardTop}><Feather name="activity" size={18} color={colors.orange} /><View style={{ flex: 1 }}><Text style={[styles.positionCardTitle, { color: colors.foreground }]}>Preferred position</Text><Text style={[styles.email, { color: colors.mutedForeground, marginTop: 3 }]}>{PLAYER_POSITIONS.find(item => item.value === preferredPosition)?.label || 'Choose your profile position'}</Text></View><Pressable accessibilityRole="button" onPress={() => { setPositionDraft(preferredPosition || 'striker'); setEditingPosition(value => !value); setPositionError(''); }} style={[styles.positionChangeButton, { borderColor: colors.border }]}><Text style={[styles.positionChangeText, { color: colors.primary }]}>{editingPosition ? 'Close' : preferredPosition ? 'Change' : 'Choose'}</Text></Pressable></View>
         {editingPosition ? <><Text style={[styles.positionHint, { color: colors.mutedForeground }]}>This badge is for your profile only. It does not affect match registration or team selection.</Text><PreferredPositionPicker selected={positionDraft} onSelect={setPositionDraft} />{positionError ? <Text accessibilityRole="alert" style={[styles.positionError, { color: colors.destructive }]}>{positionError}</Text> : null}<Pressable accessibilityRole="button" disabled={savingPosition} onPress={() => void savePosition()} style={[styles.positionSaveButton, { backgroundColor: colors.primary, opacity: savingPosition ? .6 : 1 }]}><Text style={[styles.positionSaveText, { color: colors.primaryForeground }]}>{savingPosition ? 'Saving…' : 'Save position'}</Text></Pressable></> : null}
       </View>
+      {Platform.OS === 'web' ? <ProfilePhotoCropper key={cropImageUrl || 'closed'} imageUrl={cropImageUrl} busy={uploadingImage} onCancel={() => setCropImageUrl(null)} onSave={saveCroppedProfileImage} /> : null}
       {isMatchStaff ? <Pressable accessibilityRole="button" onPress={() => router.push('/staff-check-in' as Href)} style={[styles.settingsRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="camera" size={17} color={colors.cyan} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Staff check-in scanner</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable> : null}
       {isMatchStaff ? <Pressable accessibilityRole="button" onPress={() => router.push('/referee-matches' as Href)} style={[styles.settingsRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="activity" size={17} color={colors.orange} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Live match controls</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable> : null}
       {user.data?.isAdmin || isPreviewOwner ? <Pressable accessibilityRole="button" onPress={() => router.push('/admin' as Href)} style={[styles.settingsRow, { backgroundColor: colors.card, borderColor: colors.border }]}><Feather name="shield" size={17} color={colors.pink} /><Text style={[styles.settingsText, { color: colors.foreground }]}>Admin console</Text><Feather name="chevron-right" size={17} color={colors.mutedForeground} /></Pressable> : null}
